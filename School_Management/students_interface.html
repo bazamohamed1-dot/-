@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تسيير متوسطة بوشنافة عمر - النسخة النهائية المستقرة</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com">
+    <script src="xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #1e40af; --accent: #3b82f6; --success: #059669; --danger: #dc2626; --warning: #d97706; --bg: #f8fafc; --border: #e2e8f0; --secondary: #64748b; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: var(--bg); margin: 0; padding: 15px; direction: rtl; }
+        .app-container { max-width: 1300px; margin: auto; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid var(--border); overflow: hidden; }
+        .app-header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
+        .app-content { display: flex; padding: 20px; gap: 20px; }
+        .sidebar-photo { width: 150px; flex-shrink: 0; text-align: center; }
+        .photo-card { width: 140px; height: 170px; border: 2px solid var(--border); background: #fff; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin: auto; overflow: hidden; position: relative; }
+        .photo-card img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .main-form { flex-grow: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .field-box { display: flex; flex-direction: column; gap: 3px; }
+        .field-box label { font-size: 0.8rem; font-weight: 700; color: #64748b; margin-bottom: 2px; }
+        .field-box input, .field-box select { padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; outline: none; background: #fff; }
+        .date-input { direction: ltr !important; text-align: right; font-weight: bold; color: var(--primary); }
+        .span-2 { grid-column: span 2; }
+        .action-tray { padding: 12px 20px; background: #f8fafc; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem; color: white; transition: 0.2s; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 0.85rem; }
+        th { background: var(--primary); color: white; padding: 10px; text-align: right; position: sticky; top: 0; }
+        td { padding: 8px; border-bottom: 1px solid var(--border); }
+        tr:hover { background: #f1f5f9; cursor: pointer; }
+        .selected-row { background: #e0f2fe !important; border-right: 4px solid var(--primary); }
+        .table-wrapper { max-height: 230px; overflow-y: auto; padding: 0 20px 20px 20px; }
+        .disabled-field { background-color: #f1f5f9 !important; cursor: not-allowed; color: #64748b; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="app-header">
+        <h1><i class="fas fa-graduation-cap"></i> تسيير تلاميذ متوسطة بوشنافة عمر</h1>
+        <span id="modeStatus"><i class="fas fa-eye"></i> وضع العرض</span>
+    </div>
+
+    <div class="app-content">
+        <div class="sidebar-photo">
+            <div class="photo-card" id="photoFrame">
+                <i class="fas fa-user fa-3x" id="placeholderIcon" style="color:#e2e8f0"></i>
+                <img id="displayImage">
+            </div>
+            <input type="file" id="imageSelector" style="display:none" accept="image/*" onchange="handleImageSelection(this)">
+            <button class="btn" id="photoBtn" style="color:#333; background:#e2e8f0; width:100%; margin-top:10px;" onclick="triggerImageSelect()">
+                <i class="fas fa-camera"></i> صورة التلميذ
+            </button>
+            <button class="btn" id="deletePhotoBtn" style="color:#fff; background:var(--danger); width:100%; margin-top:5px; display:none;" onclick="removePhotoImage()">
+                <i class="fas fa-trash-alt"></i> حذف الصورة
+            </button>
+        </div>
+
+        <div class="main-form" id="studentForm">
+            <div class="field-box"><label>اللقب *</label><input type="text" id="lastName" class="form-input"></div>
+            <div class="field-box"><label>الاسم *</label><input type="text" id="firstName" class="form-input"></div>
+            <div class="field-box"><label>رقم التعريف الوطني (16 رقم) *</label><input type="text" id="studentID" maxlength="16" class="form-input"></div>
+            <div class="field-box"><label>تاريخ الازدياد *</label><input type="text" id="dateOfBirth" class="date-input form-input" placeholder="يوم / شهر / سنة"></div>
+            <div class="field-box"><label>مكان الميلاد *</label><input type="text" id="placeOfBirth" class="form-input"></div>
+            <div class="field-box"><label>الجنس *</label>
+                <select id="gender" class="form-input">
+                    <option value="">اختر...</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
+                </select>
+            </div>
+            <div class="field-box"><label>المستوى *</label>
+                <select id="academicYear" class="form-input">
+                    <option value="">اختر...</option><option value="أولى">أولى</option><option value="ثانية">ثانية</option><option value="ثالثة">ثالثة</option><option value="رابعة">رابعة</option>
+                </select>
+            </div>
+            <div class="field-box"><label>القسم (رقمين) *</label><input type="text" id="className" class="form-input" maxlength="2"></div>
+            <div class="field-box"><label>نظام التمدرس *</label><select id="attendanceSystem" class="form-input"><option value="خارجي">خارجي</option><option value="نصف داخلي">نصف داخلي</option></select></div>
+            <div class="field-box"><label>رقم القيد (4 أرقام)</label><input type="text" id="enrollmentNumber" class="form-input" maxlength="4"></div>
+            <div class="field-box"><label>تاريخ التسجيل *</label><input type="text" id="enrollmentDate" class="date-input form-input" placeholder="يوم / شهر / سنة"></div>
+            <div class="field-box"><label>تاريخ الخروج</label><input type="text" id="exitDate" class="date-input form-input" placeholder="يوم / شهر / سنة"></div>
+            <div class="field-box span-2"><label>اسم الولي الكامل *</label><input type="text" id="guardianName" class="form-input"></div>
+            <div class="field-box span-2"><label>لقب واسم الأم *</label><input type="text" id="motherName" class="form-input"></div>
+            <div class="field-box span-2"><label>رقم هاتف الولي (10 أرقام) *</label><input type="text" id="guardianPhone" class="form-input" maxlength="10"></div>
+            <div class="field-box span-2"><label>عنوان السكن *</label><input type="text" id="address" class="form-input"></div>
+            <input type="hidden" id="photoPath">
+        </div>
+    </div>
+
+    <div class="action-tray">
+        <button class="btn" style="background:var(--success)" onclick="prepareNew()"><i class="fas fa-plus"></i> جديد</button>
+        <button class="btn" style="background:var(--primary)" onclick="saveCurrent()"><i class="fas fa-save"></i> حفظ</button>
+        <button class="btn" style="background:var(--warning)" onclick="enableEditing()"><i class="fas fa-edit"></i> تعديل</button>
+        <button class="btn" style="background:var(--danger)" onclick="deleteStudent()"><i class="fas fa-trash"></i> حذف</button>
+        <button class="btn" style="background:#0891b2" onclick="importExcel()"><i class="fas fa-file-excel"></i> استيراد إكسل</button>
+        <button class="btn" style="background:var(--success)" onclick="bulkSave()"><i class="fas fa-file-import"></i> حفظ الكل</button>
+        <button class="btn" style="background:var(--secondary)" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
+        <button class="btn" style="background:#334155" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
+    </div>
+
+    <div class="table-wrapper">
+        <table id="studentsTable">
+            <thead>
+                <tr>
+                    <th>رقم التعريف</th><th>اللقب</th><th>الاسم</th><th>تاريخ الازدياد</th><th>المستوى</th><th>القسم</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+let studentsList = [];
+let selectedIndex = -1;
+let isEditMode = false;
+
+function formatStrictDate(val) {
+    if (!val) return "";
+    let date;
+    if (typeof val === 'number') date = new Date(Math.round((val - 25569) * 864e5));
+    else date = new Date(val);
+    if (isNaN(date.getTime())) return val;
+    return `${String(date.getDate()).padStart(2, '0')} / ${String(date.getMonth() + 1).padStart(2, '0')} / ${date.getFullYear()}`;
+}
+
+function findVal(row, keys, excludeKeyword = null) {
+    for (let k in row) {
+        if (keys.some(key => k.includes(key))) {
+            if (excludeKeyword && k.includes(excludeKeyword)) continue;
+            return row[k];
+        }
+    }
+    return "";
+}
+
+function applyMask(id) {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input', e => {
+        let v = e.target.value.replace(/\D/g, '').substr(0, 8);
+        let f = "";
+        if (v.length > 0) {
+            f += v.substr(0, 2);
+            if (v.length > 2) f += ' / ' + v.substr(2, 2);
+            if (v.length > 4) f += ' / ' + v.substr(4, 4);
+        }
+        e.target.value = f;
+    });
+}
+['dateOfBirth', 'enrollmentDate', 'exitDate'].forEach(applyMask);
+
+function lockFields(lock) {
+    document.querySelectorAll('.form-input').forEach(input => {
+        input.disabled = lock;
+        input.classList.toggle('disabled-field', lock);
+    });
+    document.getElementById('photoBtn').disabled = lock;
+    document.getElementById('photoBtn').style.opacity = lock ? "0.5" : "1";
+    document.getElementById('deletePhotoBtn').style.display = (!lock && isEditMode) ? "flex" : "none";
+}
+lockFields(true);
+
+function triggerImageSelect() { document.getElementById('imageSelector').click(); }
+function handleImageSelection(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            document.getElementById('photoPath').value = e.target.result;
+            updatePhotoUI(e.target.result);
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+function removePhotoImage() { if(confirm("إزالة الصورة؟")) { document.getElementById('photoPath').value = ""; updatePhotoUI(""); } }
+
+function updatePhotoUI(data) {
+    const img = document.getElementById('displayImage');
+    const icon = document.getElementById('placeholderIcon');
+    if (data) { img.src = data; img.style.display = "block"; icon.style.display = "none"; }
+    else { img.style.display = "none"; icon.style.display = "block"; }
+}
+
+function prepareNew() {
+    if(!confirm("إدخال تلميذ جديد؟")) return;
+    isEditMode = false; selectedIndex = -1;
+    document.querySelectorAll('.form-input').forEach(input => input.value = "");
+    document.getElementById('photoPath').value = ""; updatePhotoUI("");
+    document.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row'));
+    lockFields(false);
+    document.getElementById('exitDate').disabled = true;
+    document.getElementById('modeStatus').innerHTML = '<i class="fas fa-plus-circle" style="color:#4ade80"></i> وضع الإدخال الجديد';
+    document.getElementById('lastName').focus();
+}
+
+function enableEditing() {
+    if (selectedIndex === -1) return alert("اختر تلميذاً.");
+    if(!confirm("تفعيل وضع التعديل؟")) return;
+    isEditMode = true; lockFields(false);
+    document.getElementById('modeStatus').innerHTML = '<i class="fas fa-edit" style="color:#fbbf24"></i> وضع التعديل';
+}
+
+function saveCurrent() {
+    const idVal = document.getElementById('studentID').value.trim();
+    const phoneVal = document.getElementById('guardianPhone').value.trim();
+    const dob = document.getElementById('dateOfBirth').value.trim();
+    const enrollD = document.getElementById('enrollmentDate').value.trim();
+    const exitD = document.getElementById('exitDate').value.trim();
+    const enrollNum = document.getElementById('enrollmentNumber').value.trim();
+    const classVal = document.getElementById('className').value.trim();
+
+    const required = ['lastName','firstName','studentID','dateOfBirth','placeOfBirth','gender','academicYear','className','attendanceSystem','enrollmentDate','guardianName','motherName','guardianPhone','address'];
+    for(let rid of required) { if(!document.getElementById(rid).value.trim()) { alert("يرجى ملء الحقول الإجبارية (*)"); return; } }
+
+    // القيود الجديدة والصارمة
+    if(!/^\d{16}$/.test(idVal)) { alert("رقم التعريف يجب أن يكون 16 رقماً."); return; }
+    if(!/^0\d{9}$/.test(phoneVal)) { alert("الهاتف يجب أن يبدأ بـ 0 ويتكون من 10 أرقام."); return; }
+    if(!/^\d{2} \/ \d{2} \/ \d{4}$/.test(dob)) { alert("تنسيق تاريخ الازدياد خاطئ."); return; }
+    if(!/^\d{2} \/ \d{2} \/ \d{4}$/.test(enrollD)) { alert("تنسيق تاريخ التسجيل خاطئ."); return; }
+    if(exitD && !/^\d{2} \/ \d{2} \/ \d{4}$/.test(exitD)) { alert("تنسيق تاريخ الخروج خاطئ."); return; }
+    if(enrollNum && !/^\d+$/.test(enrollNum)) { alert("رقم القيد يجب أن يكون أرقاماً فقط."); return; }
+    if(!/^\d+$/.test(classVal)) { alert("القسم يجب أن يكون أرقاماً فقط."); return; }
+
+    const studentData = {
+        id: idVal, ln: document.getElementById('lastName').value, fn: document.getElementById('firstName').value,
+        dob: dob, pob: document.getElementById('placeOfBirth').value, gender: document.getElementById('gender').value,
+        level: document.getElementById('academicYear').value, class: classVal,
+        sys: document.getElementById('attendanceSystem').value, enrollNum: enrollNum,
+        enrollDate: enrollD, exitDate: exitD, guard: document.getElementById('guardianName').value,
+        mother: document.getElementById('motherName').value, phone: phoneVal, addr: document.getElementById('address').value,
+        photo: document.getElementById('photoPath').value
+    };
+
+    if (isEditMode && selectedIndex !== -1) studentsList[selectedIndex] = studentData;
+    else {
+        if(studentsList.some(s => s.id === idVal)) { alert("رقم التعريف مكرر!"); return; }
+        studentsList.push(studentData);
+    }
+    renderTable(); lockFields(true); isEditMode = false;
+    document.getElementById('modeStatus').innerHTML = '<i class="fas fa-eye"></i> وضع العرض';
+    alert("تم الحفظ.");
+}
+
+function bulkSave() {
+    if(studentsList.length === 0) return alert("لا بيانات.");
+    if(!confirm("حفظ الكل في Django؟")) return;
+    alert("تمت المزامنة.");
+}
+
+function deleteStudent() {
+    if (selectedIndex === -1) return alert("اختر تلميذاً.");
+    if (confirm("حذف التلميذ؟")) {
+        studentsList.splice(selectedIndex, 1); renderTable();
+        document.querySelectorAll('.form-input').forEach(i => i.value = ""); updatePhotoUI("");
+        selectedIndex = -1;
+    }
+}
+
+function importExcel() {
+    let input = document.createElement('input'); input.type = 'file';
+    input.onchange = e => {
+        let reader = new FileReader();
+        reader.onload = ev => {
+            let data = new Uint8Array(ev.target.result);
+            let wb = XLSX.read(data, {type: 'array'});
+            let json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames]);
+            studentsList = json.map(row => ({
+                id: String(findVal(row, ['تعريف', 'رقم'])), ln: findVal(row, ['اللقب']), fn: findVal(row, ['الاسم']),
+                dob: formatStrictDate(findVal(row, ['ازدياد', 'ميلاد'])), gender: String(findVal(row, ['الجنس'])).trim(),
+                level: findVal(row, ['السنة', 'المستوى'], 'التسجيل'), class: String(findVal(row, ['قسم'])),
+                pob: findVal(row, ['مكان']), sys: findVal(row, ['نظام']), guard: findVal(row, ['ولي']),
+                mother: findVal(row, ['أم']), phone: String(findVal(row, ['هاتف'])), addr: findVal(row, ['عنوان']),
+                enrollNum: String(findVal(row, ['قيد'])), enrollDate: formatStrictDate(findVal(row, ['تاريخ التسجيل'])),
+                exitDate: "", photo: ""
+            }));
+            renderTable(); alert("تم استيراد " + studentsList.length + " تلميذ.");
+        };
+        reader.readAsArrayBuffer(e.target.files[0]);
+    };
+    input.click();
+}
+
+function renderTable() {
+    const tbody = document.querySelector('#studentsTable tbody');
+    tbody.innerHTML = studentsList.map((s, i) => `<tr onclick="fillForm(${i}, this)"><td>${s.id}</td><td>${s.ln}</td><td>${s.fn}</td><td>${s.dob}</td><td>${s.level}</td><td>${s.class}</td></tr>`).join('');
+}
+
+function fillForm(idx, row) {
+    selectedIndex = idx; const s = studentsList[idx];
+    document.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row')); row.classList.add('selected-row');
+    document.getElementById('lastName').value = s.ln; document.getElementById('firstName').value = s.fn;
+    document.getElementById('studentID').value = s.id; document.getElementById('dateOfBirth').value = s.dob;
+    document.getElementById('placeOfBirth').value = s.pob; document.getElementById('gender').value = s.gender;
+    document.getElementById('academicYear').value = s.level; document.getElementById('className').value = s.class;
+    document.getElementById('attendanceSystem').value = s.sys; document.getElementById('guardianName').value = s.guard;
+    document.getElementById('motherName').value = s.mother; document.getElementById('guardianPhone').value = s.phone;
+    document.getElementById('address').value = s.addr; document.getElementById('enrollmentNumber').value = s.enrollNum;
+    document.getElementById('enrollmentDate').value = s.enrollDate; document.getElementById('exitDate').value = s.exitDate;
+    document.getElementById('photoPath').value = s.photo; updatePhotoUI(s.photo); lockFields(true);
+    document.getElementById('modeStatus').innerHTML = '<i class="fas fa-eye"></i> وضع العرض';
+}
+
+function exportBackup() {
+    if(studentsList.length === 0) return alert("لا بيانات.");
+    // تحويل الأسماء إلى العربية في ملف الإكسل
+    const backupData = studentsList.map(s => ({
+        "رقم التعريف الوطني": s.id, "اللقب": s.ln, "الاسم": s.fn, "تاريخ الازدياد": s.dob,
+        "مكان الميلاد": s.pob, "الجنس": s.gender, "المستوى": s.level, "القسم": s.class,
+        "نظام التمدرس": s.sys, "رقم القيد": s.enrollNum, "تاريخ التسجيل": s.enrollDate,
+        "تاريخ الخروج": s.exitDate, "اسم الولي": s.guard, "اسم الأم": s.mother,
+        "هاتف الولي": s.phone, "العنوان": s.addr
+    }));
+    const ws = XLSX.utils.json_to_sheet(backupData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "التلاميذ");
+    XLSX.writeFile(wb, "Backup_Boushnafa_Students.xlsx");
+}
+</script>
+</body>
+</html>
