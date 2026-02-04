@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block header_title %}لوحة القيادة{% endblock %}
+
+{% block content %}
+<div class="grid-4">
+    <div class="card" style="border-right: 4px solid var(--primary);">
+        <div style="font-size: 3rem; color: var(--primary); margin-bottom: 10px;"><i class="fas fa-users"></i></div>
+        <div style="font-size: 1.5rem; font-weight: bold;">{{ total_students }}</div>
+        <div style="color: #64748b;">مجموع التلاميذ</div>
+    </div>
+
+    <div class="card" style="border-right: 4px solid var(--success);">
+        <div style="font-size: 3rem; color: var(--success); margin-bottom: 10px;"><i class="fas fa-utensils"></i></div>
+        <div style="font-size: 1.5rem; font-weight: bold;">{{ half_board_count }}</div>
+        <div style="color: #64748b;">تلاميذ نصف داخلي</div>
+    </div>
+
+    <div class="card" style="border-right: 4px solid var(--warning);">
+        <div style="font-size: 3rem; color: var(--warning); margin-bottom: 10px;"><i class="fas fa-chalkboard-teacher"></i></div>
+        <div style="font-size: 1.5rem; font-weight: bold;">4</div>
+        <div style="color: #64748b;">المستويات الدراسية</div>
+    </div>
+
+    <div class="card" style="border-right: 4px solid var(--danger);">
+        <div style="font-size: 3rem; color: var(--danger); margin-bottom: 10px;"><i class="fas fa-database"></i></div>
+        <div style="font-size: 1.2rem; font-weight: bold;">{{ db_status }}</div>
+        <div style="color: #64748b;">حالة قاعدة البيانات</div>
+    </div>
+</div>
+
+<div class="grid-2 mt-4">
+    <div class="card">
+        <h3><i class="fas fa-rocket"></i> اختصارات سريعة</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+            <a href="{% url 'canteen_home' %}" class="btn btn-primary"><i class="fas fa-utensils"></i> تسجيل الحضور (المطعم)</a>
+            <a href="{% url 'student_list' %}" class="btn btn-success"><i class="fas fa-user-plus"></i> إضافة تلميذ</a>
+            <a href="{% url 'settings' %}" class="btn" style="background: #475569; color: white;"><i class="fas fa-file-import"></i> استيراد Eleve.xls</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-chart-pie"></i> إحصائيات المطعم اليوم</h3>
+        <div style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0;">
+                <span>عدد الحضور اليوم:</span>
+                <span style="font-weight: bold; color: var(--success);">{{ present_today }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                <span>عدد الغياب اليوم:</span>
+                <span style="font-weight: bold; color: var(--danger);">{{ absent_today }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}تسيير التلاميذ - متوسطة بوشنافة عمر{% endblock %}
+{% block header_title %}قائمة التلاميذ{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div style="position: relative; width: 300px;">
+            <input type="text" placeholder="بحث بالاسم أو رقم التعريف..." style="width: 100%; padding: 10px 40px 10px 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <i class="fas fa-search" style="position: absolute; right: 15px; top: 13px; color: #94a3b8;"></i>
+        </div>
+        <button class="btn btn-primary"><i class="fas fa-plus"></i> إضافة تلميذ جديد</button>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>رقم التعريف</th>
+                    <th>اللقب</th>
+                    <th>الاسم</th>
+                    <th>تاريخ الميلاد</th>
+                    <th>القسم</th>
+                    <th>النظام</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr>
+                    <td>{{ student.student_id_number }}</td>
+                    <td>{{ student.last_name }}</td>
+                    <td>{{ student.first_name }}</td>
+                    <td>{{ student.date_of_birth|date:"Y/m/d" }}</td>
+                    <td>{{ student.class_name }}</td>
+                    <td>
+                        <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;
+                        {% if student.attendance_system == 'نصف داخلي' %}background: #d1fae5; color: #065f46;{% else %}background: #f1f5f9; color: #64748b;{% endif %}">
+                            {{ student.attendance_system }}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn" style="padding: 5px 10px; background: none; color: var(--primary);"><i class="fas fa-edit"></i></button>
+                        <button class="btn" style="padding: 5px 10px; background: none; color: var(--danger);"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 30px;">لا توجد بيانات. يرجى استيراد البيانات من الإعدادات.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

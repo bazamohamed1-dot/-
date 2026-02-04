@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block title %}المطعم المدرسي{% endblock %}
+{% block header_title %}تسيير النظام نصف الداخلي{% endblock %}
+
+{% block extra_css %}
+<style>
+    .scanner-section { background: white; padding: 30px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; }
+    .scanner-input {
+        width: 100%; max-width: 500px; padding: 15px; font-size: 1.5rem;
+        border: 3px solid var(--accent); border-radius: 10px; text-align: center; outline: none; transition: 0.3s;
+    }
+    .scanner-input:focus { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); border-color: var(--primary); }
+
+    .student-display { display: flex; gap: 30px; margin-top: 30px; align-items: flex-start; }
+    .photo-box {
+        width: 200px; height: 260px; background: #f8fafc; border: 2px solid #e2e8f0;
+        border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+
+    .info-box { flex: 1; background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+    .info-label { color: #64748b; font-size: 0.9rem; font-weight: 700; }
+    .info-value { font-size: 1.2rem; font-weight: 600; color: #334155; }
+
+    .stats-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; flex: 1; }
+    .stats-num { font-size: 2.5rem; font-weight: 800; margin: 10px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="grid-template-columns: 2fr 1fr; align-items: start;">
+
+    <!-- Left: Scanner & Student Info -->
+    <div>
+        <div class="scanner-section">
+            <input type="text" id="barcodeInput" class="scanner-input" placeholder="امسح البطاقة هنا..." autofocus autocomplete="off">
+            <div id="alertBox" style="margin-top: 15px; padding: 15px; border-radius: 8px; font-weight: bold; display: none;"></div>
+        </div>
+
+        <div class="student-display">
+            <div class="photo-box">
+                <img id="studentImage" src="" style="display: none;">
+                <i class="fas fa-user fa-5x" id="placeholderIcon" style="color:#cbd5e1"></i>
+            </div>
+
+            <div class="info-box">
+                <h2 style="margin: 0; color: var(--primary); border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">
+                    <span id="displayName">---</span>
+                </h2>
+                <div class="info-grid">
+                    <div><div class="info-label">تاريخ الازدياد</div><div class="info-value" id="dob">---</div></div>
+                    <div><div class="info-label">المستوى</div><div class="info-value" id="level">---</div></div>
+                    <div><div class="info-label">القسم</div><div class="info-value" id="className">---</div></div>
+                    <div><div class="info-label">النظام</div><div class="info-value" id="system">---</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Stats -->
+    <div style="display: flex; flex-direction: column; gap: 15px;">
+        <div class="stats-card">
+            <div style="color: var(--primary); font-size: 1.5rem;"><i class="fas fa-users"></i></div>
+            <div class="stats-num" id="totalCount">0</div>
+            <div>مجموع نصف الداخلي</div>
+        </div>
+        <div class="stats-card">
+            <div style="color: var(--success); font-size: 1.5rem;"><i class="fas fa-check-circle"></i></div>
+            <div class="stats-num" style="color: var(--success);" id="presentCount">0</div>
+            <div>عدد الحضور</div>
+        </div>
+        <div class="stats-card">
+            <div style="color: var(--danger); font-size: 1.5rem;"><i class="fas fa-times-circle"></i></div>
+            <div class="stats-num" style="color: var(--danger);" id="absentCount">0</div>
+            <div>عدد الغياب</div>
+        </div>
+
+        <button class="btn btn-primary" onclick="window.location.reload()"><i class="fas fa-sync"></i> تحديث الإحصائيات</button>
+        <button class="btn btn-warning" onclick="exportExcel()"><i class="fas fa-file-excel"></i> حفظ في إكسل</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const input = document.getElementById('barcodeInput');
+    input.focus();
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            handleScan(this.value);
+            this.value = '';
+        }
+    });
+
+    // Keep focus
+    document.addEventListener('click', () => input.focus());
+
+    async function handleScan(barcode) {
+        if(!barcode) return;
+
+        try {
+            const res = await fetch('/canteen/scan_card/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ barcode })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                showStudent(data.student);
+                showAlert('تم التسجيل بنجاح', 'success');
+                updateStats();
+            } else {
+                if (data.student) showStudent(data.student);
+
+                if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
+                else if (data.code === 'NOT_HALF_BOARD') showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'danger');
+                else if (data.code === 'NOT_FOUND') showAlert('خطأ: التلميذ غير موجود!', 'danger');
+                else showAlert('خطأ: ' + (data.error || 'غير معروف'), 'danger');
+            }
+        } catch (e) {
+            showAlert('خطأ في الاتصال بالسيرفر', 'danger');
+            console.error(e);
+        }
+    }
+
+    function showStudent(s) {
+        document.getElementById('displayName').textContent = `${s.last_name} ${s.first_name}`;
+        document.getElementById('dob').textContent = s.date_of_birth;
+        document.getElementById('level').textContent = s.academic_year;
+        document.getElementById('className').textContent = s.class_name;
+        document.getElementById('system').textContent = s.attendance_system;
+
+        // Image handling (if you have image path logic)
+        // document.getElementById('studentImage').src = ...
+    }
+
+    function showAlert(msg, type) {
+        const box = document.getElementById('alertBox');
+        box.textContent = msg;
+        box.style.display = 'block';
+        box.className = ''; // reset
+
+        if (type === 'success') { box.style.background = '#d1fae5'; box.style.color = '#065f46'; }
+        else if (type === 'warning') { box.style.background = '#fef3c7'; box.style.color = '#92400e'; }
+        else { box.style.background = '#fee2e2'; box.style.color = '#991b1b'; }
+
+        setTimeout(() => box.style.display = 'none', 3000);
+    }
+
+    async function updateStats() {
+        const res = await fetch('/canteen/canteen_stats/');
+        const data = await res.json();
+        document.getElementById('totalCount').textContent = data.total_half_board;
+        document.getElementById('presentCount').textContent = data.present_count;
+        document.getElementById('absentCount').textContent = data.absent_count;
+    }
+
+    async function exportExcel() {
+        if(!confirm('حفظ ملف الإكسل؟')) return;
+        fetch('/canteen/export_canteen/', { method: 'POST' })
+            .then(r => r.json())
+            .then(d => alert(d.message || d.error));
+    }
+
+    // Initial load
+    updateStats();
+</script>
+{% endblock %}

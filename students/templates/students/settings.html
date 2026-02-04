@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block header_title %}الإعدادات وقاعدة البيانات{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 800px; margin: auto;">
+    <h2><i class="fas fa-database"></i> إدارة قاعدة البيانات</h2>
+    <p style="color: #64748b; margin-bottom: 20px;">
+        هذه اللوحة تسمح لك باستيراد بيانات التلاميذ من ملف <code>Eleve.xls</code> الأصلي، ليكون هو الأساس في عمل البرنامج.
+    </p>
+
+    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+        <h3 style="margin-top: 0;">استيراد / تحديث البيانات</h3>
+        <p>يرجى التأكد من وجود ملف <code>Eleve.xls</code> في المجلد الرئيسي للمشروع.</p>
+
+        <form method="post" action="{% url 'import_eleve_view' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 15px; font-size: 1.1rem;">
+                <i class="fas fa-sync-alt"></i> ابدأ استيراد البيانات من Eleve.xls
+            </button>
+        </form>
+    </div>
+
+    <div style="margin-top: 30px;">
+        <h3><i class="fas fa-info-circle"></i> حالة النظام</h3>
+        <table class="table">
+            <tr>
+                <td>عدد التلاميذ المسجلين:</td>
+                <td><strong>{{ total_students }}</strong></td>
+            </tr>
+            <tr>
+                <td>آخر عملية استيراد:</td>
+                <td><strong>{{ last_import_date|default:"غير متوفر" }}</strong></td>
+            </tr>
+        </table>
+    </div>
+</div>
+{% endblock %}

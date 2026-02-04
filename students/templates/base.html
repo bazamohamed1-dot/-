@@ -1,0 +1,137 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}نظام تسيير متوسطة بوشنافة عمر{% endblock %}</title>
+    <!-- Fonts & Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #1e40af; --accent: #3b82f6; --success: #10b981;
+            --danger: #ef4444; --warning: #f59e0b; --bg: #f1f5f9;
+            --sidebar-width: 260px; --header-height: 70px;
+        }
+
+        body { margin: 0; font-family: 'Cairo', sans-serif; background: var(--bg); color: #334155; }
+
+        /* Layout */
+        .wrapper { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width); background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            color: white; display: flex; flex-direction: column; position: fixed; right: 0; height: 100%; z-index: 1000;
+            box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+        }
+        .brand { padding: 20px; font-size: 1.2rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center; }
+        .nav-links { list-style: none; padding: 20px 10px; margin: 0; flex: 1; }
+        .nav-item { margin-bottom: 5px; }
+        .nav-link {
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #94a3b8;
+            text-decoration: none; border-radius: 8px; transition: 0.3s; font-weight: 600;
+        }
+        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.05); color: white; transform: translateX(-5px); }
+        .nav-link i { width: 25px; text-align: center; }
+
+        /* Main Content */
+        .main { flex: 1; margin-right: var(--sidebar-width); transition: 0.3s; }
+        .header {
+            height: var(--header-height); background: white; border-bottom: 1px solid #e2e8f0;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 30px;
+        }
+        .page-title { font-size: 1.4rem; font-weight: 700; color: var(--primary); }
+        .content { padding: 30px; }
+
+        /* Cards & UI Elements */
+        .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }
+        .btn {
+            padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;
+            display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; font-family: 'Cairo', sans-serif;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { text-align: right; padding: 15px; background: #f8fafc; color: #64748b; font-weight: 700; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 15px; border-bottom: 1px solid #e2e8f0; }
+        tr:hover td { background: #f8fafc; }
+
+        /* Utilities */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .mt-4 { margin-top: 1.5rem; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <i class="fas fa-school"></i> متوسطة بوشنافة عمر
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item">
+                <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-home"></i> الرئيسية
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'student_list' %}" class="nav-link {% if 'students' in request.path %}active{% endif %}">
+                    <i class="fas fa-user-graduate"></i> تسيير التلاميذ
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'canteen_home' %}" class="nav-link {% if 'canteen' in request.path %}active{% endif %}">
+                    <i class="fas fa-utensils"></i> المطعم المدرسي
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-book"></i> المكتبة (قريباً)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
+                    <i class="fas fa-cog"></i> الإعدادات وقاعدة البيانات
+                </a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+        <header class="header">
+            <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
+            <div class="user-info">
+                <span><i class="fas fa-user-circle"></i> المدير / المسؤول</span>
+            </div>
+        </header>
+
+        <div class="content">
+            {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}" style="padding: 15px; margin-bottom: 20px; border-radius: 8px; background: #e0f2fe; color: #0369a1;">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</div>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>
