@@ -178,15 +178,16 @@
                 showAlert('تم تسجيل الحضور بنجاح', 'success');
                 updateStats();
             } else {
-                if (data.student) showStudent(data.student); // Show student even if error (e.g. already ate)
+                if (data.student) showStudent(data.student);
 
                 if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
                 else if (data.code === 'NOT_HALF_BOARD') showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'error');
+                else if (data.code === 'NOT_FOUND') showAlert('خطأ: التلميذ غير موجود في القائمة', 'error');
                 else showAlert('خطأ: ' + data.error, 'error');
             }
         } catch (err) {
             console.error(err);
-            showAlert('خطأ في الاتصال بالسيرفر', 'error');
+            showAlert('خطأ في الاتصال بالسيرفر: ' + err.message, 'error');
         }
     }
 

@@ -1,6 +1,7 @@
+from rest_framework import viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status, viewsets
+from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from django.utils import timezone
@@ -12,17 +13,31 @@ from django.http import HttpResponse
 from datetime import date
 import os
 from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+import logging
 
-# Restored StudentViewSet
+logger = logging.getLogger(__name__)
+
+# --- Restore StudentViewSet ---
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
 
+@csrf_exempt
 @api_view(['POST'])
 def scan_card(request):
-    barcode = request.data.get('barcode')
+    try:
+        barcode = request.data.get('barcode')
+        print(f"DEBUG: Received barcode: {barcode}") # Simple print for container logs
+    except Exception as e:
+        print(f"DEBUG: Error parsing data: {e}")
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+
     if not barcode:
         return Response({'error': 'No barcode provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Clean the barcode (remove spaces, etc)
+    barcode = str(barcode).strip()
 
     try:
         # Assuming barcode matches student_id_number
@@ -68,13 +83,14 @@ def get_canteen_stats(request):
         'absent_count': max(0, absent_count)
     })
 
+@csrf_exempt
 @api_view(['POST'])
 def manual_attendance(request):
     student_id = request.data.get('student_id')
     # Can search by internal ID or student_id_number
     try:
         student = Student.objects.get(id=student_id)
-    except Student.DoesNotExist:
+    except (Student.DoesNotExist, ValueError):
          try:
             student = Student.objects.get(student_id_number=student_id)
          except Student.DoesNotExist:
@@ -104,11 +120,10 @@ def get_attendance_lists(request):
         'absent': StudentSerializer(absent_students, many=True).data
     })
 
+@csrf_exempt
 @api_view(['POST'])
 def export_canteen_sheet(request):
     # This view will update the Excel file in the root/backup folder
-    # User said: "Excel sheet of presence and absence inside the backup file"
-    # I'll create/update 'Canteen_Attendance.xlsx'.
 
     file_path = os.path.join(settings.BASE_DIR, 'Canteen_Attendance.xlsx')
     today = date.today()
@@ -142,7 +157,9 @@ def export_canteen_sheet(request):
     for att in present_attendances:
         s = att.student
         present_ids.add(s.id)
-        # Avoid duplication for same day/student if possible, or just append
+        # Check if already in sheet for today (simple check)
+        # Optimized: just append for now, or use a set of (date, id) if we read the sheet first.
+        # Given request: "Accumulate days".
         ws.append([date_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
 
     # Append Absent
