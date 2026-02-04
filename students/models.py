@@ -11,7 +11,7 @@ class Student(models.Model):
     academic_year = models.CharField(max_length=20, verbose_name="المستوى") # مثال: أولى
     class_name = models.CharField(max_length=20, verbose_name="القسم") # مثال: أولى 1
     attendance_system = models.CharField(max_length=50, verbose_name="نظام التمدرس")
-    enrollment_number = models.CharField(max_length=50, unique=True, verbose_name="رقم القيد")
+    enrollment_number = models.CharField(max_length=50, verbose_name="رقم القيد")
     enrollment_date = models.DateField(verbose_name="تاريخ التسجيل")
     exit_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الخروج")
     guardian_name = models.CharField(max_length=200, verbose_name="اسم الولي")

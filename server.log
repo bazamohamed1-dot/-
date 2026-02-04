@@ -3,3 +3,19 @@ Watching for file changes with StatReloader
 [04/Feb/2026 16:23:20] "GET /canteen/canteen_stats/ HTTP/1.1" 200 57
 Bad Request: /canteen/scan_card/
 [04/Feb/2026 16:23:20] "POST /canteen/scan_card/ HTTP/1.1" 400 496
+/app/students/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 04, 2026 - 16:22:04
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+[04/Feb/2026 17:03:23] "GET /canteen/ui/ HTTP/1.1" 200 16476
+[04/Feb/2026 17:03:24] "GET /canteen/canteen_stats/ HTTP/1.1" 200 61
+Bad Request: /canteen/scan_card/
+[04/Feb/2026 17:03:24] "POST /canteen/scan_card/ HTTP/1.1" 400 568

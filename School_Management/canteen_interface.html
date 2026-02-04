@@ -12,12 +12,12 @@
         .header h1 { margin: 0; font-size: 1.8rem; }
         .date-display { font-size: 1.1rem; opacity: 0.9; margin-top: 5px; font-weight: bold; }
 
-        .main-content { display: flex; padding: 30px; gap: 30px; flex-wrap: wrap; justify-content: center; }
+        .main-content { display: flex; padding: 30px; gap: 50px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
 
         /* Left Side: Scanner & Student Info */
-        .interaction-area { flex: 1; min-width: 350px; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+        .interaction-area { flex: 1; min-width: 350px; display: flex; flex-direction: column; gap: 40px; align-items: center; }
 
-        .scanner-box { width: 100%; text-align: center; }
+        .scanner-box { width: 100%; text-align: center; margin-bottom: 20px; }
         .scanner-input { width: 100%; padding: 15px; font-size: 1.5rem; border: 3px solid var(--accent); border-radius: 10px; text-align: center; outline: none; transition: 0.3s; }
         .scanner-input:focus { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); border-color: var(--primary); }
 
@@ -83,10 +83,12 @@
                 <div class="student-details" id="studentDetails" style="opacity: 0.5;">
                     <div class="student-name" id="studentName">---</div>
                     <div class="student-info-grid">
-                        <div class="info-item"><span>تاريخ الميلاد</span><div id="dob">---</div></div>
-                        <div class="info-item"><span>القسم</span><div id="className">---</div></div>
+                        <div class="info-item"><span>اللقب</span><div id="displayLastName">---</div></div>
+                        <div class="info-item"><span>الاسم</span><div id="displayFirstName">---</div></div>
+                        <div class="info-item"><span>تاريخ الازدياد</span><div id="dob">---</div></div>
                         <div class="info-item"><span>المستوى</span><div id="level">---</div></div>
-                        <div class="info-item"><span>النظام</span><div id="system">---</div></div>
+                        <div class="info-item"><span>القسم</span><div id="className">---</div></div>
+                        <div class="info-item"><span>صفة التمدرس</span><div id="system">---</div></div>
                     </div>
                 </div>
             </div>
@@ -189,7 +191,10 @@
     }
 
     function showStudent(student) {
-        document.getElementById('studentName').textContent = `${student.last_name} ${student.first_name}`;
+        // Updated to split name and show full details
+        document.getElementById('studentName').style.display = 'none'; // Hide the combined name header
+        document.getElementById('displayLastName').textContent = student.last_name;
+        document.getElementById('displayFirstName').textContent = student.first_name;
         document.getElementById('dob').textContent = student.date_of_birth;
         document.getElementById('className').textContent = student.class_name;
         document.getElementById('level').textContent = student.academic_year;
