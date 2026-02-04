@@ -21,6 +21,7 @@ class Command(BaseCommand):
 
         count = 0
         updated = 0
+        processed_ids = set()
 
         for row in rows:
             cols = [c.get_text(strip=True) for c in row.find_all('td')]
@@ -28,9 +29,23 @@ class Command(BaseCommand):
                 continue
 
             # Map fields
-            student_id = cols[0]
-            last_name = cols[1]
-            first_name = cols[2]
+            student_id = cols[0].strip()
+
+            # Validation: Skip empty or non-numeric IDs
+            if not student_id or not student_id.isdigit():
+                continue
+
+            # Avoid duplicates within the file (handle nested rows issue)
+            if student_id in processed_ids:
+                continue
+            processed_ids.add(student_id)
+
+            last_name = cols[1].strip()
+            first_name = cols[2].strip()
+
+            # Validation: Skip entries with empty names
+            if not last_name or not first_name:
+                continue
             gender = cols[3]
             dob_str = cols[4]
             pob = cols[9]

@@ -3,14 +3,14 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.db.models import Count
+from django.db.models import Count, F
 from django.utils import timezone
-from .models import Student, CanteenAttendance
-from .serializers import StudentSerializer, CanteenAttendanceSerializer
+from .models import Student, CanteenAttendance, LibraryLoan
+from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse
-from datetime import date
+from datetime import date, timedelta
 import os
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
@@ -22,6 +22,104 @@ logger = logging.getLogger(__name__)
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
+
+# --- Library Views ---
+
+@csrf_exempt
+@api_view(['POST'])
+def scan_library_card(request):
+    barcode = request.data.get('barcode')
+    if not barcode:
+        return Response({'error': 'No barcode provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    barcode = str(barcode).strip()
+    try:
+        # Search by student_id_number
+        student = Student.objects.get(student_id_number=barcode)
+    except Student.DoesNotExist:
+        return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Get active loans
+    active_loans = LibraryLoan.objects.filter(student=student, is_returned=False)
+
+    return Response({
+        'student': StudentSerializer(student).data,
+        'active_loans': LibraryLoanSerializer(active_loans, many=True).data
+    })
+
+@csrf_exempt
+@api_view(['POST'])
+def create_loan(request):
+    student_id = request.data.get('student_id')
+    book_title = request.data.get('book_title')
+
+    if not student_id or not book_title:
+        return Response({'error': 'Missing data'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        student = Student.objects.get(id=student_id)
+    except Student.DoesNotExist:
+        return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    loan_date = date.today()
+    expected_return = loan_date + timedelta(days=15)
+
+    loan = LibraryLoan.objects.create(
+        student=student,
+        book_title=book_title,
+        loan_date=loan_date,
+        expected_return_date=expected_return
+    )
+
+    return Response(LibraryLoanSerializer(loan).data, status=status.HTTP_201_CREATED)
+
+@csrf_exempt
+@api_view(['POST'])
+def return_book(request):
+    loan_id = request.data.get('loan_id')
+    try:
+        loan = LibraryLoan.objects.get(id=loan_id)
+    except LibraryLoan.DoesNotExist:
+        return Response({'error': 'Loan not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    loan.is_returned = True
+    loan.actual_return_date = date.today()
+    loan.save()
+
+    return Response({'message': 'Book returned successfully'})
+
+@api_view(['GET'])
+def library_stats(request):
+    total_students = Student.objects.count()
+    borrowers_count = LibraryLoan.objects.values('student').distinct().count()
+
+    percentage = 0
+    if total_students > 0:
+        percentage = round((borrowers_count / total_students) * 100, 1)
+
+    # Overdue loans: Not returned AND expected_return < today
+    today = date.today()
+    overdue_loans = LibraryLoan.objects.filter(
+        is_returned=False,
+        expected_return_date__lt=today
+    ).select_related('student')
+
+    overdue_list = []
+    for loan in overdue_loans:
+        overdue_list.append({
+            'student_name': f"{loan.student.last_name} {loan.student.first_name}",
+            'student_class': loan.student.class_name,
+            'book_title': loan.book_title,
+            'loan_date': loan.loan_date,
+            'expected_return': loan.expected_return_date,
+            'days_overdue': (today - loan.expected_return_date).days
+        })
+
+    return Response({
+        'borrowers_count': borrowers_count,
+        'borrowers_percentage': percentage,
+        'overdue_loans': overdue_list
+    })
 
 @csrf_exempt
 @api_view(['POST'])
