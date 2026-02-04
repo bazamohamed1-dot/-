@@ -1,13 +1,14 @@
 from rest_framework import serializers
-from .models import Student
+from .models import Student, CanteenAttendance
 
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
-        fields = '__all__' 
+        fields = '__all__'
+
+class CanteenAttendanceSerializer(serializers.ModelSerializer):
+    student = StudentSerializer(read_only=True)
     
-    def validate(self, data):
-        phone = data.get('guardian_phone', None)
-        if not phone or not phone.strip():
-             raise serializers.ValidationError("رقم هاتف الولي إجباري ولا يمكن أن يكون فارغاً.")
-        return data
+    class Meta:
+        model = CanteenAttendance
+        fields = '__all__'

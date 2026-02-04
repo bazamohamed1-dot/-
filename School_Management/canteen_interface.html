@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>واجهة تسيير النظام نصف الداخلي</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --primary: #1e40af; --accent: #3b82f6; --success: #059669; --danger: #dc2626; --warning: #d97706; --bg: #f8fafc; --border: #e2e8f0; --secondary: #64748b; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; direction: rtl; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+        .app-container { width: 95%; max-width: 1200px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid var(--border); }
+        .header { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; padding: 20px; text-align: center; position: relative; }
+        .header h1 { margin: 0; font-size: 1.8rem; }
+        .date-display { font-size: 1.1rem; opacity: 0.9; margin-top: 5px; font-weight: bold; }
+
+        .main-content { display: flex; padding: 30px; gap: 30px; flex-wrap: wrap; justify-content: center; }
+
+        /* Left Side: Scanner & Student Info */
+        .interaction-area { flex: 1; min-width: 350px; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+
+        .scanner-box { width: 100%; text-align: center; }
+        .scanner-input { width: 100%; padding: 15px; font-size: 1.5rem; border: 3px solid var(--accent); border-radius: 10px; text-align: center; outline: none; transition: 0.3s; }
+        .scanner-input:focus { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); border-color: var(--primary); }
+
+        .student-card { width: 100%; background: #f1f5f9; border-radius: 15px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid var(--border); position: relative; min-height: 300px; justify-content: center; }
+        .student-photo { width: 180px; height: 220px; background: white; border: 2px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .student-photo img { width: 100%; height: 100%; object-fit: cover; }
+        .student-details { text-align: center; width: 100%; }
+        .student-name { font-size: 1.6rem; font-weight: bold; color: var(--primary); margin: 5px 0; }
+        .student-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: right; width: 100%; margin-top: 15px; font-size: 1.1rem; }
+        .info-item span { font-weight: bold; color: var(--secondary); display: block; font-size: 0.9rem; }
+        .info-item div { font-weight: 600; color: #333; }
+
+        .alert-box { position: absolute; top: 10px; left: 10px; right: 10px; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; display: none; z-index: 10; animation: fadeIn 0.3s; }
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }
+        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+        .alert-warning { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
+
+        /* Right Side: Stats */
+        .stats-area { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 15px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border); text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .stat-value { font-size: 2.5rem; font-weight: 800; color: var(--primary); }
+        .stat-label { color: var(--secondary); font-weight: 600; }
+        .stat-icon { font-size: 1.5rem; margin-bottom: 5px; opacity: 0.8; }
+
+        .buttons-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: auto; }
+        .btn { padding: 12px; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 100; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 500px; max-width: 90%; max-height: 80vh; overflow-y: auto; text-align: center; }
+        .close-modal { float: left; font-size: 1.5rem; cursor: pointer; }
+        .list-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .list-table th, .list-table td { padding: 8px; border-bottom: 1px solid var(--border); text-align: right; }
+        .list-table th { background: var(--bg); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <h1><i class="fas fa-utensils"></i> مرحبا بكم في واجهة تسيير النظام نصف الداخلي</h1>
+        <div class="date-display" id="dateDisplay"></div>
+    </div>
+
+    <div class="main-content">
+        <!-- Scanner Section -->
+        <div class="interaction-area">
+            <div class="scanner-box">
+                <input type="text" id="barcodeInput" class="scanner-input" placeholder="امسح البطاقة هنا..." autofocus autocomplete="off">
+            </div>
+
+            <div class="student-card" id="studentCard">
+                <div id="alertBox" class="alert-box"></div>
+
+                <div class="student-photo">
+                    <img id="studentImage" src="" alt="صورة التلميذ" style="display: none;">
+                    <i class="fas fa-user fa-5x" id="placeholderIcon" style="color:#cbd5e1"></i>
+                </div>
+
+                <div class="student-details" id="studentDetails" style="opacity: 0.5;">
+                    <div class="student-name" id="studentName">---</div>
+                    <div class="student-info-grid">
+                        <div class="info-item"><span>تاريخ الميلاد</span><div id="dob">---</div></div>
+                        <div class="info-item"><span>القسم</span><div id="className">---</div></div>
+                        <div class="info-item"><span>المستوى</span><div id="level">---</div></div>
+                        <div class="info-item"><span>النظام</span><div id="system">---</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats-area">
+            <div class="stat-card">
+                <div class="stat-icon" style="color:var(--primary)"><i class="fas fa-users"></i></div>
+                <div class="stat-value" id="totalCount">0</div>
+                <div class="stat-label">مجموع نصف الداخلي</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="color:var(--success)"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-value" id="presentCount" style="color:var(--success)">0</div>
+                <div class="stat-label">عدد الحضور</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="color:var(--danger)"><i class="fas fa-times-circle"></i></div>
+                <div class="stat-value" id="absentCount" style="color:var(--danger)">0</div>
+                <div class="stat-label">عدد الغياب</div>
+            </div>
+
+            <div class="buttons-grid">
+                <button class="btn" style="background:var(--success)" onclick="showList('present')"><i class="fas fa-list-ul"></i> قائمة الحضور</button>
+                <button class="btn" style="background:var(--danger)" onclick="showList('absent')"><i class="fas fa-user-slash"></i> قائمة الغياب</button>
+                <button class="btn" style="background:#0891b2" onclick="openManualEntry()"><i class="fas fa-hand-pointer"></i> تسجيل يدوي</button>
+                <button class="btn" style="background:var(--warning)" onclick="exportToExcel()"><i class="fas fa-save"></i> حفظ في الإكسل</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="listModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="document.getElementById('listModal').style.display='none'">&times;</span>
+        <h2 id="modalTitle">القائمة</h2>
+        <div id="modalBody"></div>
+    </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div id="manualModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="document.getElementById('manualModal').style.display='none'">&times;</span>
+        <h2>تسجيل حضور يدوي</h2>
+        <input type="text" id="manualInput" placeholder="أدخل رقم التعريف أو ابحث بالاسم" style="width: 100%; padding: 10px; font-size: 1.1rem; margin-bottom: 10px;">
+        <button class="btn" style="background:var(--primary); width:100%" onclick="submitManual()">تسجيل</button>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/canteen/';
+
+    // Set Date
+    const today = new Date();
+    document.getElementById('dateDisplay').textContent = `وجبة يوم: ${today.toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+
+    // Focus input
+    const input = document.getElementById('barcodeInput');
+    input.focus();
+    // Keep focus
+    document.addEventListener('click', () => { if(document.activeElement !== document.getElementById('manualInput')) input.focus(); });
+
+    // Barcode Listener
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            handleScan(this.value);
+            this.value = '';
+        }
+    });
+
+    async function handleScan(barcode) {
+        if (!barcode) return;
+
+        try {
+            const res = await fetch(`${API_BASE}scan_card/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ barcode })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                showStudent(data.student);
+                showAlert('تم تسجيل الحضور بنجاح', 'success');
+                updateStats();
+            } else {
+                if (data.student) showStudent(data.student); // Show student even if error (e.g. already ate)
+
+                if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
+                else if (data.code === 'NOT_HALF_BOARD') showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'error');
+                else showAlert('خطأ: ' + data.error, 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showAlert('خطأ في الاتصال بالسيرفر', 'error');
+        }
+    }
+
+    function showStudent(student) {
+        document.getElementById('studentName').textContent = `${student.last_name} ${student.first_name}`;
+        document.getElementById('dob').textContent = student.date_of_birth;
+        document.getElementById('className').textContent = student.class_name;
+        document.getElementById('level').textContent = student.academic_year;
+        document.getElementById('system').textContent = student.attendance_system;
+
+        const img = document.getElementById('studentImage');
+        const icon = document.getElementById('placeholderIcon');
+        if (student.photo_path) {
+            img.src = student.photo_path;
+            img.style.display = 'block';
+            icon.style.display = 'none';
+        } else {
+            img.style.display = 'none';
+            icon.style.display = 'block';
+        }
+        document.getElementById('studentDetails').style.opacity = '1';
+    }
+
+    function showAlert(msg, type) {
+        const box = document.getElementById('alertBox');
+        box.textContent = msg;
+        box.className = 'alert-box alert-' + type;
+        box.style.display = 'block';
+        setTimeout(() => box.style.display = 'none', 3000);
+
+        // Play sound based on type? (Optional)
+    }
+
+    async function updateStats() {
+        try {
+            const res = await fetch(`${API_BASE}canteen_stats/`);
+            const data = await res.json();
+            document.getElementById('totalCount').textContent = data.total_half_board;
+            document.getElementById('presentCount').textContent = data.present_count;
+            document.getElementById('absentCount').textContent = data.absent_count;
+        } catch (e) { console.error(e); }
+    }
+
+    // Initial stats load
+    updateStats();
+
+    async function showList(type) {
+        document.getElementById('listModal').style.display = 'flex';
+        document.getElementById('modalTitle').textContent = type === 'present' ? 'قائمة الحضور' : 'قائمة الغياب';
+        document.getElementById('modalBody').innerHTML = '<p>جاري التحميل...</p>';
+
+        try {
+            const res = await fetch(`${API_BASE}attendance_lists/`);
+            const data = await res.json();
+            const list = type === 'present' ? data.present : data.absent;
+
+            if (list.length === 0) {
+                document.getElementById('modalBody').innerHTML = '<p>لا توجد بيانات.</p>';
+                return;
+            }
+
+            let html = '<table class="list-table"><thead><tr><th>الاسم</th><th>اللقب</th><th>القسم</th></tr></thead><tbody>';
+            list.forEach(s => {
+                html += `<tr><td>${s.first_name}</td><td>${s.last_name}</td><td>${s.class_name}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('modalBody').innerHTML = html;
+        } catch (e) {
+            document.getElementById('modalBody').innerHTML = '<p>خطأ في التحميل.</p>';
+        }
+    }
+
+    function openManualEntry() {
+        document.getElementById('manualModal').style.display = 'flex';
+        document.getElementById('manualInput').focus();
+    }
+
+    async function submitManual() {
+        const val = document.getElementById('manualInput').value;
+        if (!val) return;
+
+        try {
+            const res = await fetch(`${API_BASE}manual_attendance/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: val })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                alert('تم التسجيل يدوياً بنجاح');
+                document.getElementById('manualModal').style.display = 'none';
+                updateStats();
+            } else {
+                alert('خطأ: ' + data.error);
+            }
+        } catch (e) { alert('خطأ في الاتصال'); }
+    }
+
+    async function exportToExcel() {
+        if (!confirm('هل تريد حفظ الحضور والغياب في ملف الإكسل؟')) return;
+        try {
+            const res = await fetch(`${API_BASE}export_canteen/`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) alert('تم الحفظ بنجاح في: ' + data.file);
+            else alert('فشل الحفظ: ' + data.error);
+        } catch (e) { alert('خطأ في الاتصال'); }
+    }
+</script>
+
+</body>
+</html>

@@ -1,4 +1,5 @@
 from django.db import models
+from datetime import date
 
 class Student(models.Model):
     student_id_number = models.CharField(max_length=16, unique=True, verbose_name="رقم التعريف") 
@@ -25,3 +26,16 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.last_name} {self.first_name}"
+
+class CanteenAttendance(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
+    date = models.DateField(default=date.today, verbose_name="التاريخ")
+    time = models.TimeField(auto_now_add=True, verbose_name="الوقت")
+
+    class Meta:
+        verbose_name = "حضور المطعم"
+        verbose_name_plural = "سجل حضور المطعم"
+        unique_together = ('student', 'date')
+
+    def __str__(self):
+        return f"{self.student} - {self.date}"

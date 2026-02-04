@@ -1,0 +1,5 @@
+Watching for file changes with StatReloader
+[04/Feb/2026 16:23:19] "GET /canteen/ui/ HTTP/1.1" 200 15972
+[04/Feb/2026 16:23:20] "GET /canteen/canteen_stats/ HTTP/1.1" 200 57
+Bad Request: /canteen/scan_card/
+[04/Feb/2026 16:23:20] "POST /canteen/scan_card/ HTTP/1.1" 400 496
