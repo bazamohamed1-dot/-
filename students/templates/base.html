@@ -85,7 +85,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="{% url 'student_list' %}" class="nav-link {% if 'students' in request.path %}active{% endif %}">
+                <a href="{% url 'students_management' %}" class="nav-link {% if 'management' in request.path %}active{% endif %}">
                     <i class="fas fa-user-graduate"></i> تسيير التلاميذ
                 </a>
             </li>
@@ -95,8 +95,8 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="#" class="nav-link">
-                    <i class="fas fa-book"></i> المكتبة (قريباً)
+                <a href="{% url 'library_home' %}" class="nav-link {% if 'library' in request.path %}active{% endif %}">
+                    <i class="fas fa-book"></i> المكتبة
                 </a>
             </li>
             <li class="nav-item">

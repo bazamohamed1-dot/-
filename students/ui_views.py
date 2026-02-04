@@ -37,5 +37,12 @@ def canteen_home(request):
     return render(request, 'students/canteen.html')
 
 def student_list(request):
-    students = Student.objects.all().order_by('class_name', 'last_name')[:100] # Limit for perf
-    return render(request, 'students/student_list.html', {'students': students})
+    # This is the old list view, we are replacing it with the full management UI
+    return render(request, 'students/student_list.html')
+
+def students_management(request):
+    # The new merged interface
+    return render(request, 'students/management.html')
+
+def library_home(request):
+    return render(request, 'students/library.html')

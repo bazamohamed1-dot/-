@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Student, CanteenAttendance
+from .models import Student, CanteenAttendance, LibraryLoan
 
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,4 +11,11 @@ class CanteenAttendanceSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CanteenAttendance
+        fields = '__all__'
+
+class LibraryLoanSerializer(serializers.ModelSerializer):
+    student_details = StudentSerializer(source='student', read_only=True)
+
+    class Meta:
+        model = LibraryLoan
         fields = '__all__'

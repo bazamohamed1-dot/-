@@ -39,3 +39,18 @@ class CanteenAttendance(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.date}"
+
+class LibraryLoan(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
+    book_title = models.CharField(max_length=200, verbose_name="عنوان الكتاب")
+    loan_date = models.DateField(default=date.today, verbose_name="تاريخ الإعارة")
+    expected_return_date = models.DateField(verbose_name="تاريخ الإرجاع المحدد")
+    is_returned = models.BooleanField(default=False, verbose_name="تم الإرجاع")
+    actual_return_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الإرجاع الفعلي")
+
+    class Meta:
+        verbose_name = "إعارة كتاب"
+        verbose_name_plural = "إعارات الكتب"
+
+    def __str__(self):
+        return f"{self.student} - {self.book_title}"
