@@ -110,6 +110,9 @@
 
         <div style="text-align: right; margin-bottom: 15px; display: flex; gap: 10px;">
             <input type="text" id="manualSearch" class="form-input" placeholder="ابحث بالاسم أو الرقم..." onkeyup="filterManualList()" style="flex: 2;">
+            <select id="manualLevelFilter" class="form-input" style="flex: 1;" onchange="filterManualList()">
+                <option value="">كل المستويات</option>
+            </select>
             <select id="manualClassFilter" class="form-input" style="flex: 1;" onchange="filterManualList()">
                 <option value="">كل الأقسام</option>
             </select>
@@ -267,7 +270,7 @@
                 const res = await fetch('/canteen/attendance_lists/');
                 const data = await res.json();
                 allStudents = data.absent || []; // Only show absent students as candidates
-                populateManualClassFilter();
+                populateManualFilters();
                 filterManualList();
             } catch(e) {
                 console.error(e);
@@ -282,21 +285,27 @@
         }
     }
 
-    function populateManualClassFilter() {
-        const select = document.getElementById('manualClassFilter');
+    function populateManualFilters() {
+        const levelSelect = document.getElementById('manualLevelFilter');
+        const levels = [...new Set(allStudents.map(s => s.academic_year))].sort();
+        levelSelect.innerHTML = '<option value="">كل المستويات</option>' + levels.map(l => `<option value="${l}">${l}</option>`).join('');
+
+        const classSelect = document.getElementById('manualClassFilter');
         const classes = [...new Set(allStudents.map(s => s.class_name))].sort();
-        select.innerHTML = '<option value="">كل الأقسام</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
+        classSelect.innerHTML = '<option value="">كل الأقسام</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
     }
 
     function filterManualList() {
         const query = document.getElementById('manualSearch').value.toLowerCase();
+        const lvl = document.getElementById('manualLevelFilter').value;
         const cls = document.getElementById('manualClassFilter').value;
         const tbody = document.getElementById('manualListBody');
 
         const filtered = allStudents.filter(s => {
             const matchName = s.first_name.toLowerCase().includes(query) || s.last_name.toLowerCase().includes(query) || s.student_id_number.includes(query);
+            const matchLevel = lvl ? s.academic_year === lvl : true;
             const matchClass = cls ? s.class_name === cls : true;
-            return matchName && matchClass;
+            return matchName && matchLevel && matchClass;
         });
 
         if(filtered.length === 0) {

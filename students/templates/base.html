@@ -35,12 +35,25 @@
             text-decoration: none; border-radius: 8px; transition: 0.3s; font-weight: 600;
         }
         /* Fix colors: Grey default, White on Active/Hover */
-        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.05); color: white !important; transform: translateX(-5px); }
-        .nav-link.active i, .nav-link:hover i { color: white !important; }
-        .nav-link i { width: 25px; text-align: center; }
+        .nav-link:hover { background: rgba(255,255,255,0.05); color: white !important; transform: translateX(-5px); }
 
-        /* Fix for stuck hover/active state on Canteen button if any */
+        /* Active State: White Background, Primary Color Text */
+        .nav-link.active {
+            background: white !important;
+            color: var(--primary) !important;
+            transform: translateX(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .nav-link.active i { color: var(--primary) !important; }
+
+        .nav-link i { width: 25px; text-align: center; }
         .nav-link:focus { outline: none; }
+
+        /* Force Western Arabic Numerals (0-9) */
+        td, .form-input, .number-display {
+             font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif, 'Cairo';
+             unicode-bidi: plaintext;
+        }
 
         /* Main Content */
         .main { flex: 1; margin-right: var(--sidebar-width); transition: 0.3s; }

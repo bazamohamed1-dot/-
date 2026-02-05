@@ -183,7 +183,8 @@ function updateReturnDate() {
     if(loanVal) {
         const d = new Date(loanVal);
         d.setDate(d.getDate() + 15);
-        document.getElementById('returnDatePreview').value = d.toLocaleDateString('ar-EG');
+        // Use 'en-GB' or 'fr-FR' to ensure Western Arabic numerals (0-9) as requested
+        document.getElementById('returnDatePreview').value = d.toLocaleDateString('en-GB');
     }
 }
 

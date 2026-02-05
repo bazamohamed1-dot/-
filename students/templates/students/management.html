@@ -118,6 +118,11 @@
     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
         <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
 
+        <select id="filterLevel" class="form-input" style="flex: 1;" onchange="filterTable()">
+            <option value="">جميع المستويات</option>
+            <!-- Populated via JS -->
+        </select>
+
         <select id="filterClass" class="form-input" style="flex: 1;" onchange="filterTable()">
             <option value="">جميع الأقسام</option>
             <!-- Populated via JS -->
@@ -203,7 +208,7 @@ async function fetchStudents() {
             photo: s.photo_path
         }));
 
-        populateClassFilter();
+        populateFilters();
         filteredList = studentsList;
         renderTable();
     } catch (error) {
@@ -376,35 +381,49 @@ async function deleteStudent() {
     }
 }
 
-function populateClassFilter() {
-    const filterSelect = document.getElementById('filterClass');
-    const classes = [...new Set(studentsList.map(s => s.class))].sort();
+function populateFilters() {
+    // Populate Levels
+    const levelSelect = document.getElementById('filterLevel');
+    const levels = [...new Set(studentsList.map(s => s.level).filter(l => l))].sort();
+    const selectedLevel = levelSelect.value;
 
-    // Preserve existing selection if any
-    const selected = filterSelect.value;
+    levelSelect.innerHTML = '<option value="">جميع المستويات</option>';
+    levels.forEach(l => {
+        const option = document.createElement('option');
+        option.value = l;
+        option.textContent = l;
+        levelSelect.appendChild(option);
+    });
+    levelSelect.value = selectedLevel;
 
-    filterSelect.innerHTML = '<option value="">جميع الأقسام</option>';
+    // Populate Classes
+    const classSelect = document.getElementById('filterClass');
+    const classes = [...new Set(studentsList.map(s => s.class).filter(c => c))].sort();
+    const selectedClass = classSelect.value;
+
+    classSelect.innerHTML = '<option value="">جميع الأقسام</option>';
     classes.forEach(c => {
         const option = document.createElement('option');
         option.value = c;
         option.textContent = c;
-        filterSelect.appendChild(option);
+        classSelect.appendChild(option);
     });
-
-    filterSelect.value = selected;
+    classSelect.value = selectedClass;
 }
 
 function filterTable() {
     const query = document.getElementById('searchInput').value.toLowerCase();
+    const levelFilter = document.getElementById('filterLevel').value;
     const classFilter = document.getElementById('filterClass').value;
 
     filteredList = studentsList.filter(s => {
         const matchesSearch = s.ln.toLowerCase().includes(query) ||
                               s.fn.toLowerCase().includes(query) ||
                               s.id.includes(query);
+        const matchesLevel = levelFilter ? s.level === levelFilter : true;
         const matchesClass = classFilter ? s.class === classFilter : true;
 
-        return matchesSearch && matchesClass;
+        return matchesSearch && matchesLevel && matchesClass;
     });
     renderTable();
 }
