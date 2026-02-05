@@ -91,10 +91,7 @@ def get_readers(request):
 @csrf_exempt
 @api_view(['GET', 'POST'])
 def school_settings(request):
-    try:
-        settings_obj = SchoolSettings.objects.first()
-    except:
-        settings_obj = None
+    settings_obj = SchoolSettings.objects.first()
 
     if request.method == 'GET':
         if settings_obj:
@@ -110,6 +107,7 @@ def school_settings(request):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
+        print(f"Settings Save Error: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt

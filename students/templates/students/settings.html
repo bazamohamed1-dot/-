@@ -88,11 +88,13 @@ async function saveSchoolSettings(e) {
         if (response.ok) {
             alert("تم حفظ إعدادات المؤسسة بنجاح");
         } else {
-            alert("حدث خطأ أثناء الحفظ");
+            const errorText = await response.text();
+            console.error("Save Error:", errorText);
+            alert("حدث خطأ أثناء الحفظ: " + errorText);
         }
     } catch (error) {
         console.error(error);
-        alert("خطأ في الاتصال");
+        alert("خطأ في الاتصال: " + error);
     }
 }
 

@@ -16,12 +16,18 @@
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
         }
-        .wrapper, .sidebar, .header, .no-print {
+        .sidebar, .header, .no-print {
             display: none !important;
+        }
+        .wrapper {
+            display: block !important;
+            height: auto !important;
+            min-height: 0 !important;
         }
         .main {
             margin: 0 !important;
             padding: 0 !important;
+            width: 100% !important;
         }
         .print-container {
             display: grid !important;
