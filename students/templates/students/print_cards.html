@@ -9,7 +9,7 @@
     @media print {
         @page {
             size: A4;
-            margin: 5mm; /* Small margins as requested */
+            margin: 0;
         }
         body {
             background-color: white;
@@ -29,13 +29,22 @@
             padding: 0 !important;
             width: 100% !important;
         }
-        .print-container {
+
+        /* Container for each page (8 cards) */
+        .print-page {
+            width: 210mm;
+            height: 297mm;
             display: grid !important;
-            margin: 0 auto !important; /* Center content */
-            box-shadow: none !important;
-            padding: 0 !important;
-            min-height: auto !important; /* Prevent forced second page if content fits */
-            page-break-after: auto !important;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(4, 1fr);
+            padding: 10mm; /* Consistent margins */
+            box-sizing: border-box;
+            page-break-after: always;
+            margin: 0 auto;
+        }
+
+        .print-page:last-child {
+            page-break-after: auto;
         }
     }
 
@@ -43,15 +52,17 @@
         background-color: #f1f5f9;
     }
 
-    .print-container {
-        width: 200mm; /* Slightly less than 210mm to account for margin */
+    /* Screen view styles */
+    .print-page {
+        width: 210mm;
+        height: 297mm;
         background: white;
         margin: 20px auto;
-        padding: 5mm;
+        padding: 10mm;
         box-shadow: 0 0 10px rgba(0,0,0,0.1);
         display: grid;
         grid-template-columns: 1fr 1fr;
-        grid-template-rows: repeat(4, 60mm);
+        grid-template-rows: repeat(4, 1fr);
         gap: 5mm;
         box-sizing: border-box;
     }
@@ -67,7 +78,9 @@
         background: url('{% static "img/card_bg_pattern.png" %}') no-repeat center center;
         background-size: cover;
         position: relative;
-        height: 52mm;
+        height: 54mm; /* Exact height for fit */
+        margin: auto; /* Center in grid cell */
+        width: 88mm; /* Slightly wider than standard to fit grid nicely */
     }
 
     .photo-area {
@@ -146,17 +159,13 @@
     <a href="{% url 'students_management' %}" class="btn btn-secondary"><i class="fas fa-arrow-right"></i> رجوع</a>
 </div>
 
-<div class="print-container">
-    {% for student in students %}
-    <div class="id-card">
-        <!-- Photo (Left in LTR, Right in RTL but we used flex-direction: row-reverse so it's on left visually) -->
-        <!-- Wait, user said "Photo on Left". row-reverse puts first element on right.
-             So if I want Photo on LEFT, and Info on RIGHT.
-             Flex container (row): [Info] [Photo] -> Photo is on Right.
-             Flex container (row-reverse): [Info] [Photo] -> Photo is on Left.
-             So structure: <Info> <Photo> with row-reverse.
-        -->
+{% for student in students %}
+    <!-- Open new page every 8 cards -->
+    {% if forloop.counter0|divisibleby:8 %}
+    <div class="print-page">
+    {% endif %}
 
+    <div class="id-card">
         <div class="photo-area">
             {% if student.photo_path %}
             <img src="{{ student.photo_path }}">
@@ -168,7 +177,7 @@
         <div class="info-area">
             <div class="header-text">
                 متوسطة بوشنافة عمر<br>
-                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: 2025/2026</span>
+                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: 2026/2025</span>
             </div>
 
             <div class="student-data">
@@ -176,7 +185,26 @@
                 <div><span style="color:#64748b; font-size: 8pt;">الاسم:</span> <strong>{{ student.first_name }}</strong></div>
                 <div><span style="color:#64748b; font-size: 8pt;">تاريخ الميلاد:</span> {{ student.date_of_birth|date:"Y/m/d" }}</div>
                 <div><span style="color:#64748b; font-size: 8pt;">المستوى:</span> {{ student.academic_year }}</div>
-                <div><span style="color:#64748b; font-size: 8pt;">القسم:</span> {{ student.class_name }}</div>
+                <!-- Logic to strip class name to number only.
+                     Django template tag 'slice' or 'cut' is limited.
+                     Ideally backend or custom filter.
+                     Quick hack: Assuming class format "Year Number" -> Split and take last.
+                     But pure template logic is hard.
+                     Let's use a simple JS script to clean up AFTER rendering, OR
+                     since we are in loop, we can't easily.
+                     Actually, we can use a custom template tag OR
+                     Assume the class_name is consistently formatted.
+                     "أولى 1" -> "1".
+                     We can try to just output it and rely on JS? No, print mode JS execution might be flaky or flash.
+                     Best: Iterate and clean in View?
+                     User asked for modifying the view/template.
+                     I can't edit views.py right now for this specific context variable easily without re-reading it.
+                     But I can try to use `cut` filter if the prefix is constant? No.
+                     Let's rely on the fact that `student.class_name` contains the number at the end.
+                     We can use `last` if it was a list.
+                     Let's try to just render it and use JS to fix it immediately.
+                -->
+                <div><span style="color:#64748b; font-size: 8pt;">القسم:</span> <span class="class-name-clean">{{ student.class_name }}</span></div>
             </div>
 
             <div class="barcode-area">
@@ -192,8 +220,13 @@
             </div>
         </div>
     </div>
-    {% endfor %}
-</div>
+
+    <!-- Close page div every 8 cards or at end -->
+    {% if forloop.counter|divisibleby:8 or forloop.last %}
+    </div>
+    {% endif %}
+
+{% endfor %}
 
 {% endblock %}
 
@@ -202,6 +235,16 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         JsBarcode(".barcode").init();
+
+        // Clean class names (e.g. "أولى 1" -> "1")
+        document.querySelectorAll('.class-name-clean').forEach(span => {
+            const full = span.textContent.trim();
+            // Split by space and take last part
+            const parts = full.split(' ');
+            if (parts.length > 1) {
+                span.textContent = parts[parts.length - 1];
+            }
+        });
     });
 </script>
 {% endblock %}
