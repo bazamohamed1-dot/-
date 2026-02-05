@@ -31,16 +31,22 @@
 
 <div class="grid-2 mt-4">
     <div class="card">
-        <h3><i class="fas fa-rocket"></i> اختصارات سريعة</h3>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
-            <a href="{% url 'canteen_home' %}" class="btn btn-primary"><i class="fas fa-utensils"></i> تسجيل الحضور (المطعم)</a>
-            <a href="{% url 'student_list' %}" class="btn btn-success"><i class="fas fa-user-plus"></i> إضافة تلميذ</a>
-            <a href="{% url 'settings' %}" class="btn" style="background: #475569; color: white;"><i class="fas fa-file-import"></i> استيراد Eleve.xls</a>
+        <!-- School Stats (Placeholder as requested) -->
+        <h3><i class="fas fa-school"></i> إحصائيات التمدرس ليوم: <span id="schoolStatsDate" style="direction:ltr; font-family:'Segoe UI';">--/--/----</span></h3>
+        <div style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0;">
+                <span>عدد الحضور اليوم:</span>
+                <span style="font-weight: bold; color: var(--success);">0</span> <!-- Placeholder -->
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 10px 0;">
+                <span>عدد الغياب اليوم:</span>
+                <span style="font-weight: bold; color: var(--danger);">0</span> <!-- Placeholder -->
+            </div>
         </div>
     </div>
 
     <div class="card">
-        <h3><i class="fas fa-chart-pie"></i> إحصائيات المطعم اليوم</h3>
+        <h3><i class="fas fa-utensils"></i> إحصائيات المطعم ليوم: <span id="canteenStatsDate" style="direction:ltr; font-family:'Segoe UI';">--/--/----</span> في الفترة 12:00 إلى 13:00</h3>
         <div style="margin-top: 15px;">
             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0;">
                 <span>عدد الحضور اليوم:</span>
@@ -53,4 +59,15 @@
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set dates with Western numerals
+        const today = new Date().toLocaleDateString('en-GB');
+        document.getElementById('schoolStatsDate').textContent = today;
+        document.getElementById('canteenStatsDate').textContent = today;
+    });
+</script>
+{% endblock %}
 {% endblock %}

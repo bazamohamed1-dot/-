@@ -47,6 +47,7 @@
 <!-- Action Bar -->
 <div style="margin-bottom: 20px; text-align: left;">
     <button class="btn btn-primary" onclick="showReadersModal()"><i class="fas fa-list"></i> قائمة التلاميذ القراء</button>
+    <button class="btn btn-info" style="margin-right: 10px; background-color: #0891b2; color: white;" onclick="showBooksModal()"><i class="fas fa-book"></i> قائمة الكتب المعارة</button>
 </div>
 
 <!-- Scanner -->
@@ -161,7 +162,7 @@
 <!-- Readers Modal -->
 <div id="readersModal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeModal()">&times;</span>
+        <span class="close" onclick="closeModal('readersModal')">&times;</span>
         <div style="display:flex; justify-content:space-between; align-items:center;">
              <h2 style="color: var(--primary);">قائمة التلاميذ القراء</h2>
              <button class="btn btn-danger" onclick="deleteReadersHistory()"><i class="fas fa-trash-alt"></i> حذف القائمة</button>
@@ -173,6 +174,27 @@
                     <th>الاسم واللقب</th>
                     <th>القسم</th>
                     <th>الكتاب المعار</th>
+                    <th>تاريخ الإعارة</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Books Modal (Same content, just different view context if requested, but data is same: active loans) -->
+<div id="booksModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('booksModal')">&times;</span>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+             <h2 style="color: var(--primary);">قائمة الكتب المعارة</h2>
+        </div>
+        <table id="booksTable">
+            <thead>
+                <tr>
+                    <th>عنوان الكتاب</th>
+                    <th>التلميذ المستعير</th>
+                    <th>القسم</th>
                     <th>تاريخ الإعارة</th>
                 </tr>
             </thead>
@@ -382,7 +404,7 @@ async function loadStats() {
 async function showReadersModal() {
     document.getElementById('readersModal').style.display = 'block';
     const tbody = document.querySelector('#readersTable tbody');
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">جاري التحميل...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">جاري التحميل...</td></tr>';
 
     try {
         const response = await fetch('/canteen/library/readers/');
@@ -406,6 +428,35 @@ async function showReadersModal() {
     } catch (error) {
         console.error(error);
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">خطأ في التحميل</td></tr>';
+    }
+}
+
+async function showBooksModal() {
+    document.getElementById('booksModal').style.display = 'block';
+    const tbody = document.querySelector('#booksTable tbody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">جاري التحميل...</td></tr>';
+
+    try {
+        const response = await fetch('/canteen/library/readers/'); // Same API provides loan details
+        const data = await response.json();
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">لا توجد كتب معارة حالياً</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(s => `
+            <tr>
+                <td>${s.book_title}</td>
+                <td>${s.last_name} ${s.first_name}</td>
+                <td>${s.class_name}</td>
+                <td style="direction:ltr; font-family:'Segoe UI'">${s.loan_date}</td>
+            </tr>
+        `).join('');
+
+    } catch (error) {
+        console.error(error);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">خطأ في التحميل</td></tr>';
     }
 }
 
@@ -442,15 +493,19 @@ function getCookie(name) {
     return cookieValue;
 }
 
-function closeModal() {
-    document.getElementById('readersModal').style.display = 'none';
+function closeModal(id) {
+    if(id) {
+        document.getElementById(id).style.display = 'none';
+    } else {
+        // Fallback or close all
+        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
 }
 
 // Close modal when clicking outside
 window.onclick = function(event) {
-    const modal = document.getElementById('readersModal');
-    if (event.target == modal) {
-        modal.style.display = "none";
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = "none";
     }
 }
 </script>

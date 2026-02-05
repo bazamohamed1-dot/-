@@ -29,8 +29,11 @@
 
     .present-list-container { margin-top: 30px; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
     .present-list-container h3 { margin-top: 0; color: var(--success); }
-    .present-list { list-style: none; padding: 0; max-height: 200px; overflow-y: auto; }
-    .present-list li { padding: 8px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+    /* Table style for list */
+    .present-table { width: 100%; border-collapse: collapse; }
+    .present-table th, .present-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right; }
+    .present-table th { background-color: #f8fafc; font-weight: bold; color: #64748b; }
+    .present-list-scroll { max-height: 200px; overflow-y: auto; }
 
     /* Modal */
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
@@ -72,9 +75,20 @@
         <!-- Present Students List -->
         <div class="present-list-container">
             <h3><i class="fas fa-list-check"></i> قائمة الحضور اليوم</h3>
-            <ul id="presentList" class="present-list">
-                <!-- Items populated via JS -->
-            </ul>
+            <div class="present-list-scroll">
+                <table class="present-table">
+                    <thead>
+                        <tr>
+                            <th>الاسم واللقب</th>
+                            <th>القسم</th>
+                            <th>تاريخ الازدياد</th>
+                        </tr>
+                    </thead>
+                    <tbody id="presentList">
+                        <!-- Items populated via JS -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -236,12 +250,18 @@
             if (data.present && data.present.length > 0) {
                 // Reverse to show newest top
                 [...data.present].reverse().forEach(s => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span><b>${s.last_name} ${s.first_name}</b> (${s.class_name})</span> <span style="color:gray">${s.student_id_number}</span>`;
-                    list.appendChild(li);
+                    const row = document.createElement('tr');
+                    // Point 10: Add Date of Birth
+                    // Point 16: Ensure Western numerals
+                    row.innerHTML = `
+                        <td><b>${s.last_name} ${s.first_name}</b></td>
+                        <td>${s.class_name}</td>
+                        <td style="direction:ltr; font-family:'Segoe UI'">${s.date_of_birth}</td>
+                    `;
+                    list.appendChild(row);
                 });
             } else {
-                list.innerHTML = '<li style="text-align:center; color:gray">لا يوجد حضور حتى الآن</li>';
+                list.innerHTML = '<tr><td colspan="3" style="text-align:center; color:gray">لا يوجد حضور حتى الآن</td></tr>';
             }
         } catch(e) { console.error(e); }
     }

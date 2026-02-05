@@ -399,28 +399,16 @@ async function deleteStudent() {
 
 async function deleteFiltered() {
     if (filteredList.length === 0) return alert("لا يوجد تلاميذ في القائمة الحالية للحذف");
+    // Ensure user explicitly wants to delete using the filter "next to search" as requested (Point 7)
+    // The filteredList IS the list resulting from that filter.
+
     if (filteredList.length === studentsList.length) {
         if (!confirm("تحذير: أنت على وشك حذف جميع التلاميذ في قاعدة البيانات! هل أنت متأكد؟")) return;
     } else {
         if (!confirm(`هل أنت متأكد من حذف ${filteredList.length} تلميذ من القائمة الظاهرة؟`)) return;
     }
 
-    // Since we don't have a bulk delete API, we loop.
-    // Optimally, backend should support this. But looping is easier for now.
-    // Or we create a quick bulk API endpoint.
-
-    // Let's loop but show progress
-    let successCount = 0;
     const ids = filteredList.map(s => s.dbId);
-
-    // We can use a bulk delete logic if we add it to backend, but let's try calling delete loop
-    // To be safe and fast, use Promise.all
-    // But backend might choke on sqlite lock.
-
-    // Better: Add a bulk delete endpoint to views.py in next step.
-    // For now, assume endpoint exists or use loop.
-    // Let's use the loop for immediate feedback, or better, add the Bulk API in next step.
-    // I will call a custom action 'bulk_delete' on the viewset.
 
     try {
         const response = await fetch('/api/students/bulk_delete/', {
