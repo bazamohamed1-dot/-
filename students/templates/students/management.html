@@ -111,6 +111,7 @@
         <div style="flex-grow: 1;"></div>
 
         <button class="btn" style="background:#334155; color:white" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
+        <button class="btn" style="background:#4f46e5; color:white" onclick="submitPrint()"><i class="fas fa-id-card"></i> طباعة البطاقات</button>
     </div>
 
     <!-- Search -->
@@ -118,19 +119,23 @@
 
     <!-- Table -->
     <div class="table-container">
-        <table id="studentsTable">
-            <thead>
-                <tr>
-                    <th>رقم التعريف</th>
-                    <th>اللقب</th>
-                    <th>الاسم</th>
-                    <th>تاريخ الازدياد</th>
-                    <th>المستوى</th>
-                    <th>القسم</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+        <form id="printForm" action="{% url 'print_student_cards' %}" method="POST" target="_blank">
+            {% csrf_token %}
+            <table id="studentsTable">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" onclick="toggleSelectAll(this)"></th>
+                        <th>رقم التعريف</th>
+                        <th>اللقب</th>
+                        <th>الاسم</th>
+                        <th>تاريخ الازدياد</th>
+                        <th>المستوى</th>
+                        <th>القسم</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </form>
     </div>
 </div>
 {% endblock %}
@@ -377,6 +382,9 @@ function renderTable() {
     const tbody = document.querySelector('#studentsTable tbody');
     tbody.innerHTML = filteredList.map((s, i) => `
         <tr onclick="fillForm(${i}, this)">
+            <td onclick="event.stopPropagation()">
+                <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox">
+            </td>
             <td>${s.id}</td>
             <td>${s.ln}</td>
             <td>${s.fn}</td>
@@ -385,6 +393,20 @@ function renderTable() {
             <td>${s.class}</td>
         </tr>
     `).join('');
+}
+
+function toggleSelectAll(source) {
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    checkboxes.forEach(cb => cb.checked = source.checked);
+}
+
+function submitPrint() {
+    const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert("يرجى اختيار تلميذ واحد على الأقل للطباعة");
+        return;
+    }
+    document.getElementById('printForm').submit();
 }
 
 // Helper to get CSRF token

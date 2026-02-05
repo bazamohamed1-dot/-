@@ -10,6 +10,7 @@ urlpatterns = [
     path('ui/', ui_views.canteen_home, name='canteen_home'), # Removed 'canteen/' prefix here
     path('list/', ui_views.student_list, name='student_list'), # Renamed for clarity
     path('management/', ui_views.students_management, name='students_management'),
+    path('print_cards/', ui_views.print_student_cards, name='print_student_cards'),
 
     # API Views
     path('scan_card/', views.scan_card, name='scan_card'),
