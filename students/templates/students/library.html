@@ -46,7 +46,8 @@
 
 <!-- Action Bar -->
 <div style="margin-bottom: 20px; text-align: left;">
-    <button class="btn btn-primary" onclick="showReadersModal()"><i class="fas fa-list"></i> قائمة التلاميذ القراء</button>
+    <button class="btn btn-primary" onclick="showReadersModal()"><i class="fas fa-users"></i> قائمة التلاميذ القراء</button>
+    <button class="btn btn-info" onclick="showReadersModal()" style="margin-right: 10px; background-color: #0ea5e9; border-color: #0ea5e9; color: white;"><i class="fas fa-book-open"></i> قائمة الكتب المعارة</button>
 </div>
 
 <!-- Scanner -->
@@ -86,7 +87,7 @@
             </div>
             <div>
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">تاريخ الإعارة</label>
-                <input type="date" id="loanDate" class="form-input" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;" onchange="updateReturnDate()">
+                <input type="date" id="loanDate" class="form-input" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; direction:ltr; unicode-bidi:plaintext;" onchange="updateReturnDate()">
             </div>
             <div>
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">تاريخ الإرجاع المحدد</label>
@@ -309,8 +310,10 @@ async function loanBook() {
             // Refresh student data (simulate scan)
             scanCard(document.getElementById('studentIdDisplay').textContent);
             loadStats();
-            // Point 14: Return focus to scanner
+
+            // Return focus to scanner as requested
             document.getElementById('barcodeInput').focus();
+            document.getElementById('barcodeInput').select();
         } else {
             alert("خطأ أثناء التسجيل");
         }

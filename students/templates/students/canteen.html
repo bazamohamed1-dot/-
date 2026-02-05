@@ -237,7 +237,11 @@
                 // Reverse to show newest top
                 [...data.present].reverse().forEach(s => {
                     const li = document.createElement('li');
-                    li.innerHTML = `<span><b>${s.last_name} ${s.first_name}</b> (${s.class_name})</span> <span style="color:gray">${s.student_id_number}</span>`;
+                    li.innerHTML = `
+                        <span style="flex:2;"><b>${s.last_name} ${s.first_name}</b> (${s.class_name})</span>
+                        <span style="flex:1; text-align:center; direction:ltr; unicode-bidi:plaintext;">${s.date_of_birth || ''}</span>
+                        <span style="flex:1; text-align:left; color:gray">${s.student_id_number}</span>
+                    `;
                     list.appendChild(li);
                 });
             } else {
