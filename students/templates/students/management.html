@@ -15,7 +15,8 @@
     .field-box { display: flex; flex-direction: column; gap: 5px; }
     .field-box label { font-size: 0.85rem; font-weight: 700; color: #64748b; }
     .field-box input, .field-box select { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.95rem; outline: none; background: #fff; width: 100%; box-sizing: border-box; }
-    .date-input { direction: ltr !important; text-align: right; font-weight: bold; color: var(--primary); }
+    /* Force Western numerals for date inputs */
+    input[type="date"] { direction: ltr !important; text-align: right; font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif, 'Cairo'; unicode-bidi: plaintext; }
     .span-2 { grid-column: span 2; }
 
     .action-tray { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
@@ -110,11 +111,13 @@
 
         <div style="flex-grow: 1;"></div>
 
+        <button class="btn btn-danger" onclick="deleteFiltered()" title="حذف القائمة الظاهرة"><i class="fas fa-trash-alt"></i> حذف القائمة (فلتر)</button>
         <button class="btn" style="background:#334155; color:white" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
         <button class="btn" style="background:#4f46e5; color:white" onclick="submitPrint()"><i class="fas fa-id-card"></i> طباعة البطاقات</button>
     </div>
 
     <!-- Search and Filter -->
+    <!-- Filters enabled always as requested -->
     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
         <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
 
@@ -328,8 +331,8 @@ async function saveCurrent() {
     };
 
     const dbId = document.getElementById('dbId').value;
-    const method = (dbId && dbId !== "undefined") ? 'PUT' : 'POST';
-    const url = (dbId && dbId !== "undefined") ? `/api/students/${dbId}/` : '/api/students/';
+    const method = (dbId && dbId !== "undefined" && dbId !== "") ? 'PUT' : 'POST';
+    const url = (dbId && dbId !== "undefined" && dbId !== "") ? `/api/students/${dbId}/` : '/api/students/';
 
     try {
         const response = await fetch(url, {
@@ -342,10 +345,23 @@ async function saveCurrent() {
         });
 
         if (response.ok) {
+            // Show simple toast or alert as requested, but user asked for "Confirmation message"
+            // "يكفي الضغط على زر الحفظ فقط مع ظهور رسالة تأكيد واحدة" -> One confirmation message.
+            // We'll keep the alert but ensure no prior confirmation dialog existed (which it didn't in saveCurrent).
             alert("تم الحفظ بنجاح");
-            // Fix: Wait for fetch to complete before resetting UI to avoid race conditions or double messages
+
+            // Wait for fetch to complete but DO NOT reset the form if it was an edit
+            // The user wants "Just press save...". Usually this implies staying on the record or seamless update.
+            // If we reset (prepareNew), the user loses context.
+            // Let's refresh the list but keep the form filled with updated data if needed.
             await fetchStudents();
-            prepareNew();
+
+            // If it was a new entry, maybe clear? But if edit, keep it.
+            if (!method === 'POST') { // Edit
+                 // Ideally re-select the row.
+            } else {
+                 prepareNew(); // New entry -> Clear for next
+            }
         } else {
             const err = await response.json();
             alert("خطأ في الحفظ: " + JSON.stringify(err));
@@ -377,6 +393,54 @@ async function deleteStudent() {
         }
     } catch (error) {
         console.error(error);
+        alert("خطأ في الاتصال");
+    }
+}
+
+async function deleteFiltered() {
+    if (filteredList.length === 0) return alert("لا يوجد تلاميذ في القائمة الحالية للحذف");
+    if (filteredList.length === studentsList.length) {
+        if (!confirm("تحذير: أنت على وشك حذف جميع التلاميذ في قاعدة البيانات! هل أنت متأكد؟")) return;
+    } else {
+        if (!confirm(`هل أنت متأكد من حذف ${filteredList.length} تلميذ من القائمة الظاهرة؟`)) return;
+    }
+
+    // Since we don't have a bulk delete API, we loop.
+    // Optimally, backend should support this. But looping is easier for now.
+    // Or we create a quick bulk API endpoint.
+
+    // Let's loop but show progress
+    let successCount = 0;
+    const ids = filteredList.map(s => s.dbId);
+
+    // We can use a bulk delete logic if we add it to backend, but let's try calling delete loop
+    // To be safe and fast, use Promise.all
+    // But backend might choke on sqlite lock.
+
+    // Better: Add a bulk delete endpoint to views.py in next step.
+    // For now, assume endpoint exists or use loop.
+    // Let's use the loop for immediate feedback, or better, add the Bulk API in next step.
+    // I will call a custom action 'bulk_delete' on the viewset.
+
+    try {
+        const response = await fetch('/api/students/bulk_delete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ ids: ids })
+        });
+
+        if(response.ok) {
+            alert("تم الحذف الجماعي بنجاح");
+            fetchStudents();
+            prepareNew();
+        } else {
+            alert("حدث خطأ في الحذف الجماعي");
+        }
+    } catch(e) {
+        console.error(e);
         alert("خطأ في الاتصال");
     }
 }
@@ -430,7 +494,14 @@ function filterTable() {
 
 function renderTable() {
     const tbody = document.querySelector('#studentsTable tbody');
-    tbody.innerHTML = filteredList.map((s, i) => `
+    tbody.innerHTML = filteredList.map((s, i) => {
+        // Strip level from class name if present (e.g. "أولى 1" -> "1")
+        let shortClass = s.class;
+        if (s.level && shortClass && shortClass.includes(s.level)) {
+            shortClass = shortClass.replace(s.level, '').trim();
+        }
+
+        return `
         <tr onclick="fillForm(${i}, this)">
             <td onclick="event.stopPropagation()">
                 <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox">
@@ -438,11 +509,12 @@ function renderTable() {
             <td>${s.id}</td>
             <td>${s.ln}</td>
             <td>${s.fn}</td>
-            <td style="direction:ltr">${s.dob || ''}</td>
+            <td style="direction:ltr; font-family: 'Segoe UI', sans-serif;">${s.dob || ''}</td>
             <td>${s.level}</td>
-            <td>${s.class}</td>
+            <td>${shortClass}</td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function toggleSelectAll(source) {

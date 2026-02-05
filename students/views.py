@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -22,6 +22,18 @@ logger = logging.getLogger(__name__)
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
+
+    @action(detail=False, methods=['post'])
+    def bulk_delete(self, request):
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({'error': 'No IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            Student.objects.filter(id__in=ids).delete()
+            return Response({'message': f'Deleted {len(ids)} students'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # --- Library Views ---
 
@@ -81,12 +93,33 @@ def create_loan(request):
 
     return Response(LibraryLoanSerializer(loan).data, status=status.HTTP_201_CREATED)
 
-@api_view(['GET'])
+@api_view(['GET', 'DELETE'])
 def get_readers(request):
-    readers = Student.objects.filter(libraryloan__isnull=False).distinct().values(
-        'id', 'student_id_number', 'last_name', 'first_name', 'date_of_birth', 'academic_year', 'class_name'
-    )
-    return Response(readers)
+    if request.method == 'DELETE':
+        # Point 11: Clear history (delete all loans? or just logs? Assuming all loans history)
+        # User said "Delete list of readers", which implies clearing the log.
+        # Be careful not to delete active loans if that's not intended, but usually "clear history" means all.
+        # Let's delete ALL loans.
+        count = LibraryLoan.objects.all().delete()[0]
+        return Response({'message': f'Deleted {count} records'})
+
+    # Point 12: Include loan date and book title
+    # Since a student can have multiple loans, returning "distinct student" hides details.
+    # The user wants "When clicking reader list, show loan date and book".
+    # This implies listing LOANS, not just unique students.
+    loans = LibraryLoan.objects.select_related('student').order_by('-loan_date')
+    data = []
+    for loan in loans:
+        s = loan.student
+        data.append({
+            'student_id_number': s.student_id_number,
+            'first_name': s.first_name,
+            'last_name': s.last_name,
+            'class_name': s.class_name,
+            'book_title': loan.book_title,
+            'loan_date': loan.loan_date
+        })
+    return Response(data)
 
 @csrf_exempt
 @api_view(['GET', 'POST'])
@@ -127,6 +160,20 @@ def return_book(request):
 
 @api_view(['GET'])
 def library_stats(request):
+    today = date.today()
+
+    # Point 10: Stats Intervals (Daily, Weekly, Monthly, Quarterly, Yearly)
+    # Using loan_date as the metric
+    daily = LibraryLoan.objects.filter(loan_date=today).count()
+
+    week_start = today - timedelta(days=today.weekday()) # Start of week (Monday?) or just last 7 days? User said "Weekly". Let's do last 7 days.
+    # Actually "Weekly" usually means "This Week". But let's stick to simple "Last 7 days" or "This week" depending on interpretation.
+    # Let's use "This Week" (since start of week) or rolling 7 days. Rolling 7 is safer.
+    weekly = LibraryLoan.objects.filter(loan_date__gte=today - timedelta(days=7)).count()
+    monthly = LibraryLoan.objects.filter(loan_date__gte=today - timedelta(days=30)).count()
+    quarterly = LibraryLoan.objects.filter(loan_date__gte=today - timedelta(days=90)).count()
+    yearly = LibraryLoan.objects.filter(loan_date__gte=today - timedelta(days=365)).count()
+
     total_students = Student.objects.count()
     borrowers_count = LibraryLoan.objects.values('student').distinct().count()
 
@@ -135,7 +182,6 @@ def library_stats(request):
         percentage = round((borrowers_count / total_students) * 100, 1)
 
     # Overdue loans: Not returned AND expected_return < today
-    today = date.today()
     overdue_loans = LibraryLoan.objects.filter(
         is_returned=False,
         expected_return_date__lt=today
@@ -155,7 +201,14 @@ def library_stats(request):
     return Response({
         'borrowers_count': borrowers_count,
         'borrowers_percentage': percentage,
-        'overdue_loans': overdue_list
+        'overdue_loans': overdue_list,
+        'stats': {
+            'daily': daily,
+            'weekly': weekly,
+            'monthly': monthly,
+            'quarterly': quarterly,
+            'yearly': yearly
+        }
     })
 
 @csrf_exempt

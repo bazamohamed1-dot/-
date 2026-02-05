@@ -19,6 +19,7 @@
     .loan-form { background: #f0fdf4; padding: 20px; border-radius: 10px; border: 1px solid #86efac; margin-bottom: 20px; display: none; } /* Hidden by default */
 
     .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+    .stats-grid-detailed { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 30px; }
     .stat-card { background: white; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0; text-align: center; }
     .stat-value { font-size: 2rem; font-weight: 700; color: var(--primary); }
     .stat-label { color: #64748b; font-weight: 600; }
@@ -27,7 +28,11 @@
     .overdue-title { color: #dc2626; font-weight: 700; margin-bottom: 15px; font-size: 1.1rem; }
 
     /* Layout fixes */
-    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
+    /* Point 8: Fix input overlap by adjusting grid columns or spacing */
+    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 20px; align-items: end; }
+
+    /* Force Western numerals for date inputs (Point 7) */
+    input[type="date"] { direction: ltr !important; text-align: right; font-family: 'Segoe UI', sans-serif; unicode-bidi: plaintext; }
 
     /* Modal */
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
@@ -98,10 +103,33 @@
 <!-- Dashboard & Stats -->
 <h3 style="color: var(--primary); margin-bottom: 20px;"><i class="fas fa-chart-pie"></i> إحصائيات المكتبة</h3>
 
+<div class="stats-grid-detailed">
+    <div class="stat-card">
+        <div class="stat-value" id="statDaily">0</div>
+        <div class="stat-label">يومياً</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statWeekly">0</div>
+        <div class="stat-label">أسبوعياً</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statMonthly">0</div>
+        <div class="stat-label">شهرياً</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statQuarterly">0</div>
+        <div class="stat-label">فصلياً</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statYearly">0</div>
+        <div class="stat-label">سنوياً</div>
+    </div>
+</div>
+
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-value" id="borrowersCount">0</div>
-        <div class="stat-label">عدد القراء</div>
+        <div class="stat-label">عدد القراء (الكلي)</div>
     </div>
     <div class="stat-card">
         <div class="stat-value" id="borrowersPercent">0%</div>
@@ -134,16 +162,18 @@
 <div id="readersModal" class="modal">
     <div class="modal-content">
         <span class="close" onclick="closeModal()">&times;</span>
-        <h2 style="color: var(--primary);">قائمة التلاميذ القراء</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+             <h2 style="color: var(--primary);">قائمة التلاميذ القراء</h2>
+             <button class="btn btn-danger" onclick="deleteReadersHistory()"><i class="fas fa-trash-alt"></i> حذف القائمة</button>
+        </div>
         <table id="readersTable">
             <thead>
                 <tr>
                     <th>رقم التعريف</th>
-                    <th>الاسم</th>
-                    <th>اللقب</th>
-                    <th>تاريخ الازدياد</th>
-                    <th>المستوى</th>
+                    <th>الاسم واللقب</th>
                     <th>القسم</th>
+                    <th>الكتاب المعار</th>
+                    <th>تاريخ الإعارة</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -279,6 +309,8 @@ async function loanBook() {
             // Refresh student data (simulate scan)
             scanCard(document.getElementById('studentIdDisplay').textContent);
             loadStats();
+            // Point 14: Return focus to scanner
+            document.getElementById('barcodeInput').focus();
         } else {
             alert("خطأ أثناء التسجيل");
         }
@@ -315,10 +347,17 @@ async function loadStats() {
 
         document.getElementById('borrowersCount').textContent = data.borrowers_count;
         document.getElementById('borrowersPercent').textContent = data.borrowers_percentage + '%';
+        document.getElementById('overdueCount').textContent = (data.overdue_loans || []).length;
+
+        if (data.stats) {
+            document.getElementById('statDaily').textContent = data.stats.daily;
+            document.getElementById('statWeekly').textContent = data.stats.weekly;
+            document.getElementById('statMonthly').textContent = data.stats.monthly;
+            document.getElementById('statQuarterly').textContent = data.stats.quarterly;
+            document.getElementById('statYearly').textContent = data.stats.yearly;
+        }
 
         const overdue = data.overdue_loans || [];
-        document.getElementById('overdueCount').textContent = overdue.length;
-
         const tbody = document.querySelector('#overdueTable tbody');
         if (overdue.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">لا يوجد تأخيرات</td></tr>';
@@ -350,25 +389,57 @@ async function showReadersModal() {
         const data = await response.json();
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">لا يوجد قراء مسجلين</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">لا يوجد قراء مسجلين</td></tr>';
             return;
         }
 
         tbody.innerHTML = data.map(s => `
             <tr>
                 <td>${s.student_id_number}</td>
-                <td>${s.first_name}</td>
-                <td>${s.last_name}</td>
-                <td>${s.date_of_birth}</td>
-                <td>${s.academic_year}</td>
+                <td>${s.last_name} ${s.first_name}</td>
                 <td>${s.class_name}</td>
+                <td>${s.book_title}</td>
+                <td style="direction:ltr; font-family:'Segoe UI'">${s.loan_date}</td>
             </tr>
         `).join('');
 
     } catch (error) {
         console.error(error);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">خطأ في التحميل</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">خطأ في التحميل</td></tr>';
     }
+}
+
+async function deleteReadersHistory() {
+    if(!confirm("تحذير: هل أنت متأكد من حذف سجل القراء بالكامل؟")) return;
+
+    try {
+        const response = await fetch('/canteen/library/readers/', {
+            method: 'DELETE',
+             headers: { 'X-CSRFToken': getCookie('csrftoken') } // Use the existing helper
+        });
+        if(response.ok) {
+            alert("تم حذف السجل بنجاح");
+            showReadersModal(); // Refresh list (should be empty)
+            loadStats();
+        } else {
+            alert("خطأ في الحذف");
+        }
+    } catch(e) { console.error(e); }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 function closeModal() {
