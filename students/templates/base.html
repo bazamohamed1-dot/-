@@ -37,6 +37,9 @@
         .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.05); color: white; transform: translateX(-5px); }
         .nav-link i { width: 25px; text-align: center; }
 
+        /* Fix for stuck hover/active state on Canteen button if any */
+        .nav-link:focus { outline: none; }
+
         /* Main Content */
         .main { flex: 1; margin-right: var(--sidebar-width); transition: 0.3s; }
         .header {

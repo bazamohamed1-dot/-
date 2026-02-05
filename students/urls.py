@@ -23,6 +23,10 @@ urlpatterns = [
     path('library/loan/', views.create_loan, name='library_create_loan'),
     path('library/return/', views.return_book, name='library_return_book'),
     path('library/stats/', views.library_stats, name='library_stats'),
+    path('library/readers/', views.get_readers, name='library_readers'),
+
+    # Settings API
+    path('settings/data/', views.school_settings, name='school_settings'),
 
     # Library UI
     path('library/', ui_views.library_home, name='library_home'),

@@ -25,10 +25,24 @@
 
     .overdue-section { background: #fef2f2; border: 1px solid #fecaca; padding: 20px; border-radius: 10px; }
     .overdue-title { color: #dc2626; font-weight: 700; margin-bottom: 15px; font-size: 1.1rem; }
+
+    /* Layout fixes */
+    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+    .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; border-radius: 8px; }
+    .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
+    .close:hover { color: black; }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- Action Bar -->
+<div style="margin-bottom: 20px; text-align: left;">
+    <button class="btn btn-primary" onclick="showReadersModal()"><i class="fas fa-list"></i> قائمة التلاميذ القراء</button>
+</div>
 
 <!-- Scanner -->
 <div class="scanner-box">
@@ -60,16 +74,20 @@
     <!-- Loan Form -->
     <div class="loan-form" id="loanForm" style="display: block;">
         <h4 style="color: #166534; margin-top: 0;"><i class="fas fa-book-reader"></i> تسجيل إعارة جديدة</h4>
-        <div style="display: flex; gap: 10px; align-items: flex-end;">
-            <div style="flex: 1;">
+        <div class="form-row">
+            <div>
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">عنوان الكتاب</label>
                 <input type="text" id="bookTitle" class="form-input" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="أدخل عنوان الكتاب أو رمزه...">
             </div>
-            <div style="flex: 1;">
+            <div>
+                <label style="font-weight: bold; display: block; margin-bottom: 5px;">تاريخ الإعارة</label>
+                <input type="date" id="loanDate" class="form-input" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;" onchange="updateReturnDate()">
+            </div>
+            <div>
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">تاريخ الإرجاع المحدد</label>
                 <input type="text" id="returnDatePreview" disabled style="width: 100%; padding: 10px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: bold; color: #475569;">
             </div>
-            <button class="btn btn-success" onclick="loanBook()"><i class="fas fa-check"></i> تأكيد الإعارة</button>
+            <button class="btn btn-success" onclick="loanBook()"><i class="fas fa-check"></i> تأكيد</button>
         </div>
     </div>
 
@@ -83,15 +101,15 @@
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-value" id="borrowersCount">0</div>
-        <div class="stat-label">عدد المستعيرين</div>
+        <div class="stat-label">عدد القراء</div>
     </div>
     <div class="stat-card">
         <div class="stat-value" id="borrowersPercent">0%</div>
-        <div class="stat-label">نسبة الاستعارة</div>
+        <div class="stat-label">نسبة القراءة</div>
     </div>
     <div class="stat-card">
         <div class="stat-value" id="overdueCount" style="color: #dc2626;">0</div>
-        <div class="stat-label">متأخرات</div>
+        <div class="stat-label">عدد حالات التأخر</div>
     </div>
 </div>
 
@@ -110,6 +128,27 @@
         </thead>
         <tbody></tbody>
     </table>
+</div>
+
+<!-- Readers Modal -->
+<div id="readersModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h2 style="color: var(--primary);">قائمة التلاميذ القراء</h2>
+        <table id="readersTable">
+            <thead>
+                <tr>
+                    <th>رقم التعريف</th>
+                    <th>الاسم</th>
+                    <th>اللقب</th>
+                    <th>تاريخ الازدياد</th>
+                    <th>المستوى</th>
+                    <th>القسم</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 </div>
 
 {% endblock %}
@@ -133,18 +172,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Set Return Date Preview (+15 days)
-    const today = new Date();
-    const returnDate = new Date(today);
-    returnDate.setDate(today.getDate() + 15);
-    document.getElementById('returnDatePreview').value = returnDate.toLocaleDateString('ar-EG');
+    // Set Default Date to Today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('loanDate').value = today;
+    updateReturnDate();
 });
+
+function updateReturnDate() {
+    const loanVal = document.getElementById('loanDate').value;
+    if(loanVal) {
+        const d = new Date(loanVal);
+        d.setDate(d.getDate() + 15);
+        document.getElementById('returnDatePreview').value = d.toLocaleDateString('ar-EG');
+    }
+}
 
 async function scanCard(barcode) {
     if (!barcode) return;
 
     try {
-        const response = await fetch('/canteen/library/scan/', {
+        const response = await fetch('/api/library/scan/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ barcode: barcode })
@@ -175,9 +222,9 @@ function showStudent(data) {
 
     const img = document.getElementById('studentPhoto');
     if (s.photo_path) {
-        img.src = s.photo_path; // Verify path format if relative/absolute
+        img.src = s.photo_path;
     } else {
-        img.src = ''; // Or placeholder
+        img.src = '';
     }
 
     // Show active loans
@@ -209,16 +256,19 @@ function hideWorkspace() {
 
 async function loanBook() {
     const title = document.getElementById('bookTitle').value.trim();
+    const loanDate = document.getElementById('loanDate').value;
+
     if (!title) return alert("الرجاء إدخال عنوان الكتاب");
     if (!currentStudentId) return;
 
     try {
-        const response = await fetch('/canteen/library/loan/', {
+        const response = await fetch('/api/library/loan/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 student_id: currentStudentId,
-                book_title: title
+                book_title: title,
+                loan_date: loanDate
             })
         });
 
@@ -240,7 +290,7 @@ async function returnBook(loanId) {
     if(!confirm("تأكيد إرجاع الكتاب؟")) return;
 
     try {
-        const response = await fetch('/canteen/library/return/', {
+        const response = await fetch('/api/library/return/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ loan_id: loanId })
@@ -259,7 +309,7 @@ async function returnBook(loanId) {
 
 async function loadStats() {
     try {
-        const response = await fetch('/canteen/library/stats/');
+        const response = await fetch('/api/library/stats/');
         const data = await response.json();
 
         document.getElementById('borrowersCount').textContent = data.borrowers_count;
@@ -286,6 +336,49 @@ async function loadStats() {
 
     } catch (error) {
         console.error(error);
+    }
+}
+
+async function showReadersModal() {
+    document.getElementById('readersModal').style.display = 'block';
+    const tbody = document.querySelector('#readersTable tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">جاري التحميل...</td></tr>';
+
+    try {
+        const response = await fetch('/api/library/readers/');
+        const data = await response.json();
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">لا يوجد قراء مسجلين</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(s => `
+            <tr>
+                <td>${s.student_id_number}</td>
+                <td>${s.first_name}</td>
+                <td>${s.last_name}</td>
+                <td>${s.date_of_birth}</td>
+                <td>${s.academic_year}</td>
+                <td>${s.class_name}</td>
+            </tr>
+        `).join('');
+
+    } catch (error) {
+        console.error(error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">خطأ في التحميل</td></tr>';
+    }
+}
+
+function closeModal() {
+    document.getElementById('readersModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('readersModal');
+    if (event.target == modal) {
+        modal.style.display = "none";
     }
 }
 </script>

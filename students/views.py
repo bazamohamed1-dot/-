@@ -5,8 +5,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan
-from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings
+from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse
@@ -52,6 +52,7 @@ def scan_library_card(request):
 def create_loan(request):
     student_id = request.data.get('student_id')
     book_title = request.data.get('book_title')
+    loan_date_str = request.data.get('loan_date') # Allow manual override
 
     if not student_id or not book_title:
         return Response({'error': 'Missing data'}, status=status.HTTP_400_BAD_REQUEST)
@@ -61,7 +62,14 @@ def create_loan(request):
     except Student.DoesNotExist:
         return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    loan_date = date.today()
+    if loan_date_str:
+        try:
+            loan_date = date.fromisoformat(loan_date_str)
+        except ValueError:
+            return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        loan_date = date.today()
+
     expected_return = loan_date + timedelta(days=15)
 
     loan = LibraryLoan.objects.create(
@@ -72,6 +80,37 @@ def create_loan(request):
     )
 
     return Response(LibraryLoanSerializer(loan).data, status=status.HTTP_201_CREATED)
+
+@api_view(['GET'])
+def get_readers(request):
+    readers = Student.objects.filter(libraryloan__isnull=False).distinct().values(
+        'id', 'student_id_number', 'last_name', 'first_name', 'date_of_birth', 'academic_year', 'class_name'
+    )
+    return Response(readers)
+
+@csrf_exempt
+@api_view(['GET', 'POST'])
+def school_settings(request):
+    try:
+        settings_obj = SchoolSettings.objects.first()
+    except:
+        settings_obj = None
+
+    if request.method == 'GET':
+        if settings_obj:
+            return Response(SchoolSettingsSerializer(settings_obj).data)
+        return Response({})
+
+    elif request.method == 'POST':
+        if settings_obj:
+            serializer = SchoolSettingsSerializer(settings_obj, data=request.data)
+        else:
+            serializer = SchoolSettingsSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['POST'])

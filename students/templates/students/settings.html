@@ -1,38 +1,101 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block header_title %}الإعدادات وقاعدة البيانات{% endblock %}
+{% block title %}الإعدادات والصلاحيات{% endblock %}
+{% block header_title %}الإعدادات العامة والصلاحيات{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width: 800px; margin: auto;">
-    <h2><i class="fas fa-database"></i> إدارة قاعدة البيانات</h2>
-    <p style="color: #64748b; margin-bottom: 20px;">
-        هذه اللوحة تسمح لك باستيراد بيانات التلاميذ من ملف <code>Eleve.xls</code> الأصلي، ليكون هو الأساس في عمل البرنامج.
-    </p>
-
-    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1;">
-        <h3 style="margin-top: 0;">استيراد / تحديث البيانات</h3>
-        <p>يرجى التأكد من وجود ملف <code>Eleve.xls</code> في المجلد الرئيسي للمشروع.</p>
-
-        <form method="post" action="{% url 'import_eleve_view' %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 15px; font-size: 1.1rem;">
-                <i class="fas fa-sync-alt"></i> ابدأ استيراد البيانات من Eleve.xls
-            </button>
-        </form>
-    </div>
-
-    <div style="margin-top: 30px;">
-        <h3><i class="fas fa-info-circle"></i> حالة النظام</h3>
-        <table class="table">
-            <tr>
-                <td>عدد التلاميذ المسجلين:</td>
-                <td><strong>{{ total_students }}</strong></td>
-            </tr>
-            <tr>
-                <td>آخر عملية استيراد:</td>
-                <td><strong>{{ last_import_date|default:"غير متوفر" }}</strong></td>
-            </tr>
-        </table>
-    </div>
+<div class="card" style="margin-bottom: 20px;">
+    <h3><i class="fas fa-school"></i> بيانات المؤسسة</h3>
+    <form id="schoolSettingsForm" onsubmit="saveSchoolSettings(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">اسم المؤسسة</label>
+                <input type="text" id="schoolName" class="form-input" required style="width:100%; padding:10px;">
+            </div>
+            <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">السنة الدراسية</label>
+                <input type="text" id="academicYear" class="form-input" required style="width:100%; padding:10px;">
+            </div>
+            <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">اسم المدير</label>
+                <input type="text" id="directorName" class="form-input" required style="width:100%; padding:10px;">
+            </div>
+            <!-- Logo upload can be added here if needed, requires FormData handling -->
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 15px;">حفظ الإعدادات</button>
+    </form>
 </div>
+
+<div class="card">
+    <h3><i class="fas fa-users-cog"></i> إدارة صلاحيات المستخدمين</h3>
+    <p style="color: #64748b;">(ميزة تجريبية - إدارة مستخدمي Django)</p>
+    <!-- Here we could list users if we had an API for User Management.
+         For now, just a placeholder or link to Django Admin -->
+    <a href="/admin/" target="_blank" class="btn btn-warning">الذهاب إلى لوحة التحكم المتقدمة (Admin)</a>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', loadSettings);
+
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings/data/');
+        const data = await response.json();
+
+        if (data.name) document.getElementById('schoolName').value = data.name;
+        if (data.academic_year) document.getElementById('academicYear').value = data.academic_year;
+        if (data.director_name) document.getElementById('directorName').value = data.director_name;
+    } catch (error) {
+        console.error("Error loading settings", error);
+    }
+}
+
+async function saveSchoolSettings(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('schoolName').value,
+        academic_year: document.getElementById('academicYear').value,
+        director_name: document.getElementById('directorName').value
+    };
+
+    try {
+        const response = await fetch('/api/settings/data/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            alert("تم حفظ إعدادات المؤسسة بنجاح");
+        } else {
+            alert("حدث خطأ أثناء الحفظ");
+        }
+    } catch (error) {
+        console.error(error);
+        alert("خطأ في الاتصال");
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
 {% endblock %}
