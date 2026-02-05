@@ -7,8 +7,12 @@ from datetime import datetime
 class Command(BaseCommand):
     help = 'Imports students from Eleve.xls (HTML format)'
 
+    def add_arguments(self, parser):
+        parser.add_argument('--file', type=str, help='Path to the file to import', required=False)
+
     def handle(self, *args, **options):
-        file_path = 'Eleve.xls'
+        file_path = options.get('file') or 'Eleve.xls'
+
         if not os.path.exists(file_path):
             self.stdout.write(self.style.ERROR(f'File {file_path} not found'))
             return

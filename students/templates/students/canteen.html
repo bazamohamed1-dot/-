@@ -104,13 +104,31 @@
 
 <!-- Manual Entry Modal -->
 <div id="manualModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="width: 60%;">
         <span class="close" onclick="closeManualModal()">&times;</span>
-        <h3>إدخال يدوي (تلاميذ بدون بطاقة)</h3>
-        <p>يرجى إدخال رقم التعريف أو اختيار التلميذ من القائمة</p>
-        <input type="text" id="manualInput" class="form-input" style="width: 80%; padding: 10px; font-size: 1.2rem; margin-bottom: 10px;" placeholder="رقم التعريف">
-        <br>
-        <button class="btn btn-success" onclick="submitManual()">تسجيل الحضور</button>
+        <h3 style="color:var(--primary); margin-top:0;">إدخال يدوي (تلاميذ بدون بطاقة)</h3>
+
+        <div style="text-align: right; margin-bottom: 15px; display: flex; gap: 10px;">
+            <input type="text" id="manualSearch" class="form-input" placeholder="ابحث بالاسم أو الرقم..." onkeyup="filterManualList()" style="flex: 2;">
+            <select id="manualClassFilter" class="form-input" style="flex: 1;" onchange="filterManualList()">
+                <option value="">كل الأقسام</option>
+            </select>
+        </div>
+
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: #f8fafc;">
+                    <tr>
+                        <th style="padding: 10px; text-align: right;">الاسم واللقب</th>
+                        <th style="padding: 10px; text-align: right;">القسم</th>
+                        <th style="padding: 10px; text-align: center;">إجراء</th>
+                    </tr>
+                </thead>
+                <tbody id="manualListBody">
+                    <tr><td colspan="3" style="padding: 20px; text-align: center;">جاري التحميل...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -233,10 +251,68 @@
     }
 
     // Modal Functions
-    function openManualModal() {
+    let allStudents = [];
+
+    async function openManualModal() {
         modalOpen = true;
         document.getElementById('manualModal').style.display = 'block';
-        document.getElementById('manualInput').focus();
+        document.getElementById('manualSearch').focus();
+
+        if(allStudents.length === 0) {
+            try {
+                // Fetch all students. Re-using attendance lists absent API is not enough, we need ALL half-board.
+                // Or simply re-use get_attendance_lists -> absent is a good starting point but we want to allow marking ANYONE.
+                // Better to fetch all Half-Board students. We don't have a specific API for "All Half Board" yet but /api/attendance_lists/ has "absent" which are the ones we likely want to add.
+                // Let's rely on /api/attendance_lists/ 'absent' list for now as they are the targets.
+                const res = await fetch('/canteen/attendance_lists/');
+                const data = await res.json();
+                allStudents = data.absent || []; // Only show absent students as candidates
+                populateManualClassFilter();
+                filterManualList();
+            } catch(e) {
+                console.error(e);
+                document.getElementById('manualListBody').innerHTML = '<tr><td colspan="3">خطأ في التحميل</td></tr>';
+            }
+        } else {
+            // Refresh logic if needed, or just use cached
+             const res = await fetch('/canteen/attendance_lists/');
+             const data = await res.json();
+             allStudents = data.absent || [];
+             filterManualList();
+        }
+    }
+
+    function populateManualClassFilter() {
+        const select = document.getElementById('manualClassFilter');
+        const classes = [...new Set(allStudents.map(s => s.class_name))].sort();
+        select.innerHTML = '<option value="">كل الأقسام</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    function filterManualList() {
+        const query = document.getElementById('manualSearch').value.toLowerCase();
+        const cls = document.getElementById('manualClassFilter').value;
+        const tbody = document.getElementById('manualListBody');
+
+        const filtered = allStudents.filter(s => {
+            const matchName = s.first_name.toLowerCase().includes(query) || s.last_name.toLowerCase().includes(query) || s.student_id_number.includes(query);
+            const matchClass = cls ? s.class_name === cls : true;
+            return matchName && matchClass;
+        });
+
+        if(filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">لا يوجد نتائج</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(s => `
+            <tr>
+                <td style="padding:10px; border-bottom:1px solid #f1f5f9;">${s.last_name} ${s.first_name}</td>
+                <td style="padding:10px; border-bottom:1px solid #f1f5f9;">${s.class_name}</td>
+                <td style="padding:10px; border-bottom:1px solid #f1f5f9; text-align:center;">
+                    <button class="btn btn-success" style="padding:5px 10px; font-size:0.8rem;" onclick="submitManual(${s.id})">تسجيل</button>
+                </td>
+            </tr>
+        `).join('');
     }
 
     function closeManualModal() {
@@ -245,14 +321,8 @@
         input.focus();
     }
 
-    async function submitManual() {
-        const id = document.getElementById('manualInput').value.trim();
+    async function submitManual(id) {
         if(!id) return;
-
-        // Reuse handleScan logic which calls the scan_card API.
-        // The API supports barcode matching student_id_number.
-        // If manual entry uses internal ID, handleScan might fail if it expects strict barcode.
-        // But manual_attendance API exists in views.py! Let's use that.
 
         try {
             const res = await fetch('/canteen/manual_attendance/', {
@@ -263,10 +333,12 @@
             const data = await res.json();
 
             if (res.ok) {
-                alert("تم التسجيل يدوياً بنجاح");
-                closeManualModal();
+                // Remove from local list to avoid double add
+                allStudents = allStudents.filter(s => s.id !== id);
+                filterManualList();
                 updateStats();
                 updatePresentList();
+                showAlert("تم تسجيل " + data.student?.first_name + " يدوياً", 'success');
             } else {
                 alert(data.error || "خطأ");
             }
