@@ -34,7 +34,9 @@
             display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #94a3b8;
             text-decoration: none; border-radius: 8px; transition: 0.3s; font-weight: 600;
         }
-        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.05); color: white; transform: translateX(-5px); }
+        /* Fix colors: Grey default, White on Active/Hover */
+        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.05); color: white !important; transform: translateX(-5px); }
+        .nav-link.active i, .nav-link:hover i { color: white !important; }
         .nav-link i { width: 25px; text-align: center; }
 
         /* Fix for stuck hover/active state on Canteen button if any */

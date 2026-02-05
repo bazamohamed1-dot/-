@@ -114,8 +114,15 @@
         <button class="btn" style="background:#4f46e5; color:white" onclick="submitPrint()"><i class="fas fa-id-card"></i> طباعة البطاقات</button>
     </div>
 
-    <!-- Search -->
-    <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()">
+    <!-- Search and Filter -->
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
+
+        <select id="filterClass" class="form-input" style="flex: 1;" onchange="filterTable()">
+            <option value="">جميع الأقسام</option>
+            <!-- Populated via JS -->
+        </select>
+    </div>
 
     <!-- Table -->
     <div class="table-container">
@@ -196,6 +203,7 @@ async function fetchStudents() {
             photo: s.photo_path
         }));
 
+        populateClassFilter();
         filteredList = studentsList;
         renderTable();
     } catch (error) {
@@ -368,13 +376,36 @@ async function deleteStudent() {
     }
 }
 
+function populateClassFilter() {
+    const filterSelect = document.getElementById('filterClass');
+    const classes = [...new Set(studentsList.map(s => s.class))].sort();
+
+    // Preserve existing selection if any
+    const selected = filterSelect.value;
+
+    filterSelect.innerHTML = '<option value="">جميع الأقسام</option>';
+    classes.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c;
+        option.textContent = c;
+        filterSelect.appendChild(option);
+    });
+
+    filterSelect.value = selected;
+}
+
 function filterTable() {
     const query = document.getElementById('searchInput').value.toLowerCase();
-    filteredList = studentsList.filter(s =>
-        s.ln.toLowerCase().includes(query) ||
-        s.fn.toLowerCase().includes(query) ||
-        s.id.includes(query)
-    );
+    const classFilter = document.getElementById('filterClass').value;
+
+    filteredList = studentsList.filter(s => {
+        const matchesSearch = s.ln.toLowerCase().includes(query) ||
+                              s.fn.toLowerCase().includes(query) ||
+                              s.id.includes(query);
+        const matchesClass = classFilter ? s.class === classFilter : true;
+
+        return matchesSearch && matchesClass;
+    });
     renderTable();
 }
 

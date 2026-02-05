@@ -4,6 +4,8 @@ from django.core.management import call_command
 from .models import Student, CanteenAttendance, SchoolSettings
 from datetime import date
 from io import StringIO
+import os
+from django.conf import settings
 
 def dashboard(request):
     context = {
@@ -22,6 +24,29 @@ def settings_view(request):
     return render(request, 'students/settings.html', context)
 
 def import_eleve_view(request):
+    if request.method == 'POST' and request.FILES.get('eleve_file'):
+        eleve_file = request.FILES['eleve_file']
+
+        # Save temporary file
+        temp_path = os.path.join(settings.BASE_DIR, 'temp_import.xls')
+        with open(temp_path, 'wb+') as destination:
+            for chunk in eleve_file.chunks():
+                destination.write(chunk)
+
+        out = StringIO()
+        try:
+            # Call command with the temp file path
+            call_command('import_eleve', file=temp_path, stdout=out)
+            messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
+        except Exception as e:
+            messages.error(request, f"حدث خطأ أثناء الاستيراد: {str(e)}")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        return redirect('settings')
+
+    # Fallback to default behavior if no file uploaded but POST triggered (legacy)
     if request.method == 'POST':
         out = StringIO()
         try:
@@ -30,6 +55,7 @@ def import_eleve_view(request):
         except Exception as e:
             messages.error(request, f"حدث خطأ أثناء الاستيراد: {str(e)}")
         return redirect('settings')
+
     return redirect('settings')
 
 def canteen_home(request):

@@ -103,7 +103,7 @@ def school_settings(request):
 
     elif request.method == 'POST':
         if settings_obj:
-            serializer = SchoolSettingsSerializer(settings_obj, data=request.data)
+            serializer = SchoolSettingsSerializer(settings_obj, data=request.data, partial=True)
         else:
             serializer = SchoolSettingsSerializer(data=request.data)
 
