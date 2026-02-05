@@ -115,7 +115,7 @@ function submitImport() {
         // Create a temporary form to submit to the existing view
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '/import_eleve/'; // Make sure this URL is mapped
+        form.action = "{% url 'import_eleve_view' %}";
         form.enctype = 'multipart/form-data'; // Important!
 
         // Add CSRF
