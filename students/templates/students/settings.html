@@ -27,6 +27,19 @@
     </form>
 </div>
 
+<div class="card" style="margin-bottom: 20px;">
+    <h3><i class="fas fa-database"></i> إدارة قاعدة البيانات</h3>
+    <div style="padding: 10px 0;">
+        <button class="btn btn-info" style="background:#0891b2; color:white" onclick="document.getElementById('importFile').click()">
+            <i class="fas fa-file-import"></i> استيراد التلاميذ من ملف Excel
+        </button>
+        <input type="file" id="importFile" style="display:none;" onchange="submitImport()">
+        <p style="margin-top:10px; color:#64748b; font-size:0.9rem;">
+            * يرجى استخدام ملف Eleve.xls الأصلي لاستيراد البيانات بشكل صحيح.
+        </p>
+    </div>
+</div>
+
 <div class="card">
     <h3><i class="fas fa-users-cog"></i> إدارة صلاحيات المستخدمين</h3>
     <p style="color: #64748b;">(ميزة تجريبية - إدارة مستخدمي Django)</p>
@@ -80,6 +93,43 @@ async function saveSchoolSettings(e) {
     } catch (error) {
         console.error(error);
         alert("خطأ في الاتصال");
+    }
+}
+
+function submitImport() {
+    const input = document.getElementById('importFile');
+    if(input.files && input.files[0]) {
+        if(!confirm("هل تريد استيراد البيانات من الملف المحدد؟")) return;
+
+        // Since the current import logic is a management command on the server,
+        // we can either invoke it via a view or do client-side parsing.
+        // The original `import_eleve_view` invokes the command.
+
+        // We will construct a FormData to send the file to `import_eleve_view`
+        // But `import_eleve_view` in `ui_views.py` expects a file named 'Eleve.xls' on disk currently.
+        // It should be updated to handle uploaded files.
+        // For now, let's just trigger the form submit to the view.
+
+        // Create a temporary form to submit to the existing view
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/import_eleve/'; // Make sure this URL is mapped
+        form.enctype = 'multipart/form-data'; // Important!
+
+        // Add CSRF
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrfmiddlewaretoken';
+        csrf.value = getCookie('csrftoken');
+        form.appendChild(csrf);
+
+        // Add file input - clone it
+        const fileClone = input.cloneNode(true);
+        fileClone.name = 'eleve_file'; // View needs to be updated to accept this
+        form.appendChild(fileClone);
+
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 

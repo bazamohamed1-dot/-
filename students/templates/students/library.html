@@ -191,7 +191,7 @@ async function scanCard(barcode) {
     if (!barcode) return;
 
     try {
-        const response = await fetch('/api/library/scan/', {
+        const response = await fetch('/canteen/library/scan/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ barcode: barcode })
@@ -262,7 +262,7 @@ async function loanBook() {
     if (!currentStudentId) return;
 
     try {
-        const response = await fetch('/api/library/loan/', {
+        const response = await fetch('/canteen/library/loan/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -290,7 +290,7 @@ async function returnBook(loanId) {
     if(!confirm("تأكيد إرجاع الكتاب؟")) return;
 
     try {
-        const response = await fetch('/api/library/return/', {
+        const response = await fetch('/canteen/library/return/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ loan_id: loanId })
@@ -309,7 +309,7 @@ async function returnBook(loanId) {
 
 async function loadStats() {
     try {
-        const response = await fetch('/api/library/stats/');
+        const response = await fetch('/canteen/library/stats/');
         const data = await response.json();
 
         document.getElementById('borrowersCount').textContent = data.borrowers_count;
@@ -345,7 +345,7 @@ async function showReadersModal() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">جاري التحميل...</td></tr>';
 
     try {
-        const response = await fetch('/api/library/readers/');
+        const response = await fetch('/canteen/library/readers/');
         const data = await response.json();
 
         if (data.length === 0) {

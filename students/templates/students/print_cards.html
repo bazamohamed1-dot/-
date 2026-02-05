@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}طباعة البطاقات المدرسية{% endblock %}
+{% block header_title %}طباعة البطاقات المدرسية{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        body {
+            background-color: white;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+        .wrapper, .sidebar, .header, .no-print {
+            display: none !important;
+        }
+        .main {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .print-container {
+            display: grid !important;
+        }
+    }
+
+    body {
+        background-color: #f1f5f9;
+    }
+
+    .print-container {
+        width: 210mm;
+        min-height: 297mm;
+        background: white;
+        margin: 20px auto;
+        padding: 10mm;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-auto-rows: 54mm; /* Adjusted for ~8 cards per page or 6 with spacing */
+        gap: 5mm;
+        box-sizing: border-box;
+    }
+
+    /* Business Card Size approx 85mm x 54mm */
+    .id-card {
+        border: 2px solid #1e40af;
+        border-radius: 10px;
+        padding: 5px;
+        display: flex;
+        flex-direction: row-reverse; /* Arabic Layout */
+        overflow: hidden;
+        background: url('{% static "img/card_bg_pattern.png" %}') no-repeat center center;
+        background-size: cover;
+        position: relative;
+        height: 52mm;
+    }
+
+    .photo-area {
+        width: 35mm;
+        height: 45mm;
+        border: 1px solid #ccc;
+        margin-left: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .photo-area img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .info-area {
+        flex: 1;
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding-right: 5px;
+    }
+
+    .header-text {
+        text-align: center;
+        font-size: 10pt;
+        font-weight: bold;
+        color: #1e40af;
+        border-bottom: 1px solid #1e40af;
+        padding-bottom: 2px;
+        margin-bottom: 2px;
+    }
+
+    .student-data {
+        font-size: 10pt;
+        line-height: 1.2;
+    }
+    .student-data strong {
+        color: #333;
+    }
+
+    .barcode-area {
+        text-align: center;
+        margin-top: auto;
+    }
+
+    .barcode-area svg {
+        max-width: 100%;
+        height: 12mm;
+    }
+
+    .btn-float {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        padding: 15px 25px;
+        font-size: 1.2rem;
+        border-radius: 50px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 1000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="no-print" style="text-align: center; margin-bottom: 20px;">
+    <button onclick="window.print()" class="btn btn-primary btn-float"><i class="fas fa-print"></i> طباعة البطاقات</button>
+    <a href="{% url 'students_management' %}" class="btn btn-secondary"><i class="fas fa-arrow-right"></i> رجوع</a>
+</div>
+
+<div class="print-container">
+    {% for student in students %}
+    <div class="id-card">
+        <!-- Photo (Left in LTR, Right in RTL but we used flex-direction: row-reverse so it's on left visually) -->
+        <!-- Wait, user said "Photo on Left". row-reverse puts first element on right.
+             So if I want Photo on LEFT, and Info on RIGHT.
+             Flex container (row): [Info] [Photo] -> Photo is on Right.
+             Flex container (row-reverse): [Info] [Photo] -> Photo is on Left.
+             So structure: <Info> <Photo> with row-reverse.
+        -->
+
+        <div class="photo-area">
+            {% if student.photo_path %}
+            <img src="{{ student.photo_path }}">
+            {% else %}
+            <i class="fas fa-user fa-3x" style="color:#cbd5e1"></i>
+            {% endif %}
+        </div>
+
+        <div class="info-area">
+            <div class="header-text">
+                {{ school_name }}<br>
+                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: {{ academic_year }}</span>
+            </div>
+
+            <div class="student-data">
+                <div><span style="color:#64748b; font-size: 8pt;">اللقب:</span> <strong>{{ student.last_name }}</strong></div>
+                <div><span style="color:#64748b; font-size: 8pt;">الاسم:</span> <strong>{{ student.first_name }}</strong></div>
+                <div><span style="color:#64748b; font-size: 8pt;">تاريخ الميلاد:</span> {{ student.date_of_birth|date:"Y/m/d" }}</div>
+                <div><span style="color:#64748b; font-size: 8pt;">المستوى:</span> {{ student.academic_year }}</div>
+                <div><span style="color:#64748b; font-size: 8pt;">القسم:</span> {{ student.class_name }}</div>
+            </div>
+
+            <div class="barcode-area">
+                <svg class="barcode"
+                     jsbarcode-format="CODE128"
+                     jsbarcode-value="{{ student.student_id_number }}"
+                     jsbarcode-textmargin="0"
+                     jsbarcode-fontoptions="bold"
+                     jsbarcode-height="30"
+                     jsbarcode-displayValue="true"
+                     jsbarcode-fontSize="10">
+                </svg>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/JsBarcode.all.min.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        JsBarcode(".barcode").init();
+    });
+</script>
+{% endblock %}

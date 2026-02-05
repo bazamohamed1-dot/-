@@ -26,6 +26,17 @@
 
     .stats-card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; flex: 1; }
     .stats-num { font-size: 2.5rem; font-weight: 800; margin: 10px 0; }
+
+    .present-list-container { margin-top: 30px; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .present-list-container h3 { margin-top: 0; color: var(--success); }
+    .present-list { list-style: none; padding: 0; max-height: 200px; overflow-y: auto; }
+    .present-list li { padding: 8px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+    .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 50%; border-radius: 8px; text-align: center; }
+    .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
+    .close:hover { color: black; }
 </style>
 {% endblock %}
 
@@ -57,6 +68,14 @@
                 </div>
             </div>
         </div>
+
+        <!-- Present Students List -->
+        <div class="present-list-container">
+            <h3><i class="fas fa-list-check"></i> قائمة الحضور اليوم</h3>
+            <ul id="presentList" class="present-list">
+                <!-- Items populated via JS -->
+            </ul>
+        </div>
     </div>
 
     <!-- Right: Stats -->
@@ -77,8 +96,21 @@
             <div>عدد الغياب</div>
         </div>
 
+        <button class="btn btn-secondary" onclick="openManualModal()" style="background: #64748b; color: white;"><i class="fas fa-keyboard"></i> إدخال يدوي</button>
         <button class="btn btn-primary" onclick="window.location.reload()"><i class="fas fa-sync"></i> تحديث الإحصائيات</button>
         <button class="btn btn-warning" onclick="exportExcel()"><i class="fas fa-file-excel"></i> حفظ في إكسل</button>
+    </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div id="manualModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeManualModal()">&times;</span>
+        <h3>إدخال يدوي (تلاميذ بدون بطاقة)</h3>
+        <p>يرجى إدخال رقم التعريف أو اختيار التلميذ من القائمة</p>
+        <input type="text" id="manualInput" class="form-input" style="width: 80%; padding: 10px; font-size: 1.2rem; margin-bottom: 10px;" placeholder="رقم التعريف">
+        <br>
+        <button class="btn btn-success" onclick="submitManual()">تسجيل الحضور</button>
     </div>
 </div>
 {% endblock %}
@@ -86,6 +118,9 @@
 {% block extra_js %}
 <script>
     const input = document.getElementById('barcodeInput');
+    // Focus logic: only force focus if no modal is open
+    let modalOpen = false;
+
     input.focus();
     input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
@@ -94,8 +129,11 @@
         }
     });
 
-    // Keep focus
-    document.addEventListener('click', () => input.focus());
+    document.addEventListener('click', (e) => {
+        if (!modalOpen && !e.target.closest('button') && !e.target.closest('.modal-content')) {
+            input.focus();
+        }
+    });
 
     async function handleScan(barcode) {
         if(!barcode) return;
@@ -112,6 +150,7 @@
                 showStudent(data.student);
                 showAlert('تم التسجيل بنجاح', 'success');
                 updateStats();
+                updatePresentList();
             } else {
                 if (data.student) showStudent(data.student);
 
@@ -133,15 +172,22 @@
         document.getElementById('className').textContent = s.class_name;
         document.getElementById('system').textContent = s.attendance_system;
 
-        // Image handling (if you have image path logic)
-        // document.getElementById('studentImage').src = ...
+        const img = document.getElementById('studentImage');
+        if (s.photo_path) {
+            img.src = s.photo_path;
+            img.style.display = 'block';
+            document.getElementById('placeholderIcon').style.display = 'none';
+        } else {
+            img.style.display = 'none';
+            document.getElementById('placeholderIcon').style.display = 'block';
+        }
     }
 
     function showAlert(msg, type) {
         const box = document.getElementById('alertBox');
         box.textContent = msg;
         box.style.display = 'block';
-        box.className = ''; // reset
+        box.className = '';
 
         if (type === 'success') { box.style.background = '#d1fae5'; box.style.color = '#065f46'; }
         else if (type === 'warning') { box.style.background = '#fef3c7'; box.style.color = '#92400e'; }
@@ -158,6 +204,27 @@
         document.getElementById('absentCount').textContent = data.absent_count;
     }
 
+    async function updatePresentList() {
+        try {
+            const res = await fetch('/canteen/attendance_lists/');
+            const data = await res.json();
+            const list = document.getElementById('presentList');
+            list.innerHTML = '';
+
+            // Assuming the API returns { present: [...], absent: [...] }
+            if (data.present && data.present.length > 0) {
+                // Reverse to show newest top
+                [...data.present].reverse().forEach(s => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span><b>${s.last_name} ${s.first_name}</b> (${s.class_name})</span> <span style="color:gray">${s.student_id_number}</span>`;
+                    list.appendChild(li);
+                });
+            } else {
+                list.innerHTML = '<li style="text-align:center; color:gray">لا يوجد حضور حتى الآن</li>';
+            }
+        } catch(e) { console.error(e); }
+    }
+
     async function exportExcel() {
         if(!confirm('حفظ ملف الإكسل؟')) return;
         fetch('/canteen/export_canteen/', { method: 'POST' })
@@ -165,7 +232,52 @@
             .then(d => alert(d.message || d.error));
     }
 
+    // Modal Functions
+    function openManualModal() {
+        modalOpen = true;
+        document.getElementById('manualModal').style.display = 'block';
+        document.getElementById('manualInput').focus();
+    }
+
+    function closeManualModal() {
+        document.getElementById('manualModal').style.display = 'none';
+        modalOpen = false;
+        input.focus();
+    }
+
+    async function submitManual() {
+        const id = document.getElementById('manualInput').value.trim();
+        if(!id) return;
+
+        // Reuse handleScan logic which calls the scan_card API.
+        // The API supports barcode matching student_id_number.
+        // If manual entry uses internal ID, handleScan might fail if it expects strict barcode.
+        // But manual_attendance API exists in views.py! Let's use that.
+
+        try {
+            const res = await fetch('/canteen/manual_attendance/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: id })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                alert("تم التسجيل يدوياً بنجاح");
+                closeManualModal();
+                updateStats();
+                updatePresentList();
+            } else {
+                alert(data.error || "خطأ");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("خطأ في الاتصال");
+        }
+    }
+
     // Initial load
     updateStats();
+    updatePresentList();
 </script>
 {% endblock %}

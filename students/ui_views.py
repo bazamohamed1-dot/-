@@ -1,7 +1,7 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.management import call_command
-from .models import Student, CanteenAttendance
+from .models import Student, CanteenAttendance, SchoolSettings
 from datetime import date
 from io import StringIO
 
@@ -46,3 +46,22 @@ def students_management(request):
 
 def library_home(request):
     return render(request, 'students/library.html')
+
+def print_student_cards(request):
+    if request.method == 'POST':
+        student_ids = request.POST.getlist('student_ids')
+        students = Student.objects.filter(id__in=student_ids)
+    else:
+        # Fallback or empty
+        students = []
+
+    settings = SchoolSettings.objects.first()
+    school_name = settings.name if settings else "اسم المؤسسة"
+    academic_year = settings.academic_year if settings else "2024/2025"
+
+    context = {
+        'students': students,
+        'school_name': school_name,
+        'academic_year': academic_year
+    }
+    return render(request, 'students/print_cards.html', context)
