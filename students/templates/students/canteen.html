@@ -159,7 +159,10 @@
         try {
             const res = await fetch('/canteen/scan_card/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
                 body: JSON.stringify({ barcode })
             });
             const data = await res.json();
@@ -245,9 +248,27 @@
 
     async function exportExcel() {
         if(!confirm('حفظ ملف الإكسل؟')) return;
-        fetch('/canteen/export_canteen/', { method: 'POST' })
+        fetch('/canteen/export_canteen/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        })
             .then(r => r.json())
             .then(d => alert(d.message || d.error));
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
     }
 
     // Modal Functions
@@ -327,7 +348,10 @@
         try {
             const res = await fetch('/canteen/manual_attendance/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
                 body: JSON.stringify({ student_id: id })
             });
             const data = await res.json();

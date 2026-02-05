@@ -25,6 +25,12 @@
         }
         .print-container {
             display: grid !important;
+        visibility: visible !important;
+    }
+
+    /* Ensure other elements are hidden */
+    .wrapper, .sidebar, .header, .no-print, .action-tray, .card {
+        display: none !important;
         }
     }
 

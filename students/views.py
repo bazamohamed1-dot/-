@@ -25,7 +25,6 @@ class StudentViewSet(viewsets.ModelViewSet):
 
 # --- Library Views ---
 
-@csrf_exempt
 @api_view(['POST'])
 def scan_library_card(request):
     barcode = request.data.get('barcode')
@@ -47,7 +46,6 @@ def scan_library_card(request):
         'active_loans': LibraryLoanSerializer(active_loans, many=True).data
     })
 
-@csrf_exempt
 @api_view(['POST'])
 def create_loan(request):
     student_id = request.data.get('student_id')
@@ -88,7 +86,6 @@ def get_readers(request):
     )
     return Response(readers)
 
-@csrf_exempt
 @api_view(['GET', 'POST'])
 def school_settings(request):
     try:
@@ -112,7 +109,6 @@ def school_settings(request):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@csrf_exempt
 @api_view(['POST'])
 def return_book(request):
     loan_id = request.data.get('loan_id')
@@ -160,7 +156,6 @@ def library_stats(request):
         'overdue_loans': overdue_list
     })
 
-@csrf_exempt
 @api_view(['POST'])
 def scan_card(request):
     try:
@@ -220,7 +215,6 @@ def get_canteen_stats(request):
         'absent_count': max(0, absent_count)
     })
 
-@csrf_exempt
 @api_view(['POST'])
 def manual_attendance(request):
     student_id = request.data.get('student_id')
@@ -257,7 +251,6 @@ def get_attendance_lists(request):
         'absent': StudentSerializer(absent_students, many=True).data
     })
 
-@csrf_exempt
 @api_view(['POST'])
 def export_canteen_sheet(request):
     # This view will update the Excel file in the root/backup folder

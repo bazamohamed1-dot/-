@@ -433,6 +433,19 @@ function toggleSelectAll(source) {
 
 function submitPrint() {
     const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+
+    // Check if we need to auto-select filtered
+    const visibleRows = document.querySelectorAll('#studentsTable tbody tr');
+    if (checkboxes.length === 0 && visibleRows.length > 0 && confirm("لم تقم باختيار أي تلميذ. هل تريد طباعة جميع التلاميذ الظاهرين في القائمة (" + visibleRows.length + ")؟")) {
+        // Select all filtered visible checkboxes
+        visibleRows.forEach(row => {
+            const cb = row.querySelector('.row-checkbox');
+            if(cb) cb.checked = true;
+        });
+        document.getElementById('printForm').submit();
+        return;
+    }
+
     if (checkboxes.length === 0) {
         alert("يرجى اختيار تلميذ واحد على الأقل للطباعة");
         return;

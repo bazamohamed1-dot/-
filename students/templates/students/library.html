@@ -178,12 +178,27 @@ document.addEventListener('DOMContentLoaded', () => {
     updateReturnDate();
 });
 
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 function updateReturnDate() {
     const loanVal = document.getElementById('loanDate').value;
     if(loanVal) {
         const d = new Date(loanVal);
         d.setDate(d.getDate() + 15);
-        document.getElementById('returnDatePreview').value = d.toLocaleDateString('ar-EG');
+        document.getElementById('returnDatePreview').value = d.toLocaleDateString('fr-FR'); // Ensure Western Numerals (123)
     }
 }
 
@@ -193,7 +208,10 @@ async function scanCard(barcode) {
     try {
         const response = await fetch('/canteen/library/scan/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({ barcode: barcode })
         });
 
@@ -264,7 +282,10 @@ async function loanBook() {
     try {
         const response = await fetch('/canteen/library/loan/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({
                 student_id: currentStudentId,
                 book_title: title,
@@ -292,7 +313,10 @@ async function returnBook(loanId) {
     try {
         const response = await fetch('/canteen/library/return/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({ loan_id: loanId })
         });
 
