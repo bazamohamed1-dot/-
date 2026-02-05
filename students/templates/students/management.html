@@ -28,6 +28,12 @@
     .sidebar-photo-container { display: flex; flex-direction: column; gap: 10px; align-items: center; padding: 10px; border-left: 1px solid #e2e8f0; }
 
     .layout-grid { display: grid; grid-template-columns: 200px 1fr; gap: 20px; }
+
+    #editBtn { background-color: #f59e0b; color: white; display: none; }
+
+    /* Search Bar */
+    .search-box { width: 100%; padding: 10px; margin-bottom: 10px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 1rem; }
+    .search-box:focus { border-color: var(--primary); outline: none; }
 </style>
 {% endblock %}
 
@@ -99,7 +105,7 @@
     <div class="action-tray">
         <button class="btn btn-success" onclick="prepareNew()"><i class="fas fa-plus"></i> جديد</button>
         <button class="btn btn-primary" onclick="saveCurrent()"><i class="fas fa-save"></i> حفظ</button>
-        <button class="btn btn-warning" onclick="enableEditing()" style="color:white"><i class="fas fa-edit"></i> تعديل</button>
+        <button class="btn" id="editBtn" onclick="enableEditing()"><i class="fas fa-edit"></i> تعديل</button>
         <button class="btn btn-danger" onclick="deleteStudent()"><i class="fas fa-trash"></i> حذف</button>
 
         <div style="flex-grow: 1;"></div>
@@ -109,6 +115,9 @@
 
         <button class="btn" style="background:#334155; color:white" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
     </div>
+
+    <!-- Search -->
+    <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()">
 
     <!-- Table -->
     <div class="table-container">
@@ -133,6 +142,7 @@
 <script src="{% static 'js/xlsx.full.min.js' %}"></script>
 <script>
 let studentsList = [];
+let filteredList = [];
 let selectedIndex = -1;
 let isEditMode = false;
 
@@ -140,6 +150,21 @@ let isEditMode = false;
 document.addEventListener('DOMContentLoaded', () => {
     fetchStudents();
     lockFields(true);
+
+    // Click outside to cancel edit
+    document.addEventListener('click', function(event) {
+        const form = document.getElementById('studentForm');
+        const tray = document.querySelector('.action-tray');
+        const table = document.querySelector('.table-container');
+        const sidebar = document.querySelector('.sidebar-photo-container');
+
+        // If click is NOT inside form, tray, table, or sidebar, and we are in Edit Mode
+        if (isEditMode && !form.contains(event.target) && !tray.contains(event.target) && !table.contains(event.target) && !sidebar.contains(event.target)) {
+            if (confirm("إلغاء التعديل؟")) {
+                fillForm(selectedIndex, document.querySelector('.selected-row')); // Revert
+            }
+        }
+    });
 });
 
 async function fetchStudents() {
@@ -148,7 +173,6 @@ async function fetchStudents() {
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
 
-        // Map Django API data to our internal structure if needed, or use directly
         studentsList = data.map(s => ({
             dbId: s.id,
             id: s.student_id_number,
@@ -158,7 +182,7 @@ async function fetchStudents() {
             pob: s.place_of_birth,
             gender: s.gender,
             level: s.academic_year,
-            class: s.class_name, // Note: This might need splitting if format is "Level Class"
+            class: s.class_name,
             sys: s.attendance_system,
             enrollNum: s.enrollment_number,
             enrollDate: s.enrollment_date,
@@ -170,6 +194,7 @@ async function fetchStudents() {
             photo: s.photo_path
         }));
 
+        filteredList = studentsList;
         renderTable();
     } catch (error) {
         console.error('Error fetching students:', error);
@@ -199,6 +224,7 @@ function prepareNew() {
 
     document.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row'));
     lockFields(false);
+    document.getElementById('editBtn').style.display = 'none';
     document.getElementById('modeStatus').innerHTML = '<i class="fas fa-plus-circle" style="color:#10b981"></i> وضع الإدخال الجديد';
     document.getElementById('lastName').focus();
 }
@@ -211,52 +237,45 @@ function enableEditing() {
 }
 
 function fillForm(idx, row) {
-    if (!isEditMode || confirm("هل تريد تجاهل التغييرات غير المحفوظة؟")) {
-        selectedIndex = idx;
-        const s = studentsList[idx];
+    if (isEditMode && !confirm("هل تريد تجاهل التغييرات غير المحفوظة؟")) return;
 
-        document.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row'));
-        row.classList.add('selected-row');
+    selectedIndex = idx;
+    const s = filteredList[idx]; // Use filtered list index
 
-        document.getElementById('dbId').value = s.dbId;
-        document.getElementById('lastName').value = s.ln;
-        document.getElementById('firstName').value = s.fn;
-        document.getElementById('studentID').value = s.id;
-        document.getElementById('dateOfBirth').value = s.dob;
-        document.getElementById('placeOfBirth').value = s.pob;
-        document.getElementById('gender').value = s.gender;
-        document.getElementById('academicYear').value = s.level;
+    document.querySelectorAll('tr').forEach(r => r.classList.remove('selected-row'));
+    if(row) row.classList.add('selected-row');
 
-        // Handle Class Name (Try to extract number if format is "Level Num")
-        // The API returns full class name "Level Num", input expects just Num?
-        // The user input says "Class (2 digits)".
-        // If the backend stores "Level 1", we display "1" in input?
-        // Let's assume input matches backend for now or regex it.
-        // Assuming user enters just the number in input, but backend might store full?
-        // import_eleve.py constructs: full_class = f"{level} {class_num}"
-        // So we should try to extract the second part.
-        let classNum = s.class;
-        if (s.class && s.class.includes(s.level)) {
-            classNum = s.class.replace(s.level, '').trim();
-        }
-        document.getElementById('className').value = classNum;
+    document.getElementById('dbId').value = s.dbId;
+    document.getElementById('lastName').value = s.ln;
+    document.getElementById('firstName').value = s.fn;
+    document.getElementById('studentID').value = s.id;
+    document.getElementById('dateOfBirth').value = s.dob;
+    document.getElementById('placeOfBirth').value = s.pob;
+    document.getElementById('gender').value = s.gender;
+    document.getElementById('academicYear').value = s.level;
 
-        document.getElementById('attendanceSystem').value = s.sys;
-        document.getElementById('enrollmentNumber').value = s.enrollNum;
-        document.getElementById('enrollmentDate').value = s.enrollDate;
-        document.getElementById('exitDate').value = s.exitDate;
-        document.getElementById('guardianName').value = s.guard;
-        document.getElementById('motherName').value = s.mother;
-        document.getElementById('guardianPhone').value = s.phone;
-        document.getElementById('address').value = s.addr;
-
-        document.getElementById('photoPath').value = s.photo || "";
-        updatePhotoUI(s.photo);
-
-        lockFields(true);
-        isEditMode = false;
-        document.getElementById('modeStatus').innerHTML = '<i class="fas fa-eye"></i> وضع العرض';
+    let classNum = s.class;
+    if (s.class && s.class.includes(s.level)) {
+        classNum = s.class.replace(s.level, '').trim();
     }
+    document.getElementById('className').value = classNum;
+
+    document.getElementById('attendanceSystem').value = s.sys;
+    document.getElementById('enrollmentNumber').value = s.enrollNum;
+    document.getElementById('enrollmentDate').value = s.enrollDate;
+    document.getElementById('exitDate').value = s.exitDate;
+    document.getElementById('guardianName').value = s.guard;
+    document.getElementById('motherName').value = s.mother;
+    document.getElementById('guardianPhone').value = s.phone;
+    document.getElementById('address').value = s.addr;
+
+    document.getElementById('photoPath').value = s.photo || "";
+    updatePhotoUI(s.photo);
+
+    lockFields(true);
+    isEditMode = false;
+    document.getElementById('editBtn').style.display = 'inline-flex';
+    document.getElementById('modeStatus').innerHTML = '<i class="fas fa-eye"></i> وضع العرض';
 }
 
 async function saveCurrent() {
@@ -309,8 +328,9 @@ async function saveCurrent() {
 
         if (response.ok) {
             alert("تم الحفظ بنجاح");
-            fetchStudents(); // Reload table
-            prepareNew(); // Reset form
+            // Fix: Wait for fetch to complete before resetting UI to avoid race conditions or double messages
+            await fetchStudents();
+            prepareNew();
         } else {
             const err = await response.json();
             alert("خطأ في الحفظ: " + JSON.stringify(err));
@@ -346,6 +366,30 @@ async function deleteStudent() {
     }
 }
 
+function filterTable() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    filteredList = studentsList.filter(s =>
+        s.ln.toLowerCase().includes(query) ||
+        s.fn.toLowerCase().includes(query) ||
+        s.id.includes(query)
+    );
+    renderTable();
+}
+
+function renderTable() {
+    const tbody = document.querySelector('#studentsTable tbody');
+    tbody.innerHTML = filteredList.map((s, i) => `
+        <tr onclick="fillForm(${i}, this)">
+            <td>${s.id}</td>
+            <td>${s.ln}</td>
+            <td>${s.fn}</td>
+            <td style="direction:ltr">${s.dob || ''}</td>
+            <td>${s.level}</td>
+            <td>${s.class}</td>
+        </tr>
+    `).join('');
+}
+
 // Helper to get CSRF token
 function getCookie(name) {
     let cookieValue = null;
@@ -360,36 +404,6 @@ function getCookie(name) {
         }
     }
     return cookieValue;
-}
-
-function handleImportExcel(input) {
-    if (input.files && input.files[0]) {
-        // Here we could implement client-side parsing and bulk upload
-        // For now, let's just trigger the server-side import via form submission if preferred,
-        // OR parse here and fill the form.
-        // User asked for "Two extra lines" issue which implies they use server import.
-        // But the "buttons" request implies they use the UI.
-
-        // Let's parse client side to show data, then user can "Save All".
-        // BUT "Save All" needs to be implemented.
-        alert("سيتم استيراد البيانات وعرضها. اضغط 'حفظ الكل' (غير متوفر حالياً) أو استخدم الاستيراد من الإعدادات.");
-        // For simplicity and robustness, redirect to the import view logic or just say "Use Settings -> Import"
-        // But wait, I can implement client-side parsing and loop POST.
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-             const data = new Uint8Array(e.target.result);
-             const workbook = XLSX.read(data, {type: 'array'});
-             const firstSheetName = workbook.SheetNames[0];
-             const worksheet = workbook.Sheets[firstSheetName];
-             const json = XLSX.utils.sheet_to_json(worksheet);
-
-             // TODO: Implement Bulk Save loop if needed.
-             console.log("Imported data:", json);
-             alert("تم قراءة " + json.length + " صف. يرجى استخدام صفحة الإعدادات للاستيراد الكامل الموثوق.");
-        };
-        reader.readAsArrayBuffer(input.files[0]);
-    }
 }
 
 function exportBackup() {
@@ -411,27 +425,14 @@ function exportBackup() {
         "اسم الولي": s.guard,
         "اسم الأم": s.mother,
         "هاتف الولي": s.phone,
-        "العنوان": s.addr
+        "العنوان": s.addr,
+        "مسار الصورة": s.photo // Added photo path
     }));
 
     const ws = XLSX.utils.json_to_sheet(backupData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "التلاميذ");
     XLSX.writeFile(wb, "Backup_Students.xlsx");
-}
-
-function renderTable() {
-    const tbody = document.querySelector('#studentsTable tbody');
-    tbody.innerHTML = studentsList.map((s, i) => `
-        <tr onclick="fillForm(${i}, this)">
-            <td>${s.id}</td>
-            <td>${s.ln}</td>
-            <td>${s.fn}</td>
-            <td style="direction:ltr">${s.dob || ''}</td>
-            <td>${s.level}</td>
-            <td>${s.class}</td>
-        </tr>
-    `).join('');
 }
 
 function triggerImageSelect() { document.getElementById('imageSelector').click(); }

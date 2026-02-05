@@ -8,3 +8,86 @@ Not Found: /library/
 [04/Feb/2026 22:37:54] "GET /api/students/ HTTP/1.1" 200 346783
 [04/Feb/2026 22:37:56] "GET /canteen/library/ HTTP/1.1" 200 17148
 [04/Feb/2026 22:37:56] "GET /canteen/library/stats/ HTTP/1.1" 200 67
+/app/students/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 04, 2026 - 22:36:33
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+Exception in thread django-main-thread:
+Traceback (most recent call last):
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/utils/autoreload.py", line 64, in wrapper
+    fn(*args, **kwargs)
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/management/commands/runserver.py", line 134, in inner_run
+    self.check(**check_kwargs)
+  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/management/base.py", line 573, in check
+    raise SystemCheckError(msg)
+django.core.management.base.SystemCheckError: SystemCheckError: System check identified some issues:
+
+ERRORS:
+students.SchoolSettings.logo: (fields.E210) Cannot use ImageField because Pillow is not installed.
+	HINT: Get Pillow at https://pypi.org/project/Pillow/ or run command "python -m pip install Pillow".
+
+System check identified 1 issue (0 silenced).
+/app/students/serializers.py changed, reloading.
+Performing system checks...
+
+Watching for file changes with StatReloader
+/app/students/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 05, 2026 - 11:45:27
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/app/students/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 05, 2026 - 11:45:32
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/app/students/urls.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 05, 2026 - 11:45:44
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/app/students/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 05, 2026 - 11:45:51
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader

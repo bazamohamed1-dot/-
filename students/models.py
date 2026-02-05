@@ -18,7 +18,7 @@ class Student(models.Model):
     mother_name = models.CharField(max_length=200, verbose_name="لقب واسم الأم")
     address = models.TextField(verbose_name="عنوان السكن")
     guardian_phone = models.CharField(max_length=20, verbose_name="رقم هاتف الولي")
-    photo_path = models.CharField(max_length=255, null=True, blank=True, verbose_name="مسار الصورة")
+    photo_path = models.TextField(null=True, blank=True, verbose_name="مسار الصورة") # Changed to TextField to support Base64
 
     class Meta:
         verbose_name = "تلميذ"
@@ -54,3 +54,13 @@ class LibraryLoan(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.book_title}"
+
+class SchoolSettings(models.Model):
+    name = models.CharField(max_length=200, verbose_name="اسم المؤسسة")
+    academic_year = models.CharField(max_length=50, verbose_name="السنة الدراسية")
+    director_name = models.CharField(max_length=200, verbose_name="اسم المدير")
+    logo = models.ImageField(upload_to='school_logo/', null=True, blank=True, verbose_name="شعار المؤسسة")
+
+    class Meta:
+        verbose_name = "إعدادات المؤسسة"
+        verbose_name_plural = "إعدادات المؤسسة"
