@@ -1,11 +1,13 @@
 Watching for file changes with StatReloader
-[05/Feb/2026 17:36:40] "GET /canteen/settings/ HTTP/1.1" 200 12240
-Not Found: /api/settings/data/
-[05/Feb/2026 17:36:41] "GET /api/settings/data/ HTTP/1.1" 404 4269
+[05/Feb/2026 18:23:40] "GET /canteen/library/ HTTP/1.1" 200 24385
+[05/Feb/2026 18:23:40] "GET /canteen/library/stats/ HTTP/1.1" 200 135
+[05/Feb/2026 18:23:41] "GET /canteen/management/ HTTP/1.1" 200 32954
+[05/Feb/2026 18:23:41] "GET /static/js/xlsx.full.min.js HTTP/1.1" 200 951904
+[05/Feb/2026 18:23:41] "GET /api/students/ HTTP/1.1" 200 346783
 Performing system checks...
 
 System check identified no issues (0 silenced).
-February 05, 2026 - 17:35:52
+February 05, 2026 - 18:22:51
 Django version 6.0.2, using settings 'School_Management.settings'
 Starting development server at http://0.0.0.0:8000/
 Quit the server with CONTROL-C.

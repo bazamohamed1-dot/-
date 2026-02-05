@@ -9,7 +9,7 @@
     @media print {
         @page {
             size: A4;
-            margin: 0;
+            margin: 5mm; /* Small margins as requested */
         }
         body {
             background-color: white;
@@ -31,6 +31,11 @@
         }
         .print-container {
             display: grid !important;
+            margin: 0 auto !important; /* Center content */
+            box-shadow: none !important;
+            padding: 0 !important;
+            min-height: auto !important; /* Prevent forced second page if content fits */
+            page-break-after: auto !important;
         }
     }
 
@@ -39,23 +44,16 @@
     }
 
     .print-container {
-        width: 210mm;
-        min-height: 297mm;
+        width: 200mm; /* Slightly less than 210mm to account for margin */
         background: white;
         margin: 20px auto;
-        padding: 10mm;
+        padding: 5mm;
         box-shadow: 0 0 10px rgba(0,0,0,0.1);
         display: grid;
         grid-template-columns: 1fr 1fr;
-        /* A4 height 297mm. Padding 20mm (10 top 10 bottom). Available: 277mm.
-           Rows: 4. Height per row: 277/4 = ~69mm including gap.
-           Card height: 52mm. Gap: 5mm. Total used per row: 57mm.
-           4 rows * 57 = 228mm. Fits easily.
-        */
         grid-template-rows: repeat(4, 60mm);
         gap: 5mm;
         box-sizing: border-box;
-        page-break-after: always;
     }
 
     /* Business Card Size approx 85mm x 54mm */
@@ -169,8 +167,8 @@
 
         <div class="info-area">
             <div class="header-text">
-                {{ school_name }}<br>
-                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: {{ academic_year }}</span>
+                متوسطة بوشنافة عمر<br>
+                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: 2025/2026</span>
             </div>
 
             <div class="student-data">
