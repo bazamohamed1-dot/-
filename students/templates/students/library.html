@@ -39,10 +39,43 @@
     .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; border-radius: 8px; }
     .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
     .close:hover { color: black; }
+
+    /* Toast Notification */
+    #toast {
+        visibility: hidden;
+        min-width: 250px;
+        background-color: #10b981; /* Success Green */
+        color: white;
+        text-align: center;
+        border-radius: 8px;
+        padding: 16px;
+        position: fixed;
+        z-index: 3000;
+        left: 50%;
+        transform: translateX(-50%);
+        top: 30px;
+        font-size: 1rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        opacity: 0;
+        transition: opacity 0.3s, top 0.3s;
+    }
+    #toast.show {
+        visibility: visible;
+        opacity: 1;
+        top: 50px;
+    }
+
+    /* Force Western Numerals */
+    .western-nums, .stat-value, input[type="date"], td {
+        font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif !important;
+        unicode-bidi: plaintext;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<div id="toast"></div>
 
 <!-- Action Bar -->
 <div style="margin-bottom: 20px; text-align: left;">
@@ -326,19 +359,34 @@ async function loanBook() {
         });
 
         if (response.ok) {
-            alert("تم تسجيل الإعارة بنجاح");
+            // Show custom toast instead of alert
+            showToast("تم تسجيل الإعارة بنجاح");
+
             document.getElementById('bookTitle').value = '';
             // Refresh student data (simulate scan)
             scanCard(document.getElementById('studentIdDisplay').textContent);
             loadStats();
-            // Point 14: Return focus to scanner
-            document.getElementById('barcodeInput').focus();
         } else {
             alert("خطأ أثناء التسجيل");
         }
     } catch (error) {
         console.error(error);
     }
+}
+
+function showToast(msg) {
+    const x = document.getElementById("toast");
+    x.textContent = msg;
+    x.className = "show";
+    setTimeout(function(){
+        x.className = x.className.replace("show", "");
+        // Focus back to barcode input after 1 second
+        const scanner = document.getElementById('barcodeInput');
+        if(scanner) {
+            scanner.focus();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, 1000);
 }
 
 async function returnBook(loanId) {

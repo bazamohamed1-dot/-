@@ -121,6 +121,18 @@
         margin-bottom: 2px;
     }
 
+    .header-title {
+        font-size: 11pt;
+        color: #1e40af;
+        margin-bottom: 2px;
+        display: block;
+    }
+
+    .western-nums {
+        font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+        unicode-bidi: plaintext;
+    }
+
     .student-data {
         font-size: 10pt;
         line-height: 1.2;
@@ -176,14 +188,15 @@
 
         <div class="info-area">
             <div class="header-text">
+                <span class="header-title">بطاقة التعريف المدرسية</span>
                 متوسطة بوشنافة عمر<br>
-                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: 2026/2025</span>
+                <span style="font-size: 8pt; font-weight: normal;">السنة الدراسية: <span class="western-nums">2026/2025</span></span>
             </div>
 
             <div class="student-data">
                 <div><span style="color:#64748b; font-size: 8pt;">اللقب:</span> <strong>{{ student.last_name }}</strong></div>
                 <div><span style="color:#64748b; font-size: 8pt;">الاسم:</span> <strong>{{ student.first_name }}</strong></div>
-                <div><span style="color:#64748b; font-size: 8pt;">تاريخ الميلاد:</span> {{ student.date_of_birth|date:"Y/m/d" }}</div>
+                <div><span style="color:#64748b; font-size: 8pt;">تاريخ الميلاد:</span> <span class="western-nums">{{ student.date_of_birth|date:"Y/m/d" }}</span></div>
                 <div><span style="color:#64748b; font-size: 8pt;">المستوى:</span> {{ student.academic_year }}</div>
                 <!-- Logic to strip class name to number only.
                      Django template tag 'slice' or 'cut' is limited.
@@ -205,6 +218,7 @@
                      Let's try to just render it and use JS to fix it immediately.
                 -->
                 <div><span style="color:#64748b; font-size: 8pt;">القسم:</span> <span class="class-name-clean">{{ student.class_name }}</span></div>
+                <div><span style="color:#64748b; font-size: 8pt;">الصفة:</span> {{ student.attendance_system }}</div>
             </div>
 
             <div class="barcode-area">
