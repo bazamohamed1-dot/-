@@ -35,6 +35,8 @@
     /* Search Bar */
     .search-box { width: 100%; padding: 10px; margin-bottom: 10px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 1rem; }
     .search-box:focus { border-color: var(--primary); outline: none; }
+    /* Filter Selects */
+    .filter-input { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.95rem; outline: none; background: #fff; width: 100%; box-sizing: border-box; }
 </style>
 {% endblock %}
 
@@ -111,7 +113,6 @@
 
         <div style="flex-grow: 1;"></div>
 
-        <button class="btn btn-danger" onclick="deleteFiltered()" title="حذف القائمة الظاهرة"><i class="fas fa-trash-alt"></i> حذف القائمة (فلتر)</button>
         <button class="btn" style="background:#334155; color:white" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
         <button class="btn" style="background:#4f46e5; color:white" onclick="submitPrint()"><i class="fas fa-id-card"></i> طباعة البطاقات</button>
     </div>
@@ -121,12 +122,12 @@
     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
         <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
 
-        <select id="filterLevel" class="form-input" style="flex: 1;" onchange="filterTable()">
+        <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="filterTable()">
             <option value="">جميع المستويات</option>
             <!-- Populated via JS -->
         </select>
 
-        <select id="filterClass" class="form-input" style="flex: 1;" onchange="filterTable()">
+        <select id="filterClass" class="filter-input" style="flex: 1;" onchange="filterTable()">
             <option value="">جميع الأقسام</option>
             <!-- Populated via JS -->
         </select>
@@ -373,42 +374,16 @@ async function saveCurrent() {
 }
 
 async function deleteStudent() {
-    const dbId = document.getElementById('dbId').value;
-    if (!dbId) return alert("الرجاء اختيار تلميذ للحذف");
-
-    if (!confirm("هل أنت متأكد من حذف هذا التلميذ نهائياً؟")) return;
-
-    try {
-        const response = await fetch(`/api/students/${dbId}/`, {
-            method: 'DELETE',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') }
-        });
-
-        if (response.ok) {
-            alert("تم الحذف بنجاح");
-            fetchStudents();
-            prepareNew();
-        } else {
-            alert("حدث خطأ أثناء الحذف");
-        }
-    } catch (error) {
-        console.error(error);
-        alert("خطأ في الاتصال");
-    }
-}
-
-async function deleteFiltered() {
-    if (filteredList.length === 0) return alert("لا يوجد تلاميذ في القائمة الحالية للحذف");
-    // Ensure user explicitly wants to delete using the filter "next to search" as requested (Point 7)
-    // The filteredList IS the list resulting from that filter.
-
-    if (filteredList.length === studentsList.length) {
-        if (!confirm("تحذير: أنت على وشك حذف جميع التلاميذ في قاعدة البيانات! هل أنت متأكد؟")) return;
-    } else {
-        if (!confirm(`هل أنت متأكد من حذف ${filteredList.length} تلميذ من القائمة الظاهرة؟`)) return;
+    // Get all checked checkboxes
+    const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert("يرجى تحديد تلاميذ");
+        return;
     }
 
-    const ids = filteredList.map(s => s.dbId);
+    if (!confirm(`هل أنت متأكد من حذف ${checkboxes.length} تلميذ؟`)) return;
+
+    const ids = Array.from(checkboxes).map(cb => cb.value);
 
     try {
         const response = await fetch('/api/students/bulk_delete/', {
@@ -420,15 +395,15 @@ async function deleteFiltered() {
             body: JSON.stringify({ ids: ids })
         });
 
-        if(response.ok) {
-            alert("تم الحذف الجماعي بنجاح");
+        if (response.ok) {
+            alert("تم الحذف بنجاح");
             fetchStudents();
             prepareNew();
         } else {
-            alert("حدث خطأ في الحذف الجماعي");
+            alert("حدث خطأ أثناء الحذف");
         }
-    } catch(e) {
-        console.error(e);
+    } catch (error) {
+        console.error(error);
         alert("خطأ في الاتصال");
     }
 }
