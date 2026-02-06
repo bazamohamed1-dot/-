@@ -50,6 +50,9 @@
     <div>
         <div class="scanner-section">
             <input type="text" id="barcodeInput" class="scanner-input" placeholder="امسح البطاقة هنا..." autofocus autocomplete="off">
+            <small style="display:block; margin-top:5px; color:#dc2626; font-weight:bold;">
+                <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
+            </small>
             <div id="alertBox" style="margin-top: 15px; padding: 15px; border-radius: 8px; font-weight: bold; display: none;"></div>
         </div>
 
@@ -157,6 +160,16 @@
     let modalOpen = false;
 
     input.focus();
+
+    // Check for non-English chars
+    input.addEventListener('input', function(e) {
+        const val = this.value;
+        // Check for Arabic chars range
+        if (/[\u0600-\u06FF]/.test(val)) {
+             showAlert('تنبيه: يبدو أنك تستخدم اللغة العربية! يرجى التحويل للإنجليزية.', 'warning');
+        }
+    });
+
     input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             handleScan(this.value);
@@ -179,7 +192,15 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ barcode })
             });
-            const data = await res.json();
+
+            let data;
+            try {
+                data = await res.json();
+            } catch (jsonError) {
+                console.error("JSON Parse Error:", jsonError);
+                showAlert('خطأ في استجابة الخادم (غير مقروءة)', 'danger');
+                return;
+            }
 
             if (res.ok) {
                 showStudent(data.student);
@@ -192,7 +213,12 @@
                 if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
                 else if (data.code === 'NOT_HALF_BOARD') showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'danger');
                 else if (data.code === 'NOT_FOUND') showAlert('خطأ: التلميذ غير موجود!', 'danger');
-                else showAlert('خطأ: ' + (data.error || 'غير معروف'), 'danger');
+                else {
+                    // Check for DRF detail or generic error
+                    const msg = data.error || data.detail || 'خطأ غير معروف';
+                    showAlert('خطأ: ' + msg, 'danger');
+                    console.error("Scan Error Payload:", data);
+                }
             }
         } catch (e) {
             showAlert('خطأ في الاتصال بالسيرفر', 'danger');

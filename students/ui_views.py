@@ -7,7 +7,15 @@ from io import StringIO
 import os
 from django.conf import settings
 
+def landing_view(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    return render(request, 'students/landing.html')
+
 def dashboard(request):
+    if not request.user.is_authenticated:
+        return redirect('landing')
+
     context = {
         'total_students': Student.objects.count(),
         'half_board_count': Student.objects.filter(attendance_system='نصف داخلي').count(),

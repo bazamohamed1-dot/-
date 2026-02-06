@@ -40,24 +40,34 @@ class StudentViewSet(viewsets.ModelViewSet):
 @csrf_exempt
 @api_view(['POST'])
 def scan_library_card(request):
-    barcode = request.data.get('barcode')
-    if not barcode:
-        return Response({'error': 'No barcode provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-    barcode = str(barcode).strip()
     try:
-        # Search by student_id_number
-        student = Student.objects.get(student_id_number=barcode)
-    except Student.DoesNotExist:
-        return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+        barcode = request.data.get('barcode')
+        if not barcode:
+            return Response({'error': 'No barcode provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Get active loans
-    active_loans = LibraryLoan.objects.filter(student=student, is_returned=False)
+        barcode = str(barcode).strip()
 
-    return Response({
-        'student': StudentSerializer(student).data,
-        'active_loans': LibraryLoanSerializer(active_loans, many=True).data
-    })
+        # Robust lookup
+        try:
+            student = Student.objects.get(student_id_number=barcode)
+        except Student.DoesNotExist:
+            return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+        except Student.MultipleObjectsReturned:
+            # Fallback: take the first one or error out. Usually shouldn't happen with ID.
+            student = Student.objects.filter(student_id_number=barcode).first()
+            if not student:
+                 return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get active loans
+        active_loans = LibraryLoan.objects.filter(student=student, is_returned=False)
+
+        return Response({
+            'student': StudentSerializer(student).data,
+            'active_loans': LibraryLoanSerializer(active_loans, many=True).data
+        })
+    except Exception as e:
+        logger.error(f"Library Scan Error: {e}")
+        return Response({'error': f'Server Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
 @api_view(['POST'])
@@ -216,47 +226,52 @@ def library_stats(request):
 def scan_card(request):
     try:
         barcode = request.data.get('barcode')
-        print(f"DEBUG: Received barcode: {barcode}") # Simple print for container logs
+        logger.info(f"DEBUG: Received barcode: {barcode}")
+
+        if not barcode:
+            return Response({'error': 'No barcode provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Clean the barcode (remove spaces, etc)
+        barcode = str(barcode).strip()
+
+        # Robust lookup
+        try:
+            student = Student.objects.get(student_id_number=barcode)
+        except Student.DoesNotExist:
+            return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+        except Student.MultipleObjectsReturned:
+            student = Student.objects.filter(student_id_number=barcode).first()
+            if not student:
+                return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if Half-Board
+        if student.attendance_system != 'نصف داخلي':
+            return Response({
+                'error': 'Student is not Half-Board',
+                'student': StudentSerializer(student).data,
+                'code': 'NOT_HALF_BOARD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if already attended today
+        today = date.today()
+        if CanteenAttendance.objects.filter(student=student, date=today).exists():
+            return Response({
+                'error': 'Student already took the meal',
+                'student': StudentSerializer(student).data,
+                'code': 'ALREADY_ATE'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Record attendance
+        attendance = CanteenAttendance.objects.create(student=student, date=today)
+        return Response({
+            'message': 'Attendance recorded',
+            'student': StudentSerializer(student).data,
+            'attendance': CanteenAttendanceSerializer(attendance).data
+        }, status=status.HTTP_201_CREATED)
+
     except Exception as e:
-        print(f"DEBUG: Error parsing data: {e}")
-        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
-
-    if not barcode:
-        return Response({'error': 'No barcode provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Clean the barcode (remove spaces, etc)
-    barcode = str(barcode).strip()
-
-    try:
-        # Assuming barcode matches student_id_number
-        student = Student.objects.get(student_id_number=barcode)
-    except Student.DoesNotExist:
-        return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
-
-    # Check if Half-Board
-    if student.attendance_system != 'نصف داخلي':
-        return Response({
-            'error': 'Student is not Half-Board',
-            'student': StudentSerializer(student).data,
-            'code': 'NOT_HALF_BOARD'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    # Check if already attended today
-    today = date.today()
-    if CanteenAttendance.objects.filter(student=student, date=today).exists():
-        return Response({
-            'error': 'Student already took the meal',
-            'student': StudentSerializer(student).data,
-            'code': 'ALREADY_ATE'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    # Record attendance
-    attendance = CanteenAttendance.objects.create(student=student, date=today)
-    return Response({
-        'message': 'Attendance recorded',
-        'student': StudentSerializer(student).data,
-        'attendance': CanteenAttendanceSerializer(attendance).data
-    }, status=status.HTTP_201_CREATED)
+        logger.error(f"Canteen Scan Error: {e}")
+        return Response({'error': f'Server Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 def get_canteen_stats(request):
