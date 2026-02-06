@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', loadSettings);
 
 async function loadSettings() {
     try {
-        const response = await fetch('/api/settings/data/');
+        const response = await fetch('/settings/data/');
         const data = await response.json();
 
         if (data.name) document.getElementById('schoolName').value = data.name;
@@ -139,7 +139,7 @@ async function saveSchoolSettings(e) {
     };
 
     try {
-        const response = await fetch('/api/settings/data/', {
+        const response = await fetch('/settings/data/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
