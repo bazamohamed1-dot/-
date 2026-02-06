@@ -42,11 +42,74 @@
 
 <div class="card">
     <h3><i class="fas fa-users-cog"></i> إدارة صلاحيات المستخدمين</h3>
-    <p style="color: #64748b;">(ميزة تجريبية - إدارة مستخدمي Django)</p>
-    <!-- Here we could list users if we had an API for User Management.
-         For now, just a placeholder or link to Django Admin -->
-    <a href="/admin/" target="_blank" class="btn btn-warning">الذهاب إلى لوحة التحكم المتقدمة (Admin)</a>
+    <table style="width:100%; margin-top:15px;">
+        <thead>
+            <tr style="background:#f1f5f9;">
+                <th style="padding:10px; text-align:right;">اسم المستخدم</th>
+                <th style="padding:10px; text-align:right;">الدور</th>
+                <th style="padding:10px; text-align:right;">الحالة</th>
+                <th style="padding:10px; text-align:right;">إجراءات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr style="border-bottom:1px solid #e2e8f0;">
+                <td style="padding:10px;">{{ u.username }}</td>
+                <td style="padding:10px;">{{ u.profile.get_role_display }}</td>
+                <td style="padding:10px;">
+                    {% if u.profile.is_locked %}
+                    <span style="background:#fee2e2; color:#b91c1c; padding:4px 8px; border-radius:4px; font-size:0.8rem;">مقفل</span>
+                    {% else %}
+                    <span style="background:#dcfce7; color:#15803d; padding:4px 8px; border-radius:4px; font-size:0.8rem;">نشط</span>
+                    {% endif %}
+                </td>
+                <td style="padding:10px;">
+                    {% if u.profile.is_locked %}
+                    <a href="{% url 'unlock_user' u.id %}" class="btn" style="background:#22c55e; color:white; padding:5px 10px; font-size:0.8rem;">فك الحظر</a>
+                    {% endif %}
+
+                    <a href="{% url 'reset_session' u.id %}" class="btn" style="background:#f59e0b; color:white; padding:5px 10px; font-size:0.8rem;" onclick="return confirm('هل أنت متأكد من إعادة تعيين الجلسة؟ سيتم تسجيل خروج المستخدم.')">إعادة تعيين الجلسة</a>
+
+                    <button class="btn" style="background:#3b82f6; color:white; padding:5px 10px; font-size:0.8rem;" onclick="openPasswordModal('{{ u.id }}', '{{ u.username }}')">تغيير كلمة المرور</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
+
+<!-- Password Modal -->
+<div id="passwordModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+    <div class="card" style="width: 400px; padding: 20px;">
+        <h3>تغيير كلمة المرور: <span id="modalUsername"></span></h3>
+        <form id="passwordForm" method="post" action="">
+            {% csrf_token %}
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">كلمة المرور الجديدة</label>
+                <input type="password" name="new_password" class="form-input" style="width:100%; padding:8px;" required>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">تأكيد كلمة المرور</label>
+                <input type="password" name="confirm_password" class="form-input" style="width:100%; padding:8px;" required>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" class="btn" style="background:#ef4444; color:white;" onclick="closePasswordModal()">إلغاء</button>
+                <button type="submit" class="btn" style="background:#22c55e; color:white;">حفظ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openPasswordModal(userId, username) {
+    document.getElementById('passwordModal').style.display = 'flex';
+    document.getElementById('modalUsername').innerText = username;
+    document.getElementById('passwordForm').action = "/settings/users/password/" + userId + "/";
+}
+function closePasswordModal() {
+    document.getElementById('passwordModal').style.display = 'none';
+}
+</script>
 
 {% endblock %}
 

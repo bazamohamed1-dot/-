@@ -173,8 +173,14 @@
     async function handleScan(barcode) {
         if(!barcode) return;
 
+        if (!navigator.onLine) {
+            addToQueue('/scan_card/', { barcode });
+            showAlert('لا يوجد انترنت. تم الحفظ محلياً.', 'warning');
+            return;
+        }
+
         try {
-            const res = await fetch('/canteen/scan_card/', {
+            const res = await fetch('/scan_card/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ barcode })
@@ -195,7 +201,8 @@
                 else showAlert('خطأ: ' + (data.error || 'غير معروف'), 'danger');
             }
         } catch (e) {
-            showAlert('خطأ في الاتصال بالسيرفر', 'danger');
+            addToQueue('/scan_card/', { barcode });
+            showAlert('خطأ في الاتصال. تم الحفظ محلياً.', 'warning');
             console.error(e);
         }
     }
@@ -232,16 +239,18 @@
     }
 
     async function updateStats() {
-        const res = await fetch('/canteen/canteen_stats/');
-        const data = await res.json();
-        document.getElementById('totalCount').textContent = data.total_half_board;
-        document.getElementById('presentCount').textContent = data.present_count;
-        document.getElementById('absentCount').textContent = data.absent_count;
+        try {
+            const res = await fetch('/canteen_stats/');
+            const data = await res.json();
+            document.getElementById('totalCount').textContent = data.total_half_board;
+            document.getElementById('presentCount').textContent = data.present_count;
+            document.getElementById('absentCount').textContent = data.absent_count;
+        } catch(e) { console.log("Stats fetch failed"); }
     }
 
     async function updatePresentList() {
         try {
-            const res = await fetch('/canteen/attendance_lists/');
+            const res = await fetch('/attendance_lists/');
             const data = await res.json();
             const list = document.getElementById('presentList');
             list.innerHTML = '';
@@ -268,7 +277,7 @@
 
     async function exportExcel() {
         if(!confirm('حفظ ملف الإكسل؟')) return;
-        fetch('/canteen/export_canteen/', { method: 'POST' })
+        fetch('/export_canteen/', { method: 'POST' })
             .then(r => r.json())
             .then(d => alert(d.message || d.error));
     }
@@ -283,24 +292,24 @@
 
         if(allStudents.length === 0) {
             try {
-                // Fetch all students. Re-using attendance lists absent API is not enough, we need ALL half-board.
-                // Or simply re-use get_attendance_lists -> absent is a good starting point but we want to allow marking ANYONE.
-                // Better to fetch all Half-Board students. We don't have a specific API for "All Half Board" yet but /api/attendance_lists/ has "absent" which are the ones we likely want to add.
-                // Let's rely on /api/attendance_lists/ 'absent' list for now as they are the targets.
-                const res = await fetch('/canteen/attendance_lists/');
+                const res = await fetch('/attendance_lists/');
                 const data = await res.json();
-                allStudents = data.absent || []; // Only show absent students as candidates
+                allStudents = data.absent || [];
                 populateManualFilters();
                 filterManualList();
             } catch(e) {
                 console.error(e);
-                document.getElementById('manualListBody').innerHTML = '<tr><td colspan="3">خطأ في التحميل</td></tr>';
+                if(navigator.onLine) document.getElementById('manualListBody').innerHTML = '<tr><td colspan="3">خطأ في التحميل</td></tr>';
             }
         } else {
-            // Refresh logic if needed, or just use cached
-             const res = await fetch('/canteen/attendance_lists/');
-             const data = await res.json();
-             allStudents = data.absent || [];
+             // Refresh logic if needed, or just use cached
+             if(navigator.onLine) {
+                 try {
+                     const res = await fetch('/attendance_lists/');
+                     const data = await res.json();
+                     allStudents = data.absent || [];
+                 } catch(e) {}
+             }
              filterManualList();
         }
     }
@@ -353,8 +362,16 @@
     async function submitManual(id) {
         if(!id) return;
 
+        if (!navigator.onLine) {
+            addToQueue('/manual_attendance/', { student_id: id });
+            allStudents = allStudents.filter(s => s.id !== id);
+            filterManualList();
+            showAlert('لا يوجد انترنت. تم الحفظ محلياً.', 'warning');
+            return;
+        }
+
         try {
-            const res = await fetch('/canteen/manual_attendance/', {
+            const res = await fetch('/manual_attendance/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ student_id: id })
@@ -372,8 +389,10 @@
                 alert(data.error || "خطأ");
             }
         } catch (e) {
-            console.error(e);
-            alert("خطأ في الاتصال");
+            addToQueue('/manual_attendance/', { student_id: id });
+            allStudents = allStudents.filter(s => s.id !== id);
+            filterManualList();
+            showAlert('خطأ في الاتصال. تم الحفظ محلياً.', 'warning');
         }
     }
 

@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="{% static 'manifest.json' %}">
     <title>{% block title %}نظام تسيير متوسطة بوشنافة عمر{% endblock %}</title>
     <!-- Fonts & Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -97,6 +98,7 @@
 </head>
 <body>
 
+{% block body %}
 <div class="wrapper">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -137,7 +139,8 @@
         <header class="header">
             <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
             <div class="user-info">
-                <span><i class="fas fa-user-circle"></i> المدير / المسؤول</span>
+                <span><i class="fas fa-user-circle"></i> {{ request.user.username }} </span>
+                 <a href="{% url 'logout' %}" style="color: #ef4444; margin-right: 15px;"><i class="fas fa-sign-out-alt"></i> خروج</a>
             </div>
         </header>
 
@@ -156,7 +159,18 @@
         </div>
     </main>
 </div>
+{% endblock %}
 
+<script src="{% static 'js/offline_sync.js' %}"></script>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(reg => console.log('SW registered!', reg))
+                .catch(err => console.log('SW failed!', err));
+        });
+    }
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

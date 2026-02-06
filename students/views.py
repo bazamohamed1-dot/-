@@ -2,19 +2,22 @@ from rest_framework import viewsets
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework import status
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.db.models import Count, F
 from django.utils import timezone
 from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings
 from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from datetime import date, timedelta
 import os
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 import logging
+from django.contrib.auth.models import User
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 
 logger = logging.getLogger(__name__)
 
@@ -361,3 +364,50 @@ def export_canteen_sheet(request):
         return Response({'error': f'Failed to save Excel: {str(e)}'}, status=500)
 
     return Response({'message': 'Excel updated successfully', 'file': file_path})
+
+@login_required
+def unlock_user(request, user_id):
+    if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        return HttpResponseForbidden("Access Denied")
+
+    target_user = get_object_or_404(User, id=user_id)
+    if hasattr(target_user, 'profile'):
+        target_user.profile.is_locked = False
+        target_user.profile.failed_attempts = 0
+        target_user.profile.save()
+        messages.success(request, f"تم فك الحظر عن المستخدم {target_user.username}")
+
+    return redirect('settings')
+
+@login_required
+def reset_session(request, user_id):
+    if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        return HttpResponseForbidden("Access Denied")
+
+    target_user = get_object_or_404(User, id=user_id)
+    if hasattr(target_user, 'profile'):
+        target_user.profile.active_session_token = None
+        target_user.profile.device_fingerprint = None
+        target_user.profile.save()
+        messages.success(request, f"تمت إعادة تعيين الجلسة للمستخدم {target_user.username}")
+
+    return redirect('settings')
+
+@login_required
+def change_user_password(request, user_id):
+    if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        return HttpResponseForbidden("Access Denied")
+
+    if request.method == 'POST':
+        new_pass = request.POST.get('new_password')
+        confirm_pass = request.POST.get('confirm_password')
+
+        if new_pass and new_pass == confirm_pass:
+            target_user = get_object_or_404(User, id=user_id)
+            target_user.set_password(new_pass)
+            target_user.save()
+            messages.success(request, f"تم تغيير كلمة المرور للمستخدم {target_user.username}")
+        else:
+            messages.error(request, "كلمات المرور غير متطابقة")
+
+    return redirect('settings')

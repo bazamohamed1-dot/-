@@ -7,10 +7,11 @@ urlpatterns = [
     path('dashboard/', ui_views.dashboard, name='dashboard'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
-    path('ui/', ui_views.canteen_home, name='canteen_home'), # Removed 'canteen/' prefix here
-    path('list/', ui_views.student_list, name='student_list'), # Renamed for clarity
+    path('ui/', ui_views.canteen_home, name='canteen_home'),
+    path('list/', ui_views.student_list, name='student_list'),
     path('management/', ui_views.students_management, name='students_management'),
     path('print_cards/', ui_views.print_student_cards, name='print_student_cards'),
+    path('archive/', ui_views.archive_home, name='archive_home'),
 
     # API Views
     path('scan_card/', views.scan_card, name='scan_card'),
@@ -28,6 +29,9 @@ urlpatterns = [
 
     # Settings API
     path('settings/data/', views.school_settings, name='school_settings'),
+    path('settings/users/unlock/<int:user_id>/', views.unlock_user, name='unlock_user'),
+    path('settings/users/reset/<int:user_id>/', views.reset_session, name='reset_session'),
+    path('settings/users/password/<int:user_id>/', views.change_user_password, name='change_user_password'),
 
     # Library UI
     path('library/', ui_views.library_home, name='library_home'),

@@ -8,8 +8,10 @@ router = DefaultRouter()
 router.register(r'students', StudentViewSet)
 
 urlpatterns = [
-    path('', ui_views.dashboard, name='home'), # Redirect root to dashboard
+    path('', ui_views.login_view, name='root'),
+    path('login/', ui_views.login_view, name='login'),
+    path('logout/', ui_views.logout_view, name='logout'),
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    path('canteen/', include('students.urls')), # This now includes dashboard paths too based on previous step
+    path('', include('students.urls')),
 ]
