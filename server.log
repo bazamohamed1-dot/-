@@ -1,0 +1,14 @@
+Watching for file changes with StatReloader
+Not Found: /settings/
+[06/Feb/2026 22:52:48] "GET /settings/ HTTP/1.1" 404 2826
+[06/Feb/2026 22:53:28] "GET /canteen/settings/ HTTP/1.1" 200 24401
+[06/Feb/2026 22:53:28] "GET /static/js/auth_manager.js HTTP/1.1" 200 5696
+[06/Feb/2026 22:53:28] "GET /static/js/offline_manager.js HTTP/1.1" 200 6001
+Not Found: /api/settings/data/
+[06/Feb/2026 22:53:28] "GET /api/settings/data/ HTTP/1.1" 404 5034
+[06/Feb/2026 22:53:28] "GET /static/sw.js HTTP/1.1" 404 1829
+[06/Feb/2026 22:53:34] "POST /canteen/auth/login/ HTTP/1.1" 200 170
+[06/Feb/2026 22:53:34] "GET /canteen/settings/ HTTP/1.1" 200 24401
+[06/Feb/2026 22:53:34] "GET /static/sw.js HTTP/1.1" 404 1829
+Not Found: /api/settings/data/
+[06/Feb/2026 22:53:34] "GET /api/settings/data/ HTTP/1.1" 404 5034

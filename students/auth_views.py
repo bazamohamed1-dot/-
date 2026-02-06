@@ -125,6 +125,10 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         password = request.data.get('password')
         role = request.data.get('role')
 
+        if role == 'director':
+            if EmployeeProfile.objects.filter(role='director').exists():
+                return Response({'error': 'لا يمكن إنشاء أكثر من حساب مدير واحد'}, status=400)
+
         if User.objects.filter(username=username).exists():
             return Response({'error': 'اسم المستخدم موجود بالفعل'}, status=400)
 
