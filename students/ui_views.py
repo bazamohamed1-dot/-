@@ -24,6 +24,9 @@ def settings_view(request):
     return render(request, 'students/settings.html', context)
 
 def import_eleve_view(request):
+    # Checkbox logic
+    update_existing = request.POST.get('update_existing') == 'on'
+
     if request.method == 'POST' and request.FILES.get('eleve_file'):
         eleve_file = request.FILES['eleve_file']
 
@@ -35,8 +38,8 @@ def import_eleve_view(request):
 
         out = StringIO()
         try:
-            # Call command with the temp file path
-            call_command('import_eleve', file=temp_path, stdout=out)
+            # Call command with the temp file path and update flag
+            call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
             messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
         except Exception as e:
             messages.error(request, f"حدث خطأ أثناء الاستيراد: {str(e)}")
@@ -50,7 +53,7 @@ def import_eleve_view(request):
     if request.method == 'POST':
         out = StringIO()
         try:
-            call_command('import_eleve', stdout=out)
+            call_command('import_eleve', update_existing=update_existing, stdout=out)
             messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
         except Exception as e:
             messages.error(request, f"حدث خطأ أثناء الاستيراد: {str(e)}")
