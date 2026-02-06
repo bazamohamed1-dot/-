@@ -44,16 +44,20 @@
     }
 
     .print-container {
-        width: 200mm; /* Slightly less than 210mm to account for margin */
+        width: 200mm;
         background: white;
-        margin: 20px auto;
-        padding: 5mm;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        margin: 0 auto; /* Removed vertical margin for print consistency */
+        padding: 0; /* Padding handled by page margin or internal spacing */
         display: grid;
         grid-template-columns: 1fr 1fr;
-        grid-template-rows: repeat(4, 60mm);
+        grid-template-rows: repeat(4, 60mm); /* Fixed height per row */
         gap: 5mm;
         box-sizing: border-box;
+        page-break-after: always; /* Force break after each container (8 cards) */
+    }
+
+    .print-container:last-child {
+        page-break-after: auto;
     }
 
     /* Business Card Size approx 85mm x 54mm */
@@ -146,17 +150,12 @@
     <a href="{% url 'students_management' %}" class="btn btn-secondary"><i class="fas fa-arrow-right"></i> رجوع</a>
 </div>
 
-<div class="print-container">
-    {% for student in students %}
-    <div class="id-card">
-        <!-- Photo (Left in LTR, Right in RTL but we used flex-direction: row-reverse so it's on left visually) -->
-        <!-- Wait, user said "Photo on Left". row-reverse puts first element on right.
-             So if I want Photo on LEFT, and Info on RIGHT.
-             Flex container (row): [Info] [Photo] -> Photo is on Right.
-             Flex container (row-reverse): [Info] [Photo] -> Photo is on Left.
-             So structure: <Info> <Photo> with row-reverse.
-        -->
+{% for student in students %}
+    {% if forloop.counter0|divisibleby:8 %}
+    <div class="print-container">
+    {% endif %}
 
+    <div class="id-card">
         <div class="photo-area">
             {% if student.photo_path %}
             <img src="{{ student.photo_path }}">
@@ -176,7 +175,7 @@
                 <div><span style="color:#64748b; font-size: 8pt;">الاسم:</span> <strong>{{ student.first_name }}</strong></div>
                 <div><span style="color:#64748b; font-size: 8pt;">تاريخ الميلاد:</span> {{ student.date_of_birth|date:"Y/m/d" }}</div>
                 <div><span style="color:#64748b; font-size: 8pt;">المستوى:</span> {{ student.academic_year }}</div>
-                <div><span style="color:#64748b; font-size: 8pt;">القسم:</span> {{ student.class_name }}</div>
+                <div><span style="color:#64748b; font-size: 8pt;">القسم:</span> <span class="class-name-display" data-full="{{ student.class_name }}">{{ student.class_name }}</span></div>
             </div>
 
             <div class="barcode-area">
@@ -192,8 +191,11 @@
             </div>
         </div>
     </div>
-    {% endfor %}
-</div>
+
+    {% if forloop.counter|divisibleby:8 or forloop.last %}
+    </div>
+    {% endif %}
+{% endfor %}
 
 {% endblock %}
 
@@ -202,6 +204,23 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         JsBarcode(".barcode").init();
+
+        // Process Class Names to show only the number
+        document.querySelectorAll('.class-name-display').forEach(span => {
+            const full = span.getAttribute('data-full') || "";
+            // Extract the last number. E.g. "1 AM 2" -> "2", "أولى 1" -> "1"
+            // Match last digit(s)
+            const match = full.match(/(\d+)$/);
+            if (match) {
+                span.textContent = match[1];
+            } else {
+                // Fallback: if no digits at end, maybe it's just a number?
+                // Or user enters "1".
+                // If it contains "AM" or space, split and take last?
+                const parts = full.trim().split(' ');
+                span.textContent = parts[parts.length - 1];
+            }
+        });
     });
 </script>
 {% endblock %}

@@ -17,6 +17,8 @@
     .field-box input, .field-box select { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.95rem; outline: none; background: #fff; width: 100%; box-sizing: border-box; }
     /* Force Western numerals for date inputs */
     input[type="date"] { direction: ltr !important; text-align: right; font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif, 'Cairo'; unicode-bidi: plaintext; }
+    /* Ensure Maghreb numerals for specific fields as requested */
+    #enrollmentDate, #exitDate, #dateOfBirth { direction: ltr !important; unicode-bidi: plaintext; }
     .span-2 { grid-column: span 2; }
 
     .action-tray { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
@@ -111,7 +113,6 @@
 
         <div style="flex-grow: 1;"></div>
 
-        <button class="btn btn-danger" onclick="deleteFiltered()" title="حذف القائمة الظاهرة"><i class="fas fa-trash-alt"></i> حذف القائمة (فلتر)</button>
         <button class="btn" style="background:#334155; color:white" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
         <button class="btn" style="background:#4f46e5; color:white" onclick="submitPrint()"><i class="fas fa-id-card"></i> طباعة البطاقات</button>
     </div>
@@ -345,22 +346,28 @@ async function saveCurrent() {
         });
 
         if (response.ok) {
-            // Show simple toast or alert as requested, but user asked for "Confirmation message"
-            // "يكفي الضغط على زر الحفظ فقط مع ظهور رسالة تأكيد واحدة" -> One confirmation message.
-            // We'll keep the alert but ensure no prior confirmation dialog existed (which it didn't in saveCurrent).
             alert("تم الحفظ بنجاح");
 
-            // Wait for fetch to complete but DO NOT reset the form if it was an edit
-            // The user wants "Just press save...". Usually this implies staying on the record or seamless update.
-            // If we reset (prepareNew), the user loses context.
-            // Let's refresh the list but keep the form filled with updated data if needed.
+            // Refresh list
             await fetchStudents();
 
-            // If it was a new entry, maybe clear? But if edit, keep it.
-            if (!method === 'POST') { // Edit
-                 // Ideally re-select the row.
+            // Silently reset mode to avoid "Discard changes" prompt
+            isEditMode = false;
+
+            // If it was an Edit, we stay on the form (with new data) but in view mode.
+            // If it was New, we clear for next.
+            if (method === 'POST') {
+                 prepareNew();
             } else {
-                 prepareNew(); // New entry -> Clear for next
+                // If edit, we essentially "view" the saved data.
+                // We need to find the student in the new list to re-populate properly or just leave fields as is.
+                // Re-populating is safer to show server state.
+                const savedId = dbId || (await response.json()).id;
+                // Find index
+                const idx = filteredList.findIndex(s => s.dbId == savedId);
+                if(idx >= 0) {
+                    fillForm(idx, document.querySelectorAll('#studentsTable tbody tr')[idx]);
+                }
             }
         } else {
             const err = await response.json();
@@ -374,54 +381,43 @@ async function saveCurrent() {
 
 async function deleteStudent() {
     const dbId = document.getElementById('dbId').value;
-    if (!dbId) return alert("الرجاء اختيار تلميذ للحذف");
 
-    if (!confirm("هل أنت متأكد من حذف هذا التلميذ نهائياً؟")) return;
-
-    try {
-        const response = await fetch(`/api/students/${dbId}/`, {
-            method: 'DELETE',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') }
-        });
-
-        if (response.ok) {
-            alert("تم الحذف بنجاح");
-            fetchStudents();
-            prepareNew();
-        } else {
-            alert("حدث خطأ أثناء الحذف");
+    // CASE 1: Single Student Selected
+    if (dbId) {
+        if (!confirm("هل أنت متأكد من حذف هذا التلميذ نهائياً؟")) return;
+        try {
+            const response = await fetch(`/api/students/${dbId}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
+            if (response.ok) {
+                alert("تم الحذف بنجاح");
+                fetchStudents();
+                prepareNew();
+            } else {
+                alert("حدث خطأ أثناء الحذف");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("خطأ في الاتصال");
         }
-    } catch (error) {
-        console.error(error);
-        alert("خطأ في الاتصال");
+        return;
     }
-}
 
-async function deleteFiltered() {
-    if (filteredList.length === 0) return alert("لا يوجد تلاميذ في القائمة الحالية للحذف");
+    // CASE 2: Bulk Delete (Filtered List)
+    // Only if no student is selected (dbId is empty)
+    if (filteredList.length === 0) return alert("لا يوجد تلاميذ في القائمة للحذف");
+
+    let msg = "";
     if (filteredList.length === studentsList.length) {
-        if (!confirm("تحذير: أنت على وشك حذف جميع التلاميذ في قاعدة البيانات! هل أنت متأكد؟")) return;
+        msg = "تحذير: أنت على وشك حذف جميع التلاميذ في قاعدة البيانات! هل أنت متأكد؟";
     } else {
-        if (!confirm(`هل أنت متأكد من حذف ${filteredList.length} تلميذ من القائمة الظاهرة؟`)) return;
+        msg = `هل أنت متأكد من حذف ${filteredList.length} تلميذ من القائمة الظاهرة (الفلترة)؟`;
     }
 
-    // Since we don't have a bulk delete API, we loop.
-    // Optimally, backend should support this. But looping is easier for now.
-    // Or we create a quick bulk API endpoint.
+    if (!confirm(msg)) return;
 
-    // Let's loop but show progress
-    let successCount = 0;
     const ids = filteredList.map(s => s.dbId);
-
-    // We can use a bulk delete logic if we add it to backend, but let's try calling delete loop
-    // To be safe and fast, use Promise.all
-    // But backend might choke on sqlite lock.
-
-    // Better: Add a bulk delete endpoint to views.py in next step.
-    // For now, assume endpoint exists or use loop.
-    // Let's use the loop for immediate feedback, or better, add the Bulk API in next step.
-    // I will call a custom action 'bulk_delete' on the viewset.
-
     try {
         const response = await fetch('/api/students/bulk_delete/', {
             method: 'POST',
