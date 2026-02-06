@@ -1,14 +1,25 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 from . import ui_views
+from . import auth_views
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r'users', auth_views.UserManagementViewSet)
 
 urlpatterns = [
+    # Auth API
+    path('auth/login/', auth_views.login_view, name='auth_login'),
+    path('auth/logout/', auth_views.logout_view, name='auth_logout'),
+    path('auth/verify/', auth_views.verify_session, name='auth_verify'),
+    path('api/', include(router.urls)),
+
     # UI Views
     path('dashboard/', ui_views.dashboard, name='dashboard'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
-    path('ui/', ui_views.canteen_home, name='canteen_home'), # Removed 'canteen/' prefix here
-    path('list/', ui_views.student_list, name='student_list'), # Renamed for clarity
+    path('ui/', ui_views.canteen_home, name='canteen_home'),
+    path('list/', ui_views.student_list, name='student_list'),
     path('management/', ui_views.students_management, name='students_management'),
     path('print_cards/', ui_views.print_student_cards, name='print_student_cards'),
 
@@ -31,4 +42,5 @@ urlpatterns = [
 
     # Library UI
     path('library/', ui_views.library_home, name='library_home'),
+    path('archive/', ui_views.archive_view, name='archive_home'),
 ]
