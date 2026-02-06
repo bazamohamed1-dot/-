@@ -73,6 +73,9 @@ def students_management(request):
 def library_home(request):
     return render(request, 'students/library.html')
 
+def archive_view(request):
+    return render(request, 'students/archive.html')
+
 def print_student_cards(request):
     if request.method == 'POST':
         student_ids = request.POST.getlist('student_ids')
