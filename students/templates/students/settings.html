@@ -109,6 +109,20 @@
                     <option value="director">مدير</option>
                 </select>
             </div>
+
+            <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">الصلاحيات المخصصة (تخصيص الوظائف)</label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                    <div><input type="checkbox" class="perm-check" value="access_canteen" id="perm_canteen"> <label for="perm_canteen">الدخول للمطعم</label></div>
+                    <div><input type="checkbox" class="perm-check" value="access_library" id="perm_library"> <label for="perm_library">الدخول للمكتبة</label></div>
+                    <div><input type="checkbox" class="perm-check" value="access_management" id="perm_management"> <label for="perm_management">إدارة التلاميذ</label></div>
+                    <div><input type="checkbox" class="perm-check" value="access_archive" id="perm_archive"> <label for="perm_archive">الأرشيف</label></div>
+                    <div><input type="checkbox" class="perm-check" value="import_data" id="perm_import"> <label for="perm_import">استيراد البيانات</label></div>
+                    <div><input type="checkbox" class="perm-check" value="manage_users" id="perm_users"> <label for="perm_users">إدارة المستخدمين</label></div>
+                    <div><input type="checkbox" class="perm-check" value="manage_settings" id="perm_settings"> <label for="perm_settings">الإعدادات العامة</label></div>
+                </div>
+            </div>
+
             <div style="display:flex; gap:10px; margin-top:20px;">
                 <button type="submit" class="btn btn-primary" style="flex:1;">حفظ</button>
                 <button type="button" class="btn btn-danger" onclick="closeUserModal()" style="flex:1;">إلغاء</button>
@@ -312,6 +326,7 @@ async function loadUsers() {
                     <button class="btn btn-info" onclick='editUser(${JSON.stringify(u).replace(/'/g, "&#39;")})' style="padding:5px 10px;"><i class="fas fa-edit"></i></button>
                     ${u.is_locked ? `<button class="btn btn-success" onclick="unlockUser(${u.id})" style="padding:5px 10px;" title="فك القفل"><i class="fas fa-lock-open"></i></button>` : ''}
                     <button class="btn btn-warning" onclick="resetSession(${u.id})" style="padding:5px 10px;" title="إعادة ضبط الجلسة"><i class="fas fa-sync-alt"></i></button>
+                    ${u.role !== 'director' ? `<button class="btn btn-danger" onclick="deleteUser(${u.id})" style="padding:5px 10px;" title="حذف"><i class="fas fa-trash"></i></button>` : ''}
                 </td>
             `;
             tbody.appendChild(tr);
@@ -328,6 +343,7 @@ function openAddUserModal() {
     document.getElementById('editUserId').value = '';
     document.getElementById('pwdHint').style.display = 'none';
     document.getElementById('uPassword').required = true;
+    document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
 }
 
 function closeUserModal() {
@@ -343,6 +359,15 @@ function editUser(user) {
     document.getElementById('uPassword').value = '';
     document.getElementById('uPassword').required = false;
     document.getElementById('pwdHint').style.display = 'block';
+
+    // Populate permissions
+    document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
+    if (user.permissions && Array.isArray(user.permissions)) {
+        user.permissions.forEach(p => {
+             const chk = document.querySelector(`.perm-check[value="${p}"]`);
+             if(chk) chk.checked = true;
+        });
+    }
 }
 
 document.getElementById('userForm').addEventListener('submit', async (e) => {
@@ -352,26 +377,13 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     const password = document.getElementById('uPassword').value;
     const role = document.getElementById('uRole').value;
 
+    // Collect permissions
+    const permissions = [];
+    document.querySelectorAll('.perm-check:checked').forEach(c => permissions.push(c.value));
+
     const url = id ? `/canteen/api/users/${id}/update_creds/` : '/canteen/api/users/';
-    // If creating new, we use standard POST to /users/, but my logic in AuthViews uses create() on ViewSet.
-    // ViewSet create maps to POST /users/.
-    // However, update_creds is an action. For update, we might also want to update role?
-    // My update_creds action only updates creds.
-    // I should check if I can update role.
-    // Wait, UserManagementViewSet.update is NOT implemented?
-    // I inherited from ModelViewSet, so update is there, but I need to handle Profile update.
-    // I'll stick to create for new, and update_creds for existing.
-    // Role update is missing in update_creds.
-    // I will assume for now only creds are updated or I need to fix backend.
 
-    // Let's rely on basic logic:
-    // If ID exists -> POST to update_creds (only pwd/username)
-    // If ID new -> POST to /users/ (creates both)
-
-    // LIMITATION: Cannot change role of existing user with current backend implementation of `update_creds`.
-    // I should fix backend or just proceed. Given time constraints, I'll proceed.
-
-    const body = { username, role };
+    const body = { username, role, permissions };
     if (password) body.password = password;
 
     try {
@@ -396,6 +408,26 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
         alert("خطأ في الاتصال");
     }
 });
+
+async function deleteUser(id) {
+    if(!confirm("هل أنت متأكد من حذف هذا المستخدم نهائياً؟")) return;
+    try {
+        const response = await fetch(`/canteen/api/users/${id}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (response.ok) {
+            alert("تم الحذف بنجاح");
+            loadUsers();
+        } else {
+             const err = await response.json();
+             alert("خطأ: " + (err.error || "تعذر الحذف"));
+        }
+    } catch(e) { alert("خطأ في الاتصال"); }
+}
 
 async function unlockUser(id) {
     if(!confirm("هل أنت متأكد من فك قفل هذا الحساب؟")) return;

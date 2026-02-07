@@ -79,7 +79,10 @@ class ArchiveDocumentViewSet(viewsets.ModelViewSet):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def scan_library_card(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_library'):
+        return Response({'error': 'Unauthorized'}, status=403)
     try:
         barcode = request.data.get('barcode')
         if not barcode:
@@ -118,7 +121,10 @@ def scan_library_card(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_loan(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_library'):
+        return Response({'error': 'Unauthorized'}, status=403)
     student_id = request.data.get('student_id')
     book_title = request.data.get('book_title')
     loan_date_str = request.data.get('loan_date') # Allow manual override
@@ -287,18 +293,9 @@ def library_stats(request):
 @permission_classes([IsAuthenticated])
 def scan_card(request):
     try:
-        # Time Restriction Logic (13:15)
-        now = timezone.localtime()
-        cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
-
-        # Check if user is director
-        is_director = False
-        if request.user.is_authenticated and hasattr(request.user, 'profile'):
-             if request.user.profile.role == 'director':
-                 is_director = True
-
-        if now.time() > cutoff_time.time() and not is_director:
-             return Response({'error': 'انتهى وقت الإطعام (13:15)', 'code': 'TIME_LIMIT'}, status=status.HTTP_403_FORBIDDEN)
+        # Check permission
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_canteen'):
+             return Response({'error': 'Unauthorized'}, status=403)
 
         barcode = request.data.get('barcode')
         logger.info(f"DEBUG: Received barcode: {barcode}")
@@ -318,6 +315,30 @@ def scan_card(request):
             student = Student.objects.filter(student_id_number=barcode).first()
             if not student:
                 return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Time Restriction Logic (13:15)
+        now = timezone.localtime()
+        cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
+
+        # Only Director can bypass time limit
+        is_director = request.user.profile.role == 'director'
+
+        if now.time() > cutoff_time.time() and not is_director:
+             today = date.today()
+             attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
+             student_data = StudentSerializer(student).data
+             if attended:
+                 return Response({
+                     'error': 'انتهى الوقت (أكل مسبقاً)',
+                     'code': 'LATE_ATE',
+                     'student': student_data
+                 }, status=status.HTTP_403_FORBIDDEN)
+             else:
+                 return Response({
+                     'error': 'انتهى الوقت (لم يأكل)',
+                     'code': 'LATE_NOT_ATE',
+                     'student': student_data
+                 }, status=status.HTTP_403_FORBIDDEN)
 
         # Check if Half-Board
         if student.attendance_system != 'نصف داخلي':
@@ -370,15 +391,16 @@ def get_canteen_stats(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def manual_attendance(request):
+    # Check permission
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_canteen'):
+        return Response({'error': 'Unauthorized'}, status=403)
+
     # Time Restriction Logic (13:15)
     now = timezone.localtime()
     cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
 
     # Check if user is director
-    is_director = False
-    if request.user.is_authenticated and hasattr(request.user, 'profile'):
-            if request.user.profile.role == 'director':
-                is_director = True
+    is_director = request.user.profile.role == 'director'
 
     if now.time() > cutoff_time.time() and not is_director:
             return Response({'error': 'انتهى وقت الإطعام (13:15)'}, status=status.HTTP_403_FORBIDDEN)

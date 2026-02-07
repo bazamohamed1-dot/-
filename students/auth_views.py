@@ -95,13 +95,12 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     permission_classes = [IsAuthenticated]
 
-    def check_director(self, request):
-        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
-            return False
-        return True
+    def check_permission(self, request, perm):
+        if not hasattr(request.user, 'profile'): return False
+        return request.user.profile.has_perm(perm)
 
     def list(self, request):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
             return Response({'error': 'Unauthorized'}, status=403)
 
         users = User.objects.select_related('profile').all().distinct()
@@ -118,19 +117,21 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'role': prof.role,
                     'role_display': prof.get_role_display(),
                     'is_locked': prof.is_locked,
-                    'failed_attempts': prof.failed_login_attempts
+                    'failed_attempts': prof.failed_login_attempts,
+                    'permissions': prof.permissions
                 })
             except:
                 pass
         return Response(data)
 
     def create(self, request):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
             return Response({'error': 'Unauthorized'}, status=403)
 
         username = request.data.get('username')
         password = request.data.get('password')
         role = request.data.get('role')
+        permissions = request.data.get('permissions', [])
 
         if role == 'director':
             if EmployeeProfile.objects.filter(role='director').exists():
@@ -140,28 +141,52 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             return Response({'error': 'اسم المستخدم موجود بالفعل'}, status=400)
 
         user = User.objects.create_user(username=username, password=password)
-        EmployeeProfile.objects.create(user=user, role=role)
+        EmployeeProfile.objects.create(user=user, role=role, permissions=permissions)
         return Response({'message': 'User created'})
+
+    def destroy(self, request, pk=None):
+        if not self.check_permission(request, 'manage_users'):
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        user = self.get_object()
+        if user == request.user:
+             return Response({'error': 'لا يمكنك حذف حسابك الخاص'}, status=400)
+
+        if user.is_superuser or (hasattr(user, 'profile') and user.profile.role == 'director'):
+             return Response({'error': 'لا يمكن حذف المدير'}, status=400)
+
+        user.delete()
+        return Response({'message': 'User deleted'})
 
     @action(detail=True, methods=['post'])
     def update_creds(self, request, pk=None):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
              return Response({'error': 'Unauthorized'}, status=403)
 
         user = self.get_object()
         new_pass = request.data.get('password')
         new_username = request.data.get('username')
+        permissions = request.data.get('permissions')
+        role = request.data.get('role')
 
         if new_username:
             user.username = new_username
         if new_pass:
             user.set_password(new_pass)
         user.save()
-        return Response({'message': 'Credentials updated'})
+
+        if hasattr(user, 'profile'):
+            if permissions is not None:
+                user.profile.permissions = permissions
+            if role:
+                user.profile.role = role
+            user.profile.save()
+
+        return Response({'message': 'Profile updated'})
 
     @action(detail=True, methods=['post'])
     def unlock_account(self, request, pk=None):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
              return Response({'error': 'Unauthorized'}, status=403)
 
         user = self.get_object()
@@ -173,7 +198,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reset_session(self, request, pk=None):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
              return Response({'error': 'Unauthorized'}, status=403)
 
         user = self.get_object()
@@ -184,7 +209,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def logs(self, request):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
              return Response({'error': 'Unauthorized'}, status=403)
 
         logs = UserActivityLog.objects.select_related('user').all()[:200]
@@ -199,7 +224,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def clear_logs(self, request):
-        if not self.check_director(request):
+        if not self.check_permission(request, 'manage_users'):
              return Response({'error': 'Unauthorized'}, status=403)
 
         UserActivityLog.objects.all().delete()

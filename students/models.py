@@ -113,6 +113,12 @@ class EmployeeProfile(models.Model):
     failed_login_attempts = models.IntegerField(default=0, verbose_name="محاولات الدخول الفاشلة")
     is_locked = models.BooleanField(default=False, verbose_name="الحساب مقفل")
     current_session_token = models.CharField(max_length=100, null=True, blank=True, verbose_name="رمز الجلسة الحالي")
+    permissions = models.JSONField(default=list, blank=True, verbose_name="الصلاحيات")
+
+    def has_perm(self, perm):
+        if self.role == 'director' or self.user.is_superuser:
+            return True
+        return perm in self.permissions
 
     def __str__(self):
         return f"{self.user.username} - {self.get_role_display()}"
