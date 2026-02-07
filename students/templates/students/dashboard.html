@@ -63,8 +63,8 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // Set dates with Western numerals
-        const today = new Date().toLocaleDateString('ar-u-nu-latn');
+        // Set dates with Western numerals using ar-DZ locale with latn numbering
+        const today = new Date().toLocaleDateString('ar-DZ', { numberingSystem: 'latn' });
         document.getElementById('schoolStatsDate').textContent = today;
         document.getElementById('canteenStatsDate').textContent = today;
     });

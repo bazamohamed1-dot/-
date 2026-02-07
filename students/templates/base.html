@@ -204,8 +204,17 @@
     }
 
     // Enhanced Session Check on Load (Logout on Browser Close)
+    // We switched to sessionStorage in auth_manager.js.
+    // However, if any residuals are in localStorage, clean them up to avoid confusion.
     window.addEventListener('load', async () => {
-         const token = localStorage.getItem('session_token');
+         // Clean localStorage migration
+         if(localStorage.getItem('session_token')) {
+             localStorage.removeItem('session_token');
+             localStorage.removeItem('user_role');
+             localStorage.removeItem('username');
+         }
+
+         const token = sessionStorage.getItem('session_token');
          if(token) {
              try {
                  const res = await fetch('/canteen/auth/verify/', {
@@ -215,9 +224,7 @@
                  });
                  if(res.status === 401) {
                      console.warn("Session expired on server. Logging out.");
-                     localStorage.removeItem('session_token');
-                     localStorage.removeItem('user_role');
-                     localStorage.removeItem('username');
+                     sessionStorage.clear();
                      window.location.href = "{% url 'canteen_landing' %}";
                  }
              } catch(e) { console.error("Session verify error:", e); }
@@ -225,8 +232,8 @@
     });
 
     // Update user info if logged in
-    const uName = localStorage.getItem('username');
-    const uRole = localStorage.getItem('user_role');
+    const uName = sessionStorage.getItem('username');
+    const uRole = sessionStorage.getItem('user_role');
     if(uName && document.getElementById('userInfoDisplay')) {
         document.getElementById('userInfoDisplay').innerHTML = `<i class="fas fa-user-circle"></i> ${uName} (${uRole})`;
     }
@@ -244,7 +251,7 @@
         logoutBtn.addEventListener('click', () => {
              fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} })
              .then(() => {
-                 localStorage.clear();
+                 sessionStorage.clear();
                  authChannel.postMessage('logout');
                  window.location.href = "{% url 'canteen_landing' %}";
              });
@@ -288,7 +295,7 @@
             // Logout
             fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} })
              .then(() => {
-                 localStorage.clear();
+                 sessionStorage.clear();
                  authChannel.postMessage('logout');
                  window.location.href = "{% url 'canteen_landing' %}";
              });
