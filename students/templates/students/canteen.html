@@ -49,6 +49,9 @@
     <!-- Left: Scanner & Student Info -->
     <div>
         <div class="scanner-section">
+            <h3 style="margin-top: 0; margin-bottom: 20px; color: var(--primary); font-family: 'Cairo', sans-serif;">
+                <i class="fas fa-calendar-alt"></i> وجبة الإطعام ليوم : <span id="currentDateDisplay" style="color: var(--secondary);"></span>
+            </h3>
             <input type="text" id="barcodeInput" class="scanner-input" placeholder="امسح البطاقة هنا..." autofocus autocomplete="off">
             <small style="display:block; margin-top:5px; color:#dc2626; font-weight:bold;">
                 <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
@@ -105,12 +108,12 @@
         <div class="stats-card">
             <div style="color: var(--success); font-size: 1.5rem;"><i class="fas fa-check-circle"></i></div>
             <div class="stats-num" style="color: var(--success);" id="presentCount">0</div>
-            <div>عدد الحضور</div>
+            <div>عدد الحضور لهذا اليوم</div>
         </div>
         <div class="stats-card">
             <div style="color: var(--danger); font-size: 1.5rem;"><i class="fas fa-times-circle"></i></div>
             <div class="stats-num" style="color: var(--danger);" id="absentCount">0</div>
-            <div>عدد الغياب</div>
+            <div>عدد الغياب لهذا اليوم</div>
         </div>
 
         <button class="btn btn-secondary" onclick="openManualModal()" style="background: #64748b; color: white;"><i class="fas fa-keyboard"></i> إدخال يدوي</button>
@@ -320,7 +323,7 @@
             }
         } catch (e) {
             console.error(e);
-            alert("خطأ في الاتصال");
+            alert("حدث خطأ أثناء تحميل الملف");
         }
     }
 
@@ -430,6 +433,11 @@
             alert("خطأ في الاتصال");
         }
     }
+
+    // Set Current Date
+    const today = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-DZ', options);
 
     // Initial load
     updateStats();

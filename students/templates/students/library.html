@@ -29,7 +29,16 @@
 
     /* Layout fixes */
     /* Point 8: Fix input overlap by adjusting grid columns or spacing */
-    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto auto; gap: 10px; align-items: end; }
+    .form-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr auto auto;
+        gap: 15px;
+        align-items: end;
+    }
+    /* Force stacking on small screens if needed */
+    @media (max-width: 900px) {
+        .form-row { grid-template-columns: 1fr; }
+    }
 
     /* Force Western numerals for date inputs (Point 7) */
     input[type="date"] { direction: ltr !important; text-align: right; font-family: 'Segoe UI', sans-serif; unicode-bidi: plaintext; }
