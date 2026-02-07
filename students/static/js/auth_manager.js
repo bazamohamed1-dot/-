@@ -1,48 +1,42 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // Switch to sessionStorage for robust "logout on close"
     const token = sessionStorage.getItem('session_token');
     const role = sessionStorage.getItem('user_role');
-    const loginModal = document.getElementById('loginModal');
 
     // Auth Check
     if (!token) {
-        // Only show login if we are NOT already on the landing page or login related
+        // Redirect to landing if not there
         if (window.location.pathname !== '/' && window.location.pathname !== '/canteen/') {
-             showLogin();
+             window.location.href = '/canteen/';
         }
     } else {
-        // Check Role Redirect only once
-        // If we are already on a correct page, don't re-redirect unnecessarily
+        // If we have a token, just check role redirection first to avoid UI flash
+        // Verification happens in background
+        checkRoleRedirect(role);
 
-        // Verify online if possible
+        // Verify online if possible (Background Check)
         if (navigator.onLine) {
-            try {
-                const response = await fetch('/canteen/auth/verify/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({ token: token })
-                });
-
-                if (response.status === 401) {
-                    logout(); // Invalid session
-                    return;
-                } else if (response.ok) {
-                    const data = await response.json();
-                    if(data.role !== role) {
-                        sessionStorage.setItem('user_role', data.role); // Update role only if changed
-                    }
-                    checkRoleRedirect(data.role);
+            fetch('/canteen/auth/verify/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ token: token })
+            })
+            .then(res => {
+                if (res.status === 401) {
+                    logout();
+                } else if (res.ok) {
+                    return res.json();
                 }
-            } catch (e) {
-                console.log("Auth verify failed (offline?)", e);
-                checkRoleRedirect(role);
-            }
-        } else {
-             // If offline, trust the token for now (PWA mode)
-             checkRoleRedirect(role);
+            })
+            .then(data => {
+                if(data && data.role && data.role !== role) {
+                     sessionStorage.setItem('user_role', data.role);
+                     checkRoleRedirect(data.role);
+                }
+            })
+            .catch(e => console.log("Auth background check failed", e));
         }
     }
 
@@ -89,10 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function showLogin() {
-    const modal = document.getElementById('loginModal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    window.location.href = '/canteen/';
 }
 
 async function logout() {

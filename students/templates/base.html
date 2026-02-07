@@ -177,23 +177,7 @@
 
 {% block extra_js %}{% endblock %}
 
-<!-- Login Modal -->
-<div id="loginModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
-    <div class="card" style="width: 400px; padding: 40px; text-align: center;">
-        <h2 style="color: var(--primary); margin-bottom: 30px;">تسجيل الدخول</h2>
-        <form id="loginForm">
-            <div style="margin-bottom: 20px;">
-                <input type="text" id="username" placeholder="اسم المستخدم" class="form-input western-nums" style="width:100%; padding:12px; border:1px solid #ccc; border-radius:8px; font-size:1.1rem; text-align: left; direction: ltr;" required>
-            </div>
-            <div style="margin-bottom: 30px;">
-                <input type="password" id="password" placeholder="كلمة المرور" class="form-input western-nums" style="width:100%; padding:12px; border:1px solid #ccc; border-radius:8px; font-size:1.1rem; text-align: left; direction: ltr;" required>
-            </div>
-            <div id="loginError" style="color: var(--danger); margin-bottom: 20px; display: none;"></div>
-            <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; padding: 15px; font-size:1.2rem;">دخول</button>
-        </form>
-    </div>
-</div>
-
+<!-- Login Modal removed as requested -->
 <script src="{% static 'js/offline_manager.js' %}"></script>
 <script src="{% static 'js/auth_manager.js' %}"></script>
 <script>
