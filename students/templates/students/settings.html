@@ -62,7 +62,10 @@
 <div class="card" id="userManagementSection" style="display:none; margin-bottom: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
         <h3><i class="fas fa-users-cog"></i> إدارة المستخدمين</h3>
-        <button class="btn btn-success" onclick="openAddUserModal()"><i class="fas fa-plus"></i> إضافة مستخدم</button>
+        <div style="display:flex; gap:10px;">
+             <button class="btn btn-primary" onclick="openLogsModal()"><i class="fas fa-history"></i> سجل الدخول والخروج</button>
+             <button class="btn btn-success" onclick="openAddUserModal()"><i class="fas fa-plus"></i> إضافة مستخدم</button>
+        </div>
     </div>
 
     <table style="width:100%; border-collapse: collapse;">
@@ -114,6 +117,31 @@
     </div>
 </div>
 
+<!-- Logs Modal -->
+<div id="logsModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
+    <div class="card" style="width:600px; padding:20px; max-height:80vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+             <h3 style="margin:0;">سجل نشاط المستخدمين</h3>
+             <button class="btn btn-danger" onclick="clearLogs()"><i class="fas fa-trash"></i> محو السجل</button>
+        </div>
+        <table style="width:100%; border-collapse: collapse;">
+             <thead>
+                 <tr style="background:#f1f5f9; text-align:right;">
+                     <th style="padding:8px;">المستخدم</th>
+                     <th style="padding:8px;">النشاط</th>
+                     <th style="padding:8px;">التوقيت</th>
+                 </tr>
+             </thead>
+             <tbody id="logsTableBody">
+                 <tr><td colspan="3">جاري التحميل...</td></tr>
+             </tbody>
+        </table>
+        <div style="text-align:center; margin-top:20px;">
+             <button class="btn btn-secondary" onclick="document.getElementById('logsModal').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -125,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadSettings() {
     try {
-        const response = await fetch('/api/settings/data/');
+        const response = await fetch('/canteen/settings/data/');
         const data = await response.json();
 
         if (data.name) document.getElementById('schoolName').value = data.name;
@@ -146,7 +174,7 @@ async function saveSchoolSettings(e) {
     };
 
     try {
-        const response = await fetch('/api/settings/data/', {
+        const response = await fetch('/canteen/settings/data/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -175,7 +203,7 @@ async function saveLibrarySettings(e) {
     };
 
     try {
-        const response = await fetch('/api/settings/data/', {
+        const response = await fetch('/canteen/settings/data/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -394,6 +422,50 @@ async function resetSession(id) {
             alert("تم إعادة ضبط الجلسة");
         }
     } catch(e) { alert("خطأ"); }
+}
+
+async function openLogsModal() {
+    document.getElementById('logsModal').style.display = 'flex';
+    const tbody = document.getElementById('logsTableBody');
+    tbody.innerHTML = '<tr><td colspan="3">جاري التحميل...</td></tr>';
+
+    try {
+        const res = await fetch('/canteen/api/users/logs/');
+        const data = await res.json();
+        tbody.innerHTML = '';
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">السجل فارغ</td></tr>';
+            return;
+        }
+
+        data.forEach(log => {
+            tbody.innerHTML += `
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:8px; direction:ltr; text-align:left;">${log.username}</td>
+                    <td style="padding:8px;">
+                        ${log.action === 'login' ? '<span style="color:green">دخول</span>' : '<span style="color:red">خروج</span>'}
+                    </td>
+                    <td style="padding:8px; direction:ltr;">${new Date(log.timestamp).toLocaleString()}</td>
+                </tr>
+            `;
+        });
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:red;">خطأ في التحميل</td></tr>';
+    }
+}
+
+async function clearLogs() {
+    if(!confirm('هل أنت متأكد من محو جميع السجلات؟')) return;
+    try {
+        const res = await fetch('/canteen/api/users/clear_logs/', {
+            method: 'POST',
+             headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            alert('تم محو السجلات');
+            openLogsModal();
+        }
+    } catch(e) { alert('خطأ'); }
 }
 </script>
 {% endblock %}

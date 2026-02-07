@@ -207,6 +207,41 @@
     if(uName && document.getElementById('userInfoDisplay')) {
         document.getElementById('userInfoDisplay').innerHTML = `<i class="fas fa-user-circle"></i> ${uName} (${uRole})`;
     }
+
+    // Logout Sync across tabs
+    const authChannel = new BroadcastChannel('auth_channel');
+    authChannel.onmessage = (event) => {
+        if (event.data === 'logout') {
+            window.location.href = "{% url 'canteen_landing' %}";
+        }
+    };
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if(logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+             fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} })
+             .then(() => {
+                 localStorage.clear();
+                 authChannel.postMessage('logout');
+                 window.location.href = "{% url 'canteen_landing' %}";
+             });
+        });
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
 </script>
 </body>
 </html>
