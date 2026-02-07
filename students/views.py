@@ -12,6 +12,7 @@ from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
 from datetime import date, timedelta
 import os
+from io import BytesIO
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 import logging
@@ -390,46 +391,24 @@ def get_attendance_lists(request):
 @csrf_exempt
 @api_view(['POST'])
 def export_canteen_sheet(request):
-    # This view will update the Excel file in the root/backup folder
-
-    file_path = os.path.join(settings.BASE_DIR, 'Canteen_Attendance.xlsx')
+    # Generates a daily report in-memory to avoid file locking issues
     today = date.today()
     date_str = today.strftime("%Y-%m-%d")
-
-    try:
-        # Create a new workbook every time if file doesn't exist or just append.
-        # But usually for "export", users expect a cumulative log?
-        # The prompt says "save attendance lists in Excel file... accumulate days".
-        # So we must load existing.
-        if os.path.exists(file_path):
-            try:
-                wb = openpyxl.load_workbook(file_path)
-            except:
-                # If file is corrupted or unreadable, start fresh
-                wb = openpyxl.Workbook()
-                if 'Sheet' in wb.sheetnames: del wb['Sheet']
-        else:
-            wb = openpyxl.Workbook()
-            if 'Sheet' in wb.sheetnames: del wb['Sheet']
-    except Exception as e:
-        return Response({'error': f'Failed to init Excel: {str(e)}'}, status=500)
-
-    sheet_name = "سجل_المطعم"
-    if sheet_name not in wb.sheetnames:
-        ws = wb.create_sheet(sheet_name)
-        ws.append(["التاريخ", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
-        for cell in ws[1]:
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='center')
-    else:
-        ws = wb[sheet_name]
 
     # Get data for today
     present_attendances = CanteenAttendance.objects.filter(date=today).select_related('student')
 
-    # User requirement: If no one registered, ignore this day (don't record absents)
     if not present_attendances.exists():
          return Response({'message': 'لا يوجد حضور مسجل اليوم لتصديره'}, status=status.HTTP_200_OK)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "سجل_المطعم_اليومي"
+    ws.append(["التاريخ", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
+
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
 
     present_ids = set()
 
@@ -437,9 +416,6 @@ def export_canteen_sheet(request):
     for att in present_attendances:
         s = att.student
         present_ids.add(s.id)
-        # Check if already in sheet for today (simple check)
-        # Optimized: just append for now, or use a set of (date, id) if we read the sheet first.
-        # Given request: "Accumulate days".
         ws.append([date_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
 
     # Append Absent
@@ -447,11 +423,11 @@ def export_canteen_sheet(request):
     for s in absent_students:
         ws.append([date_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "غائب"])
 
-    try:
-        wb.save(file_path)
-    except Exception as e:
-        return Response({'error': f'Failed to save Excel: {str(e)}'}, status=500)
+    # Save to memory buffer
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
 
-    response = FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_{date_str}.xlsx"'
     return response

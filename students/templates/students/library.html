@@ -28,12 +28,19 @@
     .overdue-title { color: #dc2626; font-weight: 700; margin-bottom: 15px; font-size: 1.1rem; }
 
     /* Layout fixes */
-    /* Point 8: Fix input overlap by adjusting grid columns or spacing */
     .form-row {
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr auto auto;
-        gap: 15px;
-        align-items: end;
+        display: flex; /* Use Flexbox for better wrapping/spacing */
+        flex-wrap: wrap;
+        gap: 25px; /* Increased gap to prevent overlap */
+        align-items: flex-end;
+    }
+    .form-row > div {
+        flex: 1;
+        min-width: 200px; /* Ensure minimum width */
+    }
+    .form-row > button {
+        flex: 0 0 auto; /* Buttons don't stretch */
+        height: 42px; /* Match input height approx */
     }
     /* Force stacking on small screens if needed */
     @media (max-width: 900px) {
