@@ -29,14 +29,14 @@
 
     /* Layout fixes */
     /* Point 8: Fix input overlap by adjusting grid columns or spacing */
-    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 20px; align-items: end; }
+    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto auto; gap: 10px; align-items: end; }
 
     /* Force Western numerals for date inputs (Point 7) */
     input[type="date"] { direction: ltr !important; text-align: right; font-family: 'Segoe UI', sans-serif; unicode-bidi: plaintext; }
 
     /* Modal */
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
-    .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; border-radius: 8px; }
+    .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 800px; border-radius: 8px; position: relative; }
     .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
     .close:hover { color: black; }
 
@@ -70,6 +70,13 @@
         font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif !important;
         unicode-bidi: plaintext;
     }
+
+    @media print {
+        body * { visibility: hidden; }
+        #reportPrintArea, #reportPrintArea * { visibility: visible; }
+        #reportPrintArea { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; }
+        .no-print { display: none !important; }
+    }
 </style>
 {% endblock %}
 
@@ -81,6 +88,7 @@
 <div style="margin-bottom: 20px; text-align: left;">
     <button class="btn btn-primary" onclick="showReadersModal()"><i class="fas fa-list"></i> قائمة التلاميذ القراء</button>
     <button class="btn btn-info" style="margin-right: 10px; background-color: #0891b2; color: white;" onclick="showBooksModal()"><i class="fas fa-book"></i> قائمة الكتب المعارة</button>
+    <button class="btn btn-warning" style="margin-right: 10px; color: white;" onclick="showReportModal()"><i class="fas fa-chart-bar"></i> تقرير المكتبة</button>
 </div>
 
 <!-- Scanner -->
@@ -130,6 +138,7 @@
                 <input type="text" id="returnDatePreview" disabled style="width: 100%; padding: 10px; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: bold; color: #475569;">
             </div>
             <button class="btn btn-success" onclick="loanBook()"><i class="fas fa-check"></i> تأكيد</button>
+            <button class="btn btn-danger" onclick="cancelScan()"><i class="fas fa-times"></i> إلغاء</button>
         </div>
     </div>
 
@@ -239,11 +248,63 @@
     </div>
 </div>
 
+<!-- Report Modal -->
+<div id="reportModal" class="modal">
+    <div class="modal-content">
+        <span class="close no-print" onclick="closeModal('reportModal')">&times;</span>
+        <div id="reportPrintArea">
+            <h2 style="color: var(--primary); text-align:center;">تقرير المكتبة المدرسية</h2>
+            <p style="text-align:center; color:#666;" id="reportDate"></p>
+
+            <div style="display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap;">
+                <!-- Sections Distribution -->
+                <div style="flex: 1; min-width: 300px; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
+                    <h4 style="border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top:0;">توزيع القراء حسب الأقسام</h4>
+                    <div style="height: 200px; position: relative;">
+                        <canvas id="readersChart"></canvas>
+                    </div>
+                    <table id="reportTable" style="margin-top: 15px; width: 100%;">
+                        <thead>
+                            <tr style="background: #f1f5f9;">
+                                <th>القسم</th>
+                                <th>عدد القراء</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <!-- Levels Distribution -->
+                <div style="flex: 1; min-width: 300px; border: 1px solid #eee; padding: 15px; border-radius: 8px;">
+                    <h4 style="border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top:0;">توزيع القراء حسب المستوى</h4>
+                    <div style="height: 200px; position: relative;">
+                        <canvas id="levelsChart"></canvas>
+                    </div>
+                    <table id="levelsTable" style="margin-top: 15px; width: 100%;">
+                        <thead>
+                            <tr style="background: #f1f5f9;">
+                                <th>المستوى</th>
+                                <th>عدد القراء</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;" class="no-print">
+            <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> طباعة التقرير</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 let currentStudentId = null;
+let myChart = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadStats();
@@ -363,6 +424,12 @@ function hideWorkspace() {
     currentStudentId = null;
 }
 
+function cancelScan() {
+    hideWorkspace();
+    document.getElementById('barcodeInput').value = '';
+    document.getElementById('barcodeInput').focus();
+}
+
 async function loanBook() {
     const title = document.getElementById('bookTitle').value.trim();
     const loanDate = document.getElementById('loanDate').value;
@@ -478,6 +545,9 @@ async function loadStats() {
             `).join('');
         }
 
+        // Store data for report
+        window.libraryReportData = data;
+
     } catch (error) {
         console.error(error);
     }
@@ -558,6 +628,101 @@ async function deleteReadersHistory() {
             alert("خطأ في الحذف");
         }
     } catch(e) { console.error(e); }
+}
+
+function showReportModal() {
+    document.getElementById('reportModal').style.display = 'block';
+    document.getElementById('reportDate').textContent = 'تاريخ التقرير: ' + new Date().toLocaleDateString('ar-u-nu-latn');
+
+    // Use the data loaded from loadStats()
+    const data = window.libraryReportData;
+    if(!data) {
+        loadStats().then(() => showReportModal());
+        return;
+    }
+
+    const classDist = data.class_distribution || [];
+    const labels = classDist.map(item => item.student__class_name);
+    const counts = classDist.map(item => item.count);
+
+    // Fill Class Table
+    const tbody = document.querySelector('#reportTable tbody');
+    if(classDist.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">لا توجد بيانات</td></tr>';
+    } else {
+        tbody.innerHTML = classDist.map(item => `
+            <tr>
+                <td>${item.student__class_name}</td>
+                <td class="western-nums">${item.count}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Render Class Chart
+    if(window.myChart) window.myChart.destroy();
+    const ctx = document.getElementById('readersChart').getContext('2d');
+    window.myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'عدد القراء (أقسام)',
+                data: counts,
+                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+    });
+
+    // Handle Levels
+    const levelDist = data.level_distribution || [];
+    const lLabels = levelDist.map(item => item.student__academic_year);
+    const lCounts = levelDist.map(item => item.count);
+
+    // Fill Level Table
+    const lTbody = document.querySelector('#levelsTable tbody');
+    if(levelDist.length === 0) {
+        lTbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">لا توجد بيانات</td></tr>';
+    } else {
+        lTbody.innerHTML = levelDist.map(item => `
+            <tr>
+                <td>${item.student__academic_year}</td>
+                <td class="western-nums">${item.count}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Render Level Chart
+    if(window.levelChart) window.levelChart.destroy();
+    const lCtx = document.getElementById('levelsChart').getContext('2d');
+    window.levelChart = new Chart(lCtx, {
+        type: 'pie',
+        data: {
+            labels: lLabels,
+            datasets: [{
+                label: 'عدد القراء (مستويات)',
+                data: lCounts,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.6)',
+                    'rgba(54, 162, 235, 0.6)',
+                    'rgba(255, 206, 86, 0.6)',
+                    'rgba(75, 192, 192, 0.6)',
+                    'rgba(153, 102, 255, 0.6)',
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+        }
+    });
 }
 
 function getCookie(name) {

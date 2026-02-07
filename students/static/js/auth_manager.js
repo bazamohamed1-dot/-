@@ -69,6 +69,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.preventDefault();
         logout();
     });
+
+    // Sync Logout across tabs
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'session_token' && !e.newValue) {
+            // Token removed -> logout
+            window.location.href = '/canteen/';
+        }
+    });
 });
 
 function showLogin() {

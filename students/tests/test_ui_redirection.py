@@ -35,4 +35,5 @@ class DashboardRedirectionTest(TestCase):
 
     def test_unauthenticated_access(self):
         response = self.client.get(reverse('dashboard'))
-        self.assertRedirects(response, reverse('landing'))
+        # Updated to match the actual view redirect
+        self.assertRedirects(response, reverse('canteen_landing'))

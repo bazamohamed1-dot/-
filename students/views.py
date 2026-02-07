@@ -216,6 +216,10 @@ def library_stats(request):
             'days_overdue': (today - loan.expected_return_date).days
         })
 
+    # Distribution stats
+    class_dist = LibraryLoan.objects.values('student__class_name').annotate(count=Count('student', distinct=True)).order_by('student__class_name')
+    level_dist = LibraryLoan.objects.values('student__academic_year').annotate(count=Count('student', distinct=True)).order_by('student__academic_year')
+
     return Response({
         'borrowers_count': borrowers_count,
         'borrowers_percentage': percentage,
@@ -226,7 +230,9 @@ def library_stats(request):
             'monthly': monthly,
             'quarterly': quarterly,
             'yearly': yearly
-        }
+        },
+        'class_distribution': list(class_dist),
+        'level_distribution': list(level_dist)
     })
 
 @csrf_exempt
