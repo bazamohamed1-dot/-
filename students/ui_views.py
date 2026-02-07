@@ -16,6 +16,22 @@ def dashboard(request):
     if not request.user.is_authenticated:
         return redirect('landing')
 
+    # Server-side Role Redirection
+    try:
+        if hasattr(request.user, 'profile'):
+            role = request.user.profile.role
+            if role == 'librarian':
+                return redirect('library_home')
+            elif role == 'storekeeper':
+                return redirect('canteen_home')
+            elif role == 'secretariat':
+                return redirect('students_management')
+            elif role == 'archivist':
+                return redirect('archive_home')
+            # Director continues to dashboard
+    except Exception:
+        pass # Fallback to dashboard if profile error
+
     context = {
         'total_students': Student.objects.count(),
         'half_board_count': Student.objects.filter(attendance_system='نصف داخلي').count(),

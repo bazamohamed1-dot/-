@@ -393,7 +393,12 @@ async function loanBook() {
             scanCard(document.getElementById('studentIdDisplay').textContent);
             loadStats();
         } else {
-            alert("خطأ أثناء التسجيل");
+            try {
+                const errData = await response.json();
+                alert(errData.error || "خطأ أثناء التسجيل");
+            } catch (e) {
+                alert("خطأ أثناء التسجيل");
+            }
         }
     } catch (error) {
         console.error(error);

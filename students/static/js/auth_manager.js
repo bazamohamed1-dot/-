@@ -78,15 +78,17 @@ function showLogin() {
     }
 }
 
-function logout() {
+async function logout() {
     localStorage.removeItem('session_token');
     localStorage.removeItem('user_role');
     const csrftoken = getCookie('csrftoken');
-    fetch('/canteen/auth/logout/', {
-        method: 'POST',
-        headers: {'X-CSRFToken': csrftoken}
-    });
-    location.href = '/canteen/dashboard/';
+    try {
+        await fetch('/canteen/auth/logout/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken}
+        });
+    } catch (e) { console.error(e); }
+    location.href = '/canteen/';
 }
 
 function checkRoleRedirect(role) {

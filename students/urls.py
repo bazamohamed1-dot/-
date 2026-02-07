@@ -8,6 +8,8 @@ router = DefaultRouter()
 router.register(r'users', auth_views.UserManagementViewSet)
 
 urlpatterns = [
+    # Landing
+    path('', ui_views.landing_view, name='canteen_landing'),
     # Auth API
     path('auth/login/', auth_views.login_view, name='auth_login'),
     path('auth/logout/', auth_views.logout_view, name='auth_logout'),
