@@ -320,9 +320,9 @@
 
                 if (response.ok) {
                     // Success
-                    localStorage.setItem('session_token', data.token);
-                    localStorage.setItem('user_role', data.role);
-                    localStorage.setItem('username', data.username);
+                    sessionStorage.setItem('session_token', data.token);
+                    sessionStorage.setItem('user_role', data.role);
+                    sessionStorage.setItem('username', data.username);
 
                     // Show Welcome Overlay
                     document.getElementById('welcomeUser').textContent = data.username;
