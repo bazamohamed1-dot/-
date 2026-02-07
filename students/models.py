@@ -80,6 +80,25 @@ class UserActivityLog(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.action} - {self.timestamp}"
 
+class ArchiveDocument(models.Model):
+    reference_number = models.CharField(max_length=50, verbose_name="الرقم")
+    service = models.CharField(max_length=100, verbose_name="المصلحة")
+    file_type = models.CharField(max_length=100, verbose_name="الملف/السجل")
+    document_type = models.CharField(max_length=100, verbose_name="الوثيقة")
+    symbol = models.CharField(max_length=50, verbose_name="الرمز", blank=True, null=True)
+    student_dob = models.DateField(null=True, blank=True, verbose_name="تاريخ الازدياد (للتلاميذ)")
+    entry_date = models.DateField(default=date.today, verbose_name="تاريخ الدخول")
+    temp_exit_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الخروج المؤقت")
+    elimination_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الحذف أو الإقصاء")
+    notes = models.TextField(blank=True, null=True, verbose_name="ملاحظات")
+
+    class Meta:
+        verbose_name = "وثيقة أرشيف"
+        verbose_name_plural = "وثائق الأرشيف"
+
+    def __str__(self):
+        return f"{self.reference_number} - {self.document_type}"
+
 class EmployeeProfile(models.Model):
     ROLE_CHOICES = [
         ('director', 'مدير'),

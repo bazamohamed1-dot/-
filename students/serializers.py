@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument
+
+class ArchiveDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ArchiveDocument
+        fields = '__all__'
 
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:

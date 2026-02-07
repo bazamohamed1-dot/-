@@ -6,6 +6,7 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register(r'users', auth_views.UserManagementViewSet)
+router.register(r'archive/docs', views.ArchiveDocumentViewSet, basename='archive_docs')
 
 urlpatterns = [
     # Landing

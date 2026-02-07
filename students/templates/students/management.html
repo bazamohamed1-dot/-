@@ -109,6 +109,7 @@
         <button class="btn btn-success" onclick="prepareNew()"><i class="fas fa-plus"></i> جديد</button>
         <button class="btn btn-primary" onclick="saveCurrent()"><i class="fas fa-save"></i> حفظ</button>
         <button class="btn" id="editBtn" onclick="enableEditing()"><i class="fas fa-edit"></i> تعديل</button>
+        <button class="btn btn-warning" id="cancelEditBtn" style="display:none;" onclick="cancelEditing()"><i class="fas fa-times"></i> إلغاء التعديل</button>
         <button class="btn btn-danger" onclick="deleteStudent()"><i class="fas fa-trash"></i> حذف</button>
 
         <div style="flex-grow: 1;"></div>
@@ -294,7 +295,14 @@ function fillForm(idx, row) {
     lockFields(true);
     isEditMode = false;
     document.getElementById('editBtn').style.display = 'inline-flex';
+    document.getElementById('cancelEditBtn').style.display = 'none';
     document.getElementById('modeStatus').innerHTML = '<i class="fas fa-eye"></i> وضع العرض';
+}
+
+function cancelEditing() {
+    if(!confirm('هل تريد إلغاء التعديلات؟')) return;
+    // Revert to view mode for the selected student
+    fillForm(selectedIndex, document.querySelector('.selected-row'));
 }
 
 async function saveCurrent() {

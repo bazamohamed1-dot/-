@@ -5,8 +5,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings
-from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument
+from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
@@ -35,6 +35,44 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class ArchiveDocumentViewSet(viewsets.ModelViewSet):
+    queryset = ArchiveDocument.objects.all().order_by('-entry_date')
+    serializer_class = ArchiveDocumentSerializer
+
+    @action(detail=False, methods=['post'])
+    def export_excel(self, request):
+        file_path = os.path.join(settings.BASE_DIR, 'Archive_Export.xlsx')
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "أرشيف المؤسسة"
+
+        headers = ["الرقم", "المصلحة", "الملف/السجل", "الوثيقة", "الرمز", "تاريخ الازدياد", "تاريخ الدخول", "تاريخ الخروج المؤقت", "تاريخ الحذف", "ملاحظات"]
+        ws.append(headers)
+
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center')
+
+        docs = self.filter_queryset(self.get_queryset())
+        for doc in docs:
+            ws.append([
+                doc.reference_number,
+                doc.service,
+                doc.file_type,
+                doc.document_type,
+                doc.symbol or '',
+                str(doc.student_dob) if doc.student_dob else '',
+                str(doc.entry_date),
+                str(doc.temp_exit_date) if doc.temp_exit_date else '',
+                str(doc.elimination_date) if doc.elimination_date else '',
+                doc.notes or ''
+            ])
+
+        wb.save(file_path)
+        response = FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="Archive_{date.today()}.xlsx"'
+        return response
+
 # --- Library Views ---
 
 @csrf_exempt
@@ -61,9 +99,16 @@ def scan_library_card(request):
         # Get active loans
         active_loans = LibraryLoan.objects.filter(student=student, is_returned=False)
 
+        # Check limit
+        settings_obj = SchoolSettings.objects.first()
+        limit = settings_obj.loan_limit if settings_obj else 2
+        limit_reached = active_loans.count() >= limit
+
         return Response({
             'student': StudentSerializer(student).data,
-            'active_loans': LibraryLoanSerializer(active_loans, many=True).data
+            'active_loans': LibraryLoanSerializer(active_loans, many=True).data,
+            'limit_reached': limit_reached,
+            'loan_limit': limit
         })
     except Exception as e:
         logger.error(f"Library Scan Error: {e}")
@@ -352,14 +397,22 @@ def export_canteen_sheet(request):
     date_str = today.strftime("%Y-%m-%d")
 
     try:
+        # Create a new workbook every time if file doesn't exist or just append.
+        # But usually for "export", users expect a cumulative log?
+        # The prompt says "save attendance lists in Excel file... accumulate days".
+        # So we must load existing.
         if os.path.exists(file_path):
-            wb = openpyxl.load_workbook(file_path)
+            try:
+                wb = openpyxl.load_workbook(file_path)
+            except:
+                # If file is corrupted or unreadable, start fresh
+                wb = openpyxl.Workbook()
+                if 'Sheet' in wb.sheetnames: del wb['Sheet']
         else:
             wb = openpyxl.Workbook()
-            if 'Sheet' in wb.sheetnames:
-                del wb['Sheet']
+            if 'Sheet' in wb.sheetnames: del wb['Sheet']
     except Exception as e:
-        return Response({'error': f'Failed to load Excel: {str(e)}'}, status=500)
+        return Response({'error': f'Failed to init Excel: {str(e)}'}, status=500)
 
     sheet_name = "سجل_المطعم"
     if sheet_name not in wb.sheetnames:

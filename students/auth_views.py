@@ -104,9 +104,12 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         if not self.check_director(request):
             return Response({'error': 'Unauthorized'}, status=403)
 
-        users = User.objects.select_related('profile').all()
+        users = User.objects.select_related('profile').all().distinct()
         data = []
+        seen = set()
         for u in users:
+            if u.id in seen: continue
+            seen.add(u.id)
             try:
                 prof = u.profile
                 data.append({
