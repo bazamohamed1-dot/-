@@ -189,7 +189,10 @@
         try {
             const res = await fetch('/canteen/scan_card/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
                 body: JSON.stringify({ barcode })
             });
 
@@ -382,7 +385,10 @@
         try {
             const res = await fetch('/canteen/manual_attendance/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
                 body: JSON.stringify({ student_id: id })
             });
             const data = await res.json();

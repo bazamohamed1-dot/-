@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>برنامج تسيير المؤسسات التربوية - تسجيل الدخول</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #2563eb;
@@ -18,7 +19,7 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         body {
@@ -55,10 +56,22 @@
         }
 
         h1 {
-            color: #1e293b;
-            font-size: 1.8rem;
-            margin-bottom: 10px;
+            font-size: 2.2rem;
+            margin-bottom: 5px;
             font-weight: 800;
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.3);
+            padding-bottom: 5px;
+        }
+
+        .credit-text {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: -5px;
+            margin-bottom: 20px;
+            font-weight: 600;
         }
 
         p.subtitle {
@@ -166,12 +179,14 @@
         <div class="logo-area">
             <i class="fas fa-graduation-cap logo-icon"></i>
             <h1>برنامج تسيير المؤسسات التربوية</h1>
+            <div class="credit-text">من انجاز السيد المدير : بازة محمد الطاهر</div>
             <p class="subtitle">قم بتسجيل الدخول للوصول إلى لوحة التحكم</p>
         </div>
 
         <div id="error-msg"></div>
 
         <form id="loginForm" onsubmit="handleLogin(event)">
+            {% csrf_token %}
             <div class="form-group">
                 <label>اسم المستخدم</label>
                 <div class="input-wrapper">
@@ -230,7 +245,15 @@
                 if (response.ok) {
                     // Success
                     localStorage.setItem('user_role', data.role);
-                    window.location.href = '/dashboard/';
+
+                    // Redirect based on role
+                    if (data.role === 'storekeeper') {
+                        window.location.href = '/canteen/ui/';
+                    } else if (data.role === 'librarian') {
+                        window.location.href = '/canteen/library/';
+                    } else {
+                        window.location.href = '/dashboard/';
+                    }
                 } else {
                     // Error
                     errorMsg.textContent = data.error || 'حدث خطأ غير معروف';

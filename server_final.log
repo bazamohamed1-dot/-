@@ -1,0 +1,17 @@
+Watching for file changes with StatReloader
+[07/Feb/2026 00:15:33] "GET / HTTP/1.1" 200 9328
+Bad Request: /auth/login/
+[07/Feb/2026 00:15:35] "POST /auth/login/ HTTP/1.1" 400 80
+[07/Feb/2026 00:16:20] "GET / HTTP/1.1" 200 9462
+Bad Request: /auth/login/
+[07/Feb/2026 00:16:22] "POST /auth/login/ HTTP/1.1" 400 80
+[07/Feb/2026 00:17:07] "GET / HTTP/1.1" 200 9462
+Bad Request: /auth/login/
+[07/Feb/2026 00:17:09] "POST /auth/login/ HTTP/1.1" 400 80
+[07/Feb/2026 00:19:01] "GET / HTTP/1.1" 200 9462
+[07/Feb/2026 00:19:05] "POST /auth/login/ HTTP/1.1" 200 175
+[07/Feb/2026 00:19:05] "GET /canteen/library/ HTTP/1.1" 200 31965
+[07/Feb/2026 00:19:05] "GET /static/js/auth_manager.js HTTP/1.1" 200 5696
+[07/Feb/2026 00:19:05] "GET /static/js/offline_manager.js HTTP/1.1" 200 6001
+[07/Feb/2026 00:19:06] "GET /static/sw.js HTTP/1.1" 404 1829
+[07/Feb/2026 00:19:07] "GET /canteen/library/stats/ HTTP/1.1" 200 135
