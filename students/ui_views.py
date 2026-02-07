@@ -46,7 +46,9 @@ def dashboard(request):
         'half_board_count': Student.objects.filter(attendance_system='نصف داخلي').count(),
         'db_status': 'متصل',
         'present_today': CanteenAttendance.objects.filter(date=date.today()).count(),
-        'absent_today': Student.objects.filter(attendance_system='نصف داخلي').count() - CanteenAttendance.objects.filter(date=date.today()).count()
+        'absent_today': Student.objects.filter(attendance_system='نصف داخلي').count() - CanteenAttendance.objects.filter(date=date.today()).count(),
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
     return render(request, 'students/dashboard.html', context)
 
@@ -57,6 +59,8 @@ def settings_view(request):
 
     context = {
         'total_students': Student.objects.count(),
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
     return render(request, 'students/settings.html', context)
 
@@ -107,32 +111,51 @@ def canteen_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_canteen'):
         return redirect('dashboard')
-    return render(request, 'students/canteen.html')
+    context = {
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/canteen.html', context)
 
 def student_list(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    # Use access_management for list too
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
         return redirect('dashboard')
-    return render(request, 'students/student_list.html')
+    context = {
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/student_list.html', context)
 
 def students_management(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
         return redirect('dashboard')
-    return render(request, 'students/management.html')
+    context = {
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/management.html', context)
 
 def library_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_library'):
         return redirect('dashboard')
-    return render(request, 'students/library.html')
+    context = {
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/library.html', context)
 
 def archive_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_archive'):
         return redirect('dashboard')
-    return render(request, 'students/archive.html')
+    context = {
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/archive.html', context)
 
 def print_student_cards(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')

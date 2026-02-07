@@ -4,8 +4,32 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from .models import EmployeeProfile, UserActivityLog
+from .models import EmployeeProfile, UserActivityLog, SchoolSettings
 import secrets
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password(request):
+    username = request.data.get('username')
+    try:
+        settings_obj = SchoolSettings.objects.first()
+        if not settings_obj or not settings_obj.admin_email:
+             return Response({'error': 'لم يتم ضبط بريد المدير في الإعدادات.'}, status=400)
+
+        # We don't verify if user exists to prevent enumeration, or we do?
+        # User asked to restore. Let's verify.
+        if not User.objects.filter(username=username).exists():
+             return Response({'error': 'اسم المستخدم غير موجود'}, status=404)
+
+        # In a real app, send email. Here, we simulate.
+        print(f"--- SIMULATED EMAIL TO {settings_obj.admin_email} ---")
+        print(f"Subject: استعادة كلمة المرور للمستخدم {username}")
+        print(f"Body: يرجى التواصل مع المستخدم لإعادة تعيين كلمة المرور.")
+        print("-------------------------------------------------------")
+
+        return Response({'message': f'تم إرسال طلب الاستعادة إلى المدير ({settings_obj.admin_email})'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

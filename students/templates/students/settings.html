@@ -21,6 +21,10 @@
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">اسم المدير</label>
                 <input type="text" id="directorName" class="form-input" required style="width:100%; padding:10px;">
             </div>
+            <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">بريد المدير (للاستعادة)</label>
+                <input type="email" id="adminEmail" class="form-input" style="width:100%; padding:10px; direction:ltr; text-align:left;">
+            </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 15px;">حفظ الإعدادات</button>
     </form>
@@ -111,15 +115,50 @@
             </div>
 
             <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
-                <label style="display:block; margin-bottom:5px; font-weight:bold;">الصلاحيات المخصصة (تخصيص الوظائف)</label>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                    <div><input type="checkbox" class="perm-check" value="access_canteen" id="perm_canteen"> <label for="perm_canteen">الدخول للمطعم</label></div>
-                    <div><input type="checkbox" class="perm-check" value="access_library" id="perm_library"> <label for="perm_library">الدخول للمكتبة</label></div>
-                    <div><input type="checkbox" class="perm-check" value="access_management" id="perm_management"> <label for="perm_management">إدارة التلاميذ</label></div>
-                    <div><input type="checkbox" class="perm-check" value="access_archive" id="perm_archive"> <label for="perm_archive">الأرشيف</label></div>
-                    <div><input type="checkbox" class="perm-check" value="import_data" id="perm_import"> <label for="perm_import">استيراد البيانات</label></div>
-                    <div><input type="checkbox" class="perm-check" value="manage_users" id="perm_users"> <label for="perm_users">إدارة المستخدمين</label></div>
-                    <div><input type="checkbox" class="perm-check" value="manage_settings" id="perm_settings"> <label for="perm_settings">الإعدادات العامة</label></div>
+                <label style="display:block; margin-bottom:10px; font-weight:bold;">الصلاحيات التفصيلية</label>
+
+                <div style="max-height: 200px; overflow-y: auto; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-utensils"></i> المطعم</strong>
+                        <div style="margin-right: 15px;">
+                             <div><input type="checkbox" class="perm-check" value="access_canteen" id="perm_canteen_access"> <label for="perm_canteen_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="perm-check" value="canteen_scan" id="perm_canteen_scan"> <label for="perm_canteen_scan">مسح البطاقات</label></div>
+                             <div><input type="checkbox" class="perm-check" value="canteen_manual" id="perm_canteen_manual"> <label for="perm_canteen_manual">إدخال يدوي</label></div>
+                             <div><input type="checkbox" class="perm-check" value="canteen_export" id="perm_canteen_export"> <label for="perm_canteen_export">تصدير القوائم</label></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-book"></i> المكتبة</strong>
+                        <div style="margin-right: 15px;">
+                             <div><input type="checkbox" class="perm-check" value="access_library" id="perm_lib_access"> <label for="perm_lib_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="perm-check" value="library_scan" id="perm_lib_scan"> <label for="perm_lib_scan">مسح البطاقات</label></div>
+                             <div><input type="checkbox" class="perm-check" value="library_loan" id="perm_lib_loan"> <label for="perm_lib_loan">إعارة الكتب</label></div>
+                             <div><input type="checkbox" class="perm-check" value="library_return" id="perm_lib_return"> <label for="perm_lib_return">إرجاع الكتب</label></div>
+                             <div><input type="checkbox" class="perm-check" value="library_readers_list" id="perm_lib_readers"> <label for="perm_lib_readers">قائمة القراء (حذف)</label></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-user-graduate"></i> التلاميذ</strong>
+                        <div style="margin-right: 15px;">
+                             <div><input type="checkbox" class="perm-check" value="access_management" id="perm_std_access"> <label for="perm_std_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="perm-check" value="student_add" id="perm_std_add"> <label for="perm_std_add">إضافة تلميذ</label></div>
+                             <div><input type="checkbox" class="perm-check" value="student_edit" id="perm_std_edit"> <label for="perm_std_edit">تعديل بيانات</label></div>
+                             <div><input type="checkbox" class="perm-check" value="student_delete" id="perm_std_del"> <label for="perm_std_del">حذف تلاميذ</label></div>
+                             <div><input type="checkbox" class="perm-check" value="student_print" id="perm_std_print"> <label for="perm_std_print">طباعة البطاقات</label></div>
+                             <div><input type="checkbox" class="perm-check" value="import_data" id="perm_std_import"> <label for="perm_std_import">استيراد البيانات</label></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-cog"></i> الإدارة</strong>
+                        <div style="margin-right: 15px;">
+                             <div><input type="checkbox" class="perm-check" value="manage_users" id="perm_adm_users"> <label for="perm_adm_users">إدارة المستخدمين</label></div>
+                             <div><input type="checkbox" class="perm-check" value="manage_settings" id="perm_adm_settings"> <label for="perm_adm_settings">الإعدادات العامة</label></div>
+                             <div><input type="checkbox" class="perm-check" value="access_archive" id="perm_archive"> <label for="perm_archive">الأرشيف</label></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -174,6 +213,7 @@ async function loadSettings() {
         if (data.academic_year) document.getElementById('academicYear').value = data.academic_year;
         if (data.director_name) document.getElementById('directorName').value = data.director_name;
         if (data.loan_limit) document.getElementById('loanLimit').value = data.loan_limit;
+        if (data.admin_email) document.getElementById('adminEmail').value = data.admin_email;
     } catch (error) {
         console.error("Error loading settings", error);
     }
@@ -184,7 +224,8 @@ async function saveSchoolSettings(e) {
     const data = {
         name: document.getElementById('schoolName').value,
         academic_year: document.getElementById('academicYear').value,
-        director_name: document.getElementById('directorName').value
+        director_name: document.getElementById('directorName').value,
+        admin_email: document.getElementById('adminEmail').value
     };
 
     try {
