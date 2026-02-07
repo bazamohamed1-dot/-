@@ -118,7 +118,7 @@
 
         <button class="btn btn-secondary" onclick="openManualModal()" style="background: #64748b; color: white;"><i class="fas fa-keyboard"></i> إدخال يدوي</button>
         <button class="btn btn-primary" onclick="window.location.reload()"><i class="fas fa-sync"></i> تحديث الإحصائيات</button>
-        <button class="btn btn-warning" onclick="exportExcel()"><i class="fas fa-file-excel"></i> حفظ في إكسل</button>
+        <button class="btn btn-warning" id="exportBtn" onclick="exportExcel()"><i class="fas fa-file-excel"></i> حفظ في إكسل</button>
     </div>
 </div>
 
@@ -442,5 +442,12 @@
     // Initial load
     updateStats();
     updatePresentList();
+
+    // Restrict Export Button
+    const userRole = localStorage.getItem('user_role');
+    if (userRole !== 'director') {
+        const btn = document.getElementById('exportBtn');
+        if(btn) btn.style.display = 'none';
+    }
 </script>
 {% endblock %}
