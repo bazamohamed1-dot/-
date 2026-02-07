@@ -62,6 +62,7 @@ class SchoolSettings(models.Model):
     director_name = models.CharField(max_length=200, verbose_name="اسم المدير")
     logo = models.ImageField(upload_to='school_logo/', null=True, blank=True, verbose_name="شعار المؤسسة")
     loan_limit = models.IntegerField(default=2, verbose_name="الحد الأقصى للإعارات")
+    admin_email = models.EmailField(null=True, blank=True, verbose_name="البريد الإلكتروني لاستعادة كلمة المرور")
 
     class Meta:
         verbose_name = "إعدادات المؤسسة"

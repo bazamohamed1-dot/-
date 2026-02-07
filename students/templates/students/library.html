@@ -102,16 +102,25 @@
 
 <!-- Action Bar -->
 <div style="margin-bottom: 20px; text-align: left;">
+    {% if is_director or 'library_readers_list' in permissions %}
     <button class="btn btn-primary" onclick="showReadersModal()"><i class="fas fa-list"></i> قائمة التلاميذ القراء</button>
+    {% endif %}
+
     <button class="btn btn-info" style="margin-right: 10px; background-color: #0891b2; color: white;" onclick="showBooksModal()"><i class="fas fa-book"></i> قائمة الكتب المعارة</button>
     <button class="btn btn-warning" style="margin-right: 10px; color: white;" onclick="showReportModal()"><i class="fas fa-chart-bar"></i> تقرير المكتبة</button>
 </div>
 
 <!-- Scanner -->
+{% if is_director or 'library_scan' in permissions %}
 <div class="scanner-box">
     <i class="fas fa-barcode fa-2x" style="color: #3b82f6; margin-bottom: 10px;"></i>
     <h3>امسح البطاقة من هنا</h3>
     <input type="text" id="barcodeInput" class="scanner-input" placeholder="ضع المؤشر هنا وامسح البطاقة..." autofocus autocomplete="off">
+    <p style="color:#dc2626; font-weight:bold; margin-top:10px;">
+        <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
+    </p>
+</div>
+{% endif %}
     <p style="color:#dc2626; font-weight:bold; margin-top:10px;">
         <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
     </p>
@@ -138,6 +147,7 @@
     </div>
 
     <!-- Loan Form -->
+    {% if is_director or 'library_loan' in permissions %}
     <div class="loan-form" id="loanForm" style="display: block;">
         <h4 style="color: #166534; margin-top: 0;"><i class="fas fa-book-reader"></i> تسجيل إعارة جديدة</h4>
         <div class="form-row">
@@ -157,6 +167,7 @@
             <button class="btn btn-danger" onclick="cancelScan()"><i class="fas fa-times"></i> إلغاء</button>
         </div>
     </div>
+    {% endif %}
 
 </div>
 
@@ -417,13 +428,28 @@ function showStudent(data) {
     const loansList = document.getElementById('activeLoansList');
     loansList.innerHTML = '';
 
+    // JS Logic for permissions is tricky since templates are rendered server-side.
+    // However, if we hide buttons in template, JS won't render them either?
+    // No, JS renders HTML string. We need to pass permissions to JS or handle it in JS.
+    // Let's pass 'can_return' flag from backend scan response?
+    // OR: Just rely on the fact that if user can scan, they likely can return?
+    // The requirement is granular permissions.
+    // Let's use a global JS variable injected from template.
+    const canReturn = {{ is_director|yesno:"true,false" }} || {% if 'library_return' in permissions %}true{% else %}false{% endif %};
+
     if (data.active_loans.length > 0) {
         data.active_loans.forEach(loan => {
             const li = document.createElement('li');
             li.style.cssText = "background: #fff; padding: 10px; border: 1px solid #e2e8f0; margin-bottom: 5px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;";
+
+            let btnHtml = '';
+            if (canReturn) {
+                btnHtml = `<button class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="returnBook(${loan.id})">إرجاع</button>`;
+            }
+
             li.innerHTML = `
                 <span><i class="fas fa-book"></i> <b>${loan.book_title}</b> (محدد: ${loan.expected_return_date})</span>
-                <button class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="returnBook(${loan.id})">إرجاع</button>
+                ${btnHtml}
             `;
             loansList.appendChild(li);
         });

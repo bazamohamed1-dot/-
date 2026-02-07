@@ -24,9 +24,28 @@ logger = logging.getLogger(__name__)
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_add'):
+             return Response({'error': 'Unauthorized'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_edit'):
+             return Response({'error': 'Unauthorized'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_delete'):
+             return Response({'error': 'Unauthorized'}, status=403)
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['post'])
     def bulk_delete(self, request):
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_delete'):
+             return Response({'error': 'Unauthorized'}, status=403)
+
         ids = request.data.get('ids', [])
         if not ids:
             return Response({'error': 'No IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
@@ -81,7 +100,7 @@ class ArchiveDocumentViewSet(viewsets.ModelViewSet):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def scan_library_card(request):
-    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_library'):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('library_scan'):
         return Response({'error': 'Unauthorized'}, status=403)
     try:
         barcode = request.data.get('barcode')
@@ -123,7 +142,7 @@ def scan_library_card(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_loan(request):
-    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_library'):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('library_loan'):
         return Response({'error': 'Unauthorized'}, status=403)
     student_id = request.data.get('student_id')
     book_title = request.data.get('book_title')
@@ -165,12 +184,12 @@ def create_loan(request):
     return Response(LibraryLoanSerializer(loan).data, status=status.HTTP_201_CREATED)
 
 @api_view(['GET', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def get_readers(request):
     if request.method == 'DELETE':
-        # Point 11: Clear history (delete all loans? or just logs? Assuming all loans history)
-        # User said "Delete list of readers", which implies clearing the log.
-        # Be careful not to delete active loans if that's not intended, but usually "clear history" means all.
-        # Let's delete ALL loans.
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('library_readers_list'):
+             return Response({'error': 'Unauthorized'}, status=403)
+
         count = LibraryLoan.objects.all().delete()[0]
         return Response({'message': f'Deleted {count} records'})
 
@@ -216,7 +235,11 @@ def school_settings(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def return_book(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('library_return'):
+        return Response({'error': 'Unauthorized'}, status=403)
+
     loan_id = request.data.get('loan_id')
     try:
         loan = LibraryLoan.objects.get(id=loan_id)
@@ -294,7 +317,7 @@ def library_stats(request):
 def scan_card(request):
     try:
         # Check permission
-        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_canteen'):
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('canteen_scan'):
              return Response({'error': 'Unauthorized'}, status=403)
 
         barcode = request.data.get('barcode')
@@ -392,7 +415,7 @@ def get_canteen_stats(request):
 @permission_classes([IsAuthenticated])
 def manual_attendance(request):
     # Check permission
-    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_canteen'):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('canteen_manual'):
         return Response({'error': 'Unauthorized'}, status=403)
 
     # Time Restriction Logic (13:15)
@@ -441,7 +464,11 @@ def get_attendance_lists(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def export_canteen_sheet(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('canteen_export'):
+        return Response({'error': 'Unauthorized'}, status=403)
+
     # Generates a cumulative report in-memory from DB history
     today = date.today()
     date_str = today.strftime("%Y-%m-%d")
