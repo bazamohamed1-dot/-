@@ -416,7 +416,15 @@ function showStudent(data) {
     }
 
     document.getElementById('workspace').style.display = 'block';
-    document.getElementById('bookTitle').focus();
+
+    // Limit Check (Point 4)
+    if (data.limit_reached) {
+        alert(`لا يمكن استعارة أكثر من ${data.loan_limit} كتب!`);
+        document.getElementById('loanForm').style.display = 'none'; // Hide loan form
+    } else {
+        document.getElementById('loanForm').style.display = 'block';
+        document.getElementById('bookTitle').focus();
+    }
 }
 
 function hideWorkspace() {

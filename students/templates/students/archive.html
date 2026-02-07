@@ -1,9 +1,214 @@
 {% extends 'base.html' %}
 {% block header_title %}الأرشيف{% endblock %}
 {% block content %}
-<div class="card" style="text-align: center; padding: 50px;">
-    <h1 style="color: #64748b; margin-bottom: 20px;"><i class="fas fa-archive fa-3x"></i></h1>
-    <h2>نظام الأرشيف</h2>
-    <p>هذه الواجهة قيد الإنجاز حالياً.</p>
+<div class="card" style="margin-bottom: 20px;">
+    <h3><i class="fas fa-archive"></i> إضافة وثيقة أرشيف</h3>
+    <form id="archiveForm" onsubmit="saveArchive(event)">
+        <div class="grid-4" style="grid-template-columns: repeat(5, 1fr); gap: 15px;">
+            <div>
+                <label>الرقم</label>
+                <input type="text" id="refNum" class="form-input western-nums" required style="width:100%; direction:ltr; text-align:left;">
+            </div>
+            <div>
+                <label>المصلحة</label>
+                <input type="text" id="service" class="form-input" required style="width:100%;">
+            </div>
+            <div>
+                <label>الملف/السجل</label>
+                <input type="text" id="fileType" class="form-input" required style="width:100%;">
+            </div>
+            <div>
+                <label>الوثيقة</label>
+                <input type="text" id="docType" class="form-input" required style="width:100%;">
+            </div>
+            <div>
+                <label>الرمز</label>
+                <input type="text" id="symbol" class="form-input western-nums" style="width:100%; direction:ltr; text-align:left;">
+            </div>
+            <div>
+                <label>تاريخ الازدياد (تلاميذ)</label>
+                <input type="date" id="studentDob" class="form-input western-nums" style="width:100%;">
+            </div>
+            <div>
+                <label>تاريخ الدخول</label>
+                <input type="date" id="entryDate" class="form-input western-nums" required style="width:100%;">
+            </div>
+            <div>
+                <label>تاريخ الخروج المؤقت</label>
+                <input type="date" id="tempExitDate" class="form-input western-nums" style="width:100%;">
+            </div>
+            <div>
+                <label>تاريخ الحذف/الإقصاء</label>
+                <input type="date" id="elimDate" class="form-input western-nums" style="width:100%;">
+            </div>
+            <div style="grid-column: span 2;">
+                <label>ملاحظات</label>
+                <input type="text" id="notes" class="form-input" style="width:100%;">
+            </div>
+        </div>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ في الأرشيف</button>
+            <button type="button" class="btn btn-warning" onclick="resetForm()"><i class="fas fa-undo"></i> مسح الحقول</button>
+        </div>
+    </form>
 </div>
+
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3><i class="fas fa-list-alt"></i> سجل الأرشيف</h3>
+        <button class="btn btn-success" onclick="exportExcel()"><i class="fas fa-file-excel"></i> حفظ القائمة في Excel</button>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="archive-table">
+            <thead>
+                <tr>
+                    <th>الرقم</th>
+                    <th>المصلحة</th>
+                    <th>الملف/السجل</th>
+                    <th>الوثيقة</th>
+                    <th>الرمز</th>
+                    <th>ت. الازدياد</th>
+                    <th>ت. الدخول</th>
+                    <th>ت. الخروج (مؤقت)</th>
+                    <th>ت. الحذف</th>
+                    <th>ملاحظات</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="archiveTableBody">
+                <tr><td colspan="11" style="text-align:center;">جاري التحميل...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', loadArchive);
+
+    async function saveArchive(e) {
+        e.preventDefault();
+        const data = {
+            reference_number: document.getElementById('refNum').value,
+            service: document.getElementById('service').value,
+            file_type: document.getElementById('fileType').value,
+            document_type: document.getElementById('docType').value,
+            symbol: document.getElementById('symbol').value,
+            student_dob: document.getElementById('studentDob').value || null,
+            entry_date: document.getElementById('entryDate').value,
+            temp_exit_date: document.getElementById('tempExitDate').value || null,
+            elimination_date: document.getElementById('elimDate').value || null,
+            notes: document.getElementById('notes').value
+        };
+
+        try {
+            const res = await fetch('/canteen/api/archive/docs/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            });
+
+            if(res.ok) {
+                alert('تم الحفظ بنجاح');
+                resetForm();
+                loadArchive();
+            } else {
+                alert('حدث خطأ أثناء الحفظ');
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function loadArchive() {
+        try {
+            const res = await fetch('/canteen/api/archive/docs/');
+            const data = await res.json();
+            const tbody = document.getElementById('archiveTableBody');
+            tbody.innerHTML = '';
+
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;">لا توجد وثائق</td></tr>';
+                return;
+            }
+
+            data.forEach(d => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="western-nums" style="direction:ltr;">${d.reference_number}</td>
+                        <td>${d.service}</td>
+                        <td>${d.file_type}</td>
+                        <td>${d.document_type}</td>
+                        <td class="western-nums">${d.symbol || '-'}</td>
+                        <td class="western-nums">${d.student_dob || '-'}</td>
+                        <td class="western-nums">${d.entry_date}</td>
+                        <td class="western-nums">${d.temp_exit_date || '-'}</td>
+                        <td class="western-nums">${d.elimination_date || '-'}</td>
+                        <td>${d.notes || '-'}</td>
+                        <td>
+                            <button class="btn btn-danger" onclick="deleteDoc(${d.id})" style="padding:5px;"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch(e) {
+            console.error(e);
+        }
+    }
+
+    async function deleteDoc(id) {
+        if(!confirm('هل أنت متأكد من الحذف؟')) return;
+        try {
+            await fetch(`/canteen/api/archive/docs/${id}/`, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': getCookie('csrftoken')}
+            });
+            loadArchive();
+        } catch(e) { console.error(e); }
+    }
+
+    function resetForm() {
+        document.getElementById('archiveForm').reset();
+        document.getElementById('entryDate').valueAsDate = new Date();
+    }
+
+    async function exportExcel() {
+        if(!confirm('تحميل ملف Excel؟')) return;
+        try {
+            const res = await fetch('/canteen/api/archive/docs/export_excel/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Archive_Export.xlsx";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } else {
+                alert("خطأ في التصدير");
+            }
+        } catch(e) { alert("خطأ في الاتصال"); }
+    }
+
+    // Set default date
+    document.getElementById('entryDate').valueAsDate = new Date();
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
 {% endblock %}
