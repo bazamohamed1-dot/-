@@ -160,11 +160,11 @@
                         <td>${d.service}</td>
                         <td>${d.file_type}</td>
                         <td>${d.document_type}</td>
-                        <td class="western-nums">${d.symbol || '-'}</td>
-                        <td class="western-nums">${d.student_dob || '-'}</td>
-                        <td class="western-nums">${d.entry_date}</td>
-                        <td class="western-nums">${d.temp_exit_date || '-'}</td>
-                        <td class="western-nums">${d.elimination_date || '-'}</td>
+                        <td class="western-nums" style="direction:ltr;">${d.symbol || '-'}</td>
+                        <td class="western-nums" style="direction:ltr;">${d.student_dob || '-'}</td>
+                        <td class="western-nums" style="direction:ltr;">${d.entry_date}</td>
+                        <td class="western-nums" style="direction:ltr;">${d.temp_exit_date || '-'}</td>
+                        <td class="western-nums" style="direction:ltr;">${d.elimination_date || '-'}</td>
                         <td>${d.notes || '-'}</td>
                         <td>
                             <button class="btn btn-danger" onclick="deleteDoc(${d.id})" style="padding:5px;"><i class="fas fa-trash"></i></button>

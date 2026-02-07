@@ -60,6 +60,7 @@
         .western-nums {
              font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif !important;
              unicode-bidi: plaintext;
+             font-variant-numeric: normal;
         }
 
         /* Fix for Date Inputs: Force LTR to prevent Hindi numerals and flipped formats */
@@ -68,6 +69,7 @@
              direction: ltr !important;
              text-align: right;
              unicode-bidi: plaintext;
+             font-variant-numeric: normal;
         }
 
         /* Main Content */
@@ -201,6 +203,27 @@
         .catch(err => console.log('SW failed', err));
     }
 
+    // Enhanced Session Check on Load (Logout on Browser Close)
+    window.addEventListener('load', async () => {
+         const token = localStorage.getItem('session_token');
+         if(token) {
+             try {
+                 const res = await fetch('/canteen/auth/verify/', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                     body: JSON.stringify({ token: token })
+                 });
+                 if(res.status === 401) {
+                     console.warn("Session expired on server. Logging out.");
+                     localStorage.removeItem('session_token');
+                     localStorage.removeItem('user_role');
+                     localStorage.removeItem('username');
+                     window.location.href = "{% url 'canteen_landing' %}";
+                 }
+             } catch(e) { console.error("Session verify error:", e); }
+         }
+    });
+
     // Update user info if logged in
     const uName = localStorage.getItem('username');
     const uRole = localStorage.getItem('user_role');
@@ -243,9 +266,9 @@
         return cookieValue;
     }
 
-    // Auto Logout on Inactivity (10 minutes)
+    // Auto Logout on Inactivity (3 minutes)
     let idleTime = 0;
-    const idleLimit = 10 * 60 * 1000; // 10 minutes in ms
+    const idleLimit = 3 * 60 * 1000; // 3 minutes in ms
 
     function resetTimer() {
         idleTime = 0;

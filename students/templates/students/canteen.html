@@ -288,7 +288,7 @@
                     row.innerHTML = `
                         <td><b>${s.last_name} ${s.first_name}</b></td>
                         <td>${s.class_name}</td>
-                        <td style="direction:ltr; font-family:'Segoe UI'">${s.date_of_birth}</td>
+                        <td class="western-nums" style="direction:ltr;">${s.date_of_birth}</td>
                     `;
                     list.appendChild(row);
                 });
@@ -301,7 +301,10 @@
     async function exportExcel() {
         if(!confirm('حفظ ملف الإكسل؟')) return;
         try {
-            const res = await fetch('/canteen/export_canteen/', { method: 'POST' });
+            const res = await fetch('/canteen/export_canteen/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            });
             if (res.ok) {
                 const contentType = res.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {
@@ -437,7 +440,8 @@
     // Set Current Date
     const today = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-DZ', options);
+    // Force Western Arabic Numerals
+    document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-u-nu-latn', options);
 
     // Initial load
     updateStats();
