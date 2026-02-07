@@ -67,6 +67,19 @@ class SchoolSettings(models.Model):
         verbose_name = "إعدادات المؤسسة"
         verbose_name_plural = "إعدادات المؤسسة"
 
+class UserActivityLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="المستخدم")
+    action = models.CharField(max_length=50, verbose_name="الإجراء")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="التوقيت")
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "سجل النشاط"
+        verbose_name_plural = "سجلات النشاط"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.action} - {self.timestamp}"
+
 class EmployeeProfile(models.Model):
     ROLE_CHOICES = [
         ('director', 'مدير'),

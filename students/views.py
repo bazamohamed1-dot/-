@@ -9,7 +9,7 @@ from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings
 from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from datetime import date, timedelta
 import os
 from django.conf import settings
@@ -292,7 +292,12 @@ def get_canteen_stats(request):
     today = date.today()
     total_half_board = Student.objects.filter(attendance_system='نصف داخلي').count()
     present_count = CanteenAttendance.objects.filter(date=today).count()
-    absent_count = total_half_board - present_count
+
+    # User requirement: If no one registered yet (or holiday), don't mark everyone as absent.
+    if present_count == 0:
+        absent_count = 0
+    else:
+        absent_count = total_half_board - present_count
 
     return Response({
         'total_half_board': total_half_board,
@@ -368,6 +373,11 @@ def export_canteen_sheet(request):
 
     # Get data for today
     present_attendances = CanteenAttendance.objects.filter(date=today).select_related('student')
+
+    # User requirement: If no one registered, ignore this day (don't record absents)
+    if not present_attendances.exists():
+         return Response({'message': 'لا يوجد حضور مسجل اليوم لتصديره'}, status=status.HTTP_200_OK)
+
     present_ids = set()
 
     # Append Present
@@ -389,4 +399,6 @@ def export_canteen_sheet(request):
     except Exception as e:
         return Response({'error': f'Failed to save Excel: {str(e)}'}, status=500)
 
-    return Response({'message': 'Excel updated successfully', 'file': file_path})
+    response = FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_{date_str}.xlsx"'
+    return response

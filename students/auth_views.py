@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
-from .models import EmployeeProfile
+from .models import EmployeeProfile, UserActivityLog
 import secrets
 
 @api_view(['POST'])
@@ -40,6 +40,9 @@ def login_view(request):
         profile.save()
 
         login(request, user)
+
+        # Log Activity
+        UserActivityLog.objects.create(user=user, action='login')
 
         return Response({
             'message': 'تم تسجيل الدخول بنجاح',
@@ -82,6 +85,7 @@ def logout_view(request):
             p = request.user.profile
             p.current_session_token = None
             p.save()
+            UserActivityLog.objects.create(user=request.user, action='logout')
         except:
             pass
         logout(request)
@@ -174,3 +178,26 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         profile.current_session_token = None
         profile.save()
         return Response({'message': 'Session reset'})
+
+    @action(detail=False, methods=['get'])
+    def logs(self, request):
+        if not self.check_director(request):
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        logs = UserActivityLog.objects.select_related('user').all()[:200]
+        data = []
+        for log in logs:
+             data.append({
+                 'username': log.user.username,
+                 'action': log.action,
+                 'timestamp': log.timestamp
+             })
+        return Response(data)
+
+    @action(detail=False, methods=['post'])
+    def clear_logs(self, request):
+        if not self.check_director(request):
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        UserActivityLog.objects.all().delete()
+        return Response({'message': 'Logs cleared'})
