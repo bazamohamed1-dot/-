@@ -23,18 +23,78 @@
         }
 
         body {
-            background-image: url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2000&q=80');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
             height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bg-collage {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .bg-img {
+            position: absolute;
+            background-size: cover;
+            background-position: center;
+            border-radius: 30px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            opacity: 0.85;
+            transition: all 1s ease;
+        }
+
+        /* Classroom */
+        .img-1 {
+            top: -5%; left: -5%; width: 60vw; height: 60vh;
+            background-image: url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=1000&q=80');
+            transform: rotate(-3deg);
+            z-index: 1;
+        }
+
+        /* Students */
+        .img-2 {
+            bottom: -10%; right: -5%; width: 65vw; height: 65vh;
+            background-image: url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1000&q=80');
+            transform: rotate(2deg);
+            z-index: 1;
+        }
+
+        /* Admin/Office */
+        .img-3 {
+            top: 10%; right: -10%; width: 40vw; height: 40vh;
+            background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80');
+            transform: rotate(5deg);
+            z-index: 2;
+            opacity: 0.7;
+        }
+
+        /* Flag */
+        .img-4 {
+            bottom: 5%; left: -8%; width: 35vw; height: 35vh;
+            background-image: url('https://flagcdn.com/w1280/dz.png');
+            transform: rotate(-8deg);
+            z-index: 2;
+            opacity: 0.6;
+        }
+
+        .bg-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(5px);
+            z-index: 5;
         }
 
         .login-container {
-            background: var(--bg-overlay);
+            position: relative;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border-radius: 16px;
             padding: 40px;
@@ -175,6 +235,14 @@
 </head>
 <body>
 
+    <div class="bg-collage">
+        <div class="bg-img img-1"></div>
+        <div class="bg-img img-2"></div>
+        <div class="bg-img img-3"></div>
+        <div class="bg-img img-4"></div>
+    </div>
+    <div class="bg-overlay"></div>
+
     <div class="login-container">
         <div class="logo-area">
             <i class="fas fa-graduation-cap logo-icon"></i>
@@ -244,7 +312,9 @@
 
                 if (response.ok) {
                     // Success
+                    localStorage.setItem('session_token', data.token);
                     localStorage.setItem('user_role', data.role);
+                    localStorage.setItem('username', data.username);
 
                     // Redirect based on role
                     if (data.role === 'storekeeper') {

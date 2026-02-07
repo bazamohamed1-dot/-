@@ -21,7 +21,10 @@
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">اسم المدير</label>
                 <input type="text" id="directorName" class="form-input" required style="width:100%; padding:10px;">
             </div>
-            <!-- Logo upload can be added here if needed, requires FormData handling -->
+            <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">الحد الأقصى للإعارات</label>
+                <input type="number" id="loanLimit" class="form-input western-nums" required style="width:100%; padding:10px; direction: ltr;" min="1" value="2">
+            </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 15px;">حفظ الإعدادات</button>
     </form>
@@ -119,6 +122,7 @@ async function loadSettings() {
         if (data.name) document.getElementById('schoolName').value = data.name;
         if (data.academic_year) document.getElementById('academicYear').value = data.academic_year;
         if (data.director_name) document.getElementById('directorName').value = data.director_name;
+        if (data.loan_limit) document.getElementById('loanLimit').value = data.loan_limit;
     } catch (error) {
         console.error("Error loading settings", error);
     }
@@ -129,7 +133,8 @@ async function saveSchoolSettings(e) {
     const data = {
         name: document.getElementById('schoolName').value,
         academic_year: document.getElementById('academicYear').value,
-        director_name: document.getElementById('directorName').value
+        director_name: document.getElementById('directorName').value,
+        loan_limit: document.getElementById('loanLimit').value
     };
 
     try {

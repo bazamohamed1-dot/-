@@ -84,6 +84,14 @@ def create_loan(request):
     except Student.DoesNotExist:
         return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    # Check loan limit
+    active_loans_count = LibraryLoan.objects.filter(student=student, is_returned=False).count()
+    settings_obj = SchoolSettings.objects.first()
+    limit = settings_obj.loan_limit if settings_obj else 2
+
+    if active_loans_count >= limit:
+        return Response({'error': f'لا يمكن استعارة أكثر من {limit} كتب'}, status=status.HTTP_400_BAD_REQUEST)
+
     if loan_date_str:
         try:
             loan_date = date.fromisoformat(loan_date_str)

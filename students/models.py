@@ -61,6 +61,7 @@ class SchoolSettings(models.Model):
     academic_year = models.CharField(max_length=50, verbose_name="السنة الدراسية")
     director_name = models.CharField(max_length=200, verbose_name="اسم المدير")
     logo = models.ImageField(upload_to='school_logo/', null=True, blank=True, verbose_name="شعار المؤسسة")
+    loan_limit = models.IntegerField(default=2, verbose_name="الحد الأقصى للإعارات")
 
     class Meta:
         verbose_name = "إعدادات المؤسسة"
