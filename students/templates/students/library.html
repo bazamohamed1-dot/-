@@ -562,9 +562,9 @@ async function loadStats() {
                     <td>${o.student_name}</td>
                     <td>${o.student_class}</td>
                     <td>${o.book_title}</td>
-                    <td>${o.loan_date}</td>
-                    <td>${o.expected_return}</td>
-                    <td style="color:#dc2626; font-weight:bold;">${o.days_overdue} يوم</td>
+                    <td class="western-nums" style="direction:ltr;">${o.loan_date}</td>
+                    <td class="western-nums" style="direction:ltr;">${o.expected_return}</td>
+                    <td class="western-nums" style="color:#dc2626; font-weight:bold;">${o.days_overdue} يوم</td>
                 </tr>
             `).join('');
         }
@@ -593,11 +593,11 @@ async function showReadersModal() {
 
         tbody.innerHTML = data.map(s => `
             <tr>
-                <td>${s.student_id_number}</td>
+                <td class="western-nums">${s.student_id_number}</td>
                 <td>${s.last_name} ${s.first_name}</td>
                 <td>${s.class_name}</td>
                 <td>${s.book_title}</td>
-                <td style="direction:ltr; font-family:'Segoe UI'">${s.loan_date}</td>
+                <td class="western-nums" style="direction:ltr;">${s.loan_date}</td>
             </tr>
         `).join('');
 
@@ -626,7 +626,7 @@ async function showBooksModal() {
                 <td>${s.book_title}</td>
                 <td>${s.last_name} ${s.first_name}</td>
                 <td>${s.class_name}</td>
-                <td style="direction:ltr; font-family:'Segoe UI'">${s.loan_date}</td>
+                <td class="western-nums" style="direction:ltr;">${s.loan_date}</td>
             </tr>
         `).join('');
 
