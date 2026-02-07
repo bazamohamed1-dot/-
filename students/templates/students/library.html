@@ -280,8 +280,8 @@ function updateReturnDate() {
     if(loanVal) {
         const d = new Date(loanVal);
         d.setDate(d.getDate() + 15);
-        // Use 'en-GB' or 'fr-FR' to ensure Western Arabic numerals (0-9) as requested
-        document.getElementById('returnDatePreview').value = d.toLocaleDateString('en-GB');
+        // Use 'ar-u-nu-latn' to ensure Western Arabic numerals (0-9)
+        document.getElementById('returnDatePreview').value = d.toLocaleDateString('ar-u-nu-latn');
     }
 }
 
