@@ -70,7 +70,7 @@
                 <div class="field-box"><label>اللقب *</label><input type="text" id="lastName" class="form-input"></div>
                 <div class="field-box"><label>الاسم *</label><input type="text" id="firstName" class="form-input"></div>
                 <div class="field-box"><label>رقم التعريف (16 رقم) *</label><input type="text" id="studentID" maxlength="16" class="form-input"></div>
-                <div class="field-box"><label>تاريخ الازدياد *</label><input type="date" id="dateOfBirth" class="form-input"></div>
+                <div class="field-box"><label>تاريخ الازدياد *</label><input type="date" id="dateOfBirth" class="form-input" lang="fr-FR"></div>
 
                 <div class="field-box"><label>مكان الميلاد *</label><input type="text" id="placeOfBirth" class="form-input"></div>
                 <div class="field-box"><label>الجنس *</label>
@@ -91,8 +91,8 @@
                     </select>
                 </div>
                 <div class="field-box"><label>رقم القيد</label><input type="text" id="enrollmentNumber" class="form-input"></div>
-                <div class="field-box"><label>تاريخ التسجيل *</label><input type="date" id="enrollmentDate" class="form-input"></div>
-                <div class="field-box"><label>تاريخ الخروج</label><input type="date" id="exitDate" class="form-input"></div>
+                <div class="field-box"><label>تاريخ التسجيل *</label><input type="date" id="enrollmentDate" class="form-input" lang="fr-FR"></div>
+                <div class="field-box"><label>تاريخ الخروج</label><input type="date" id="exitDate" class="form-input" lang="fr-FR"></div>
 
                 <div class="field-box span-2"><label>اسم الولي الكامل *</label><input type="text" id="guardianName" class="form-input"></div>
                 <div class="field-box span-2"><label>لقب واسم الأم *</label><input type="text" id="motherName" class="form-input"></div>
@@ -303,6 +303,10 @@ function fillForm(idx, row) {
 
 function cancelEditing() {
     if(!confirm('هل تريد إلغاء التعديلات؟')) return;
+
+    // Disable edit mode first to prevent double confirmation in fillForm
+    isEditMode = false;
+
     // Revert to view mode for the selected student
     fillForm(selectedIndex, document.querySelector('.selected-row'));
 }
