@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    const token = localStorage.getItem('session_token');
-    const role = localStorage.getItem('user_role');
+    // Switch to sessionStorage for robust "logout on close"
+    const token = sessionStorage.getItem('session_token');
+    const role = sessionStorage.getItem('user_role');
     const loginModal = document.getElementById('loginModal');
 
     // Auth Check
@@ -23,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     logout(); // Invalid session
                 } else if (response.ok) {
                     const data = await response.json();
-                    localStorage.setItem('user_role', data.role); // Update role
+                    sessionStorage.setItem('user_role', data.role); // Update role
                     checkRoleRedirect(data.role);
                 }
             } catch (e) {
@@ -51,9 +52,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
 
             if (response.ok) {
-                localStorage.setItem('session_token', data.token);
-                localStorage.setItem('user_role', data.role);
-                localStorage.setItem('username', data.username);
+                sessionStorage.setItem('session_token', data.token);
+                sessionStorage.setItem('user_role', data.role);
+                sessionStorage.setItem('username', data.username);
                 location.reload();
             } else {
                 errorDiv.textContent = data.error || 'فشل تسجيل الدخول';
@@ -71,12 +72,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Sync Logout across tabs
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'session_token' && !e.newValue) {
-            // Token removed -> logout
-            window.location.href = '/canteen/';
-        }
-    });
+    // Note: sessionStorage is not shared across tabs/windows in the same way localStorage is for storage events.
+    // However, we keep this listener if the app uses localStorage for other syncs, or if we decide to revert.
+    // For now, removing the listener for session_token on storage as sessionStorage doesn't trigger it across tabs.
 });
 
 function showLogin() {
@@ -87,8 +85,7 @@ function showLogin() {
 }
 
 async function logout() {
-    localStorage.removeItem('session_token');
-    localStorage.removeItem('user_role');
+    sessionStorage.clear();
     const csrftoken = getCookie('csrftoken');
     try {
         await fetch('/canteen/auth/logout/', {

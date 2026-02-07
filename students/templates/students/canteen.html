@@ -439,9 +439,9 @@
 
     // Set Current Date
     const today = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', numberingSystem: 'latn' };
     // Force Western Arabic Numerals
-    document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-u-nu-latn', options);
+    document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-DZ', options);
 
     // Initial load
     updateStats();

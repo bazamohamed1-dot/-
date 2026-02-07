@@ -5,7 +5,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile
 from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
@@ -285,6 +285,19 @@ def library_stats(request):
 @api_view(['POST'])
 def scan_card(request):
     try:
+        # Time Restriction Logic (13:15)
+        now = timezone.localtime()
+        cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
+
+        # Check if user is director
+        is_director = False
+        if request.user.is_authenticated and hasattr(request.user, 'profile'):
+             if request.user.profile.role == 'director':
+                 is_director = True
+
+        if now.time() > cutoff_time.time() and not is_director:
+             return Response({'error': 'انتهى وقت الإطعام (13:15)', 'code': 'TIME_LIMIT'}, status=status.HTTP_403_FORBIDDEN)
+
         barcode = request.data.get('barcode')
         logger.info(f"DEBUG: Received barcode: {barcode}")
 
@@ -354,6 +367,19 @@ def get_canteen_stats(request):
 @csrf_exempt
 @api_view(['POST'])
 def manual_attendance(request):
+    # Time Restriction Logic (13:15)
+    now = timezone.localtime()
+    cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
+
+    # Check if user is director
+    is_director = False
+    if request.user.is_authenticated and hasattr(request.user, 'profile'):
+            if request.user.profile.role == 'director':
+                is_director = True
+
+    if now.time() > cutoff_time.time() and not is_director:
+            return Response({'error': 'انتهى وقت الإطعام (13:15)'}, status=status.HTTP_403_FORBIDDEN)
+
     student_id = request.data.get('student_id')
     # Can search by internal ID or student_id_number
     try:

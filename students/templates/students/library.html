@@ -656,7 +656,7 @@ async function deleteReadersHistory() {
 
 function showReportModal() {
     document.getElementById('reportModal').style.display = 'block';
-    document.getElementById('reportDate').textContent = 'تاريخ التقرير: ' + new Date().toLocaleDateString('ar-u-nu-latn');
+    document.getElementById('reportDate').textContent = 'تاريخ التقرير: ' + new Date().toLocaleDateString('ar-DZ', { numberingSystem: 'latn' });
 
     // Use the data loaded from loadStats()
     const data = window.libraryReportData;
