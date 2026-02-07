@@ -1,5 +1,24 @@
 {% extends 'base.html' %}
 {% block header_title %}الأرشيف{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-input {
+        font-size: 1.1rem !important; /* Larger font */
+        padding: 12px !important;
+    }
+    .archive-table td, .archive-table th {
+        padding: 12px;
+        text-align: center;
+    }
+    /* Force Western numerals for date inputs and specific text */
+    .western-nums, input[type="date"] {
+        font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif !important;
+        unicode-bidi: plaintext;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card" style="margin-bottom: 20px;">
     <h3><i class="fas fa-archive"></i> إضافة وثيقة أرشيف</h3>

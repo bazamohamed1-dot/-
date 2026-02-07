@@ -253,6 +253,8 @@ function enableEditing() {
     if (selectedIndex === -1) return alert("الرجاء اختيار تلميذ من القائمة أولاً");
     isEditMode = true;
     lockFields(false);
+    document.getElementById('editBtn').style.display = 'none';
+    document.getElementById('cancelEditBtn').style.display = 'inline-flex';
     document.getElementById('modeStatus').innerHTML = '<i class="fas fa-edit" style="color:#f59e0b"></i> وضع التعديل';
 }
 
