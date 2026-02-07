@@ -14,12 +14,13 @@ def landing_view(request):
 
 def dashboard(request):
     if not request.user.is_authenticated:
-        return redirect('landing')
+        return redirect('canteen_landing')
 
-    # Server-side Role Redirection
+    # Strict Role Redirection
     try:
         if hasattr(request.user, 'profile'):
             role = request.user.profile.role
+
             if role == 'librarian':
                 return redirect('library_home')
             elif role == 'storekeeper':
@@ -28,9 +29,17 @@ def dashboard(request):
                 return redirect('students_management')
             elif role == 'archivist':
                 return redirect('archive_home')
-            # Director continues to dashboard
+            elif role != 'director':
+                # Unknown role or unauthorized
+                return redirect('canteen_landing')
+            # Director continues
+        else:
+            # No profile (e.g., admin). If not superuser, redirect
+            if not request.user.is_superuser:
+                return redirect('canteen_landing')
+
     except Exception:
-        pass # Fallback to dashboard if profile error
+        return redirect('canteen_landing')
 
     context = {
         'total_students': Student.objects.count(),
