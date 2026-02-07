@@ -6,8 +6,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Auth Check
     if (!token) {
-        showLogin();
+        // Only show login if we are NOT already on the landing page or login related
+        if (window.location.pathname !== '/' && window.location.pathname !== '/canteen/') {
+             showLogin();
+        }
     } else {
+        // Check Role Redirect only once
+        // If we are already on a correct page, don't re-redirect unnecessarily
+
         // Verify online if possible
         if (navigator.onLine) {
             try {
@@ -22,17 +28,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (response.status === 401) {
                     logout(); // Invalid session
+                    return;
                 } else if (response.ok) {
                     const data = await response.json();
-                    sessionStorage.setItem('user_role', data.role); // Update role
+                    if(data.role !== role) {
+                        sessionStorage.setItem('user_role', data.role); // Update role only if changed
+                    }
                     checkRoleRedirect(data.role);
                 }
             } catch (e) {
                 console.log("Auth verify failed (offline?)", e);
+                checkRoleRedirect(role);
             }
+        } else {
+             // If offline, trust the token for now (PWA mode)
+             checkRoleRedirect(role);
         }
-        // If offline, trust the token for now (PWA mode)
-        checkRoleRedirect(role);
     }
 
     // Login Form Handler

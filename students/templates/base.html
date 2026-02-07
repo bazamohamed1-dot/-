@@ -204,32 +204,18 @@
     }
 
     // Enhanced Session Check on Load (Logout on Browser Close)
-    // We switched to sessionStorage in auth_manager.js.
-    // However, if any residuals are in localStorage, clean them up to avoid confusion.
-    window.addEventListener('load', async () => {
-         // Clean localStorage migration
-         if(localStorage.getItem('session_token')) {
-             localStorage.removeItem('session_token');
-             localStorage.removeItem('user_role');
-             localStorage.removeItem('username');
-         }
+    // Removed duplicate logic to avoid race conditions with auth_manager.js
+    // auth_manager.js handles the verify on DOMContentLoaded.
+    // We only keep the cleanup here to ensure localStorage is empty, but run it safely.
 
-         const token = sessionStorage.getItem('session_token');
-         if(token) {
-             try {
-                 const res = await fetch('/canteen/auth/verify/', {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-                     body: JSON.stringify({ token: token })
-                 });
-                 if(res.status === 401) {
-                     console.warn("Session expired on server. Logging out.");
-                     sessionStorage.clear();
-                     window.location.href = "{% url 'canteen_landing' %}";
-                 }
-             } catch(e) { console.error("Session verify error:", e); }
-         }
-    });
+    // Clean localStorage migration (Safe Run)
+    try {
+        if(localStorage.getItem('session_token')) {
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('user_role');
+            localStorage.removeItem('username');
+        }
+    } catch(e) { console.log("LocalStorage cleanup error", e); }
 
     // Update user info if logged in
     const uName = sessionStorage.getItem('username');
