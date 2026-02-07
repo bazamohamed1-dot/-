@@ -51,12 +51,21 @@ def dashboard(request):
     return render(request, 'students/dashboard.html', context)
 
 def settings_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('manage_settings'):
+         return redirect('dashboard')
+
     context = {
         'total_students': Student.objects.count(),
     }
     return render(request, 'students/settings.html', context)
 
 def import_eleve_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    # Check import permission
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('import_data'):
+         return redirect('dashboard')
+
     # Checkbox logic
     update_existing = request.POST.get('update_existing') == 'on'
 
@@ -95,24 +104,41 @@ def import_eleve_view(request):
     return redirect('settings')
 
 def canteen_home(request):
-    # This serves the new Canteen UI which extends base.html
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_canteen'):
+        return redirect('dashboard')
     return render(request, 'students/canteen.html')
 
 def student_list(request):
-    # This is the old list view, we are replacing it with the full management UI
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    # Use access_management for list too
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
+        return redirect('dashboard')
     return render(request, 'students/student_list.html')
 
 def students_management(request):
-    # The new merged interface
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
+        return redirect('dashboard')
     return render(request, 'students/management.html')
 
 def library_home(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_library'):
+        return redirect('dashboard')
     return render(request, 'students/library.html')
 
 def archive_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_archive'):
+        return redirect('dashboard')
     return render(request, 'students/archive.html')
 
 def print_student_cards(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
+        return redirect('dashboard')
+
     if request.method == 'POST':
         student_ids = request.POST.getlist('student_ids')
         students = Student.objects.filter(id__in=student_ids)

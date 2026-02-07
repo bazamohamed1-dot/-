@@ -216,7 +216,19 @@
             } else {
                 if (data.student) showStudent(data.student);
 
-                if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
+                if (data.code === 'LATE_ATE') {
+                    showAlert('التلميذ أخذ وجبته مسبقاً', 'warning');
+                    setTimeout(() => {
+                        showAlert('انتهى وقت الإطعام (المطعم مغلق)', 'danger');
+                    }, 2500);
+                }
+                else if (data.code === 'LATE_NOT_ATE') {
+                     showAlert('التلميذ لم يتناول الوجبة', 'warning');
+                     setTimeout(() => {
+                        showAlert('انتهى وقت الإطعام (المطعم مغلق)', 'danger');
+                    }, 2500);
+                }
+                else if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
                 else if (data.code === 'NOT_HALF_BOARD') showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'danger');
                 else if (data.code === 'NOT_FOUND') showAlert('خطأ: التلميذ غير موجود!', 'danger');
                 else {
