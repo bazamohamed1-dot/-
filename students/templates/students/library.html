@@ -291,7 +291,10 @@ async function scanCard(barcode) {
     try {
         const response = await fetch('/canteen/library/scan/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({ barcode: barcode })
         });
 
@@ -370,7 +373,10 @@ async function loanBook() {
     try {
         const response = await fetch('/canteen/library/loan/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({
                 student_id: currentStudentId,
                 book_title: title,
@@ -415,7 +421,10 @@ async function returnBook(loanId) {
     try {
         const response = await fetch('/canteen/library/return/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({ loan_id: loanId })
         });
 

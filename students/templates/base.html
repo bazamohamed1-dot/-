@@ -55,11 +55,18 @@
         .form-input,
         .number-display,
         .stat-value,
-        input[type="date"],
         input[type="number"],
         .date-text,
         .western-nums {
              font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif !important;
+             unicode-bidi: plaintext;
+        }
+
+        /* Fix for Date Inputs: Force LTR to prevent Hindi numerals and flipped formats */
+        input[type="date"] {
+             font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif !important;
+             direction: ltr !important;
+             text-align: right;
              unicode-bidi: plaintext;
         }
 
