@@ -1,5 +1,6 @@
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -283,6 +284,7 @@ def library_stats(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def scan_card(request):
     try:
         # Time Restriction Logic (13:15)
@@ -366,6 +368,7 @@ def get_canteen_stats(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def manual_attendance(request):
     # Time Restriction Logic (13:15)
     now = timezone.localtime()
