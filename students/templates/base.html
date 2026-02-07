@@ -242,6 +242,35 @@
         }
         return cookieValue;
     }
+
+    // Auto Logout on Inactivity (10 minutes)
+    let idleTime = 0;
+    const idleLimit = 10 * 60 * 1000; // 10 minutes in ms
+
+    function resetTimer() {
+        idleTime = 0;
+    }
+
+    window.onload = resetTimer;
+    window.onmousemove = resetTimer;
+    window.onmousedown = resetTimer;
+    window.ontouchstart = resetTimer;
+    window.onclick = resetTimer;
+    window.onkeypress = resetTimer;
+    window.addEventListener('scroll', resetTimer, true);
+
+    setInterval(() => {
+        idleTime += 1000;
+        if (idleTime >= idleLimit) {
+            // Logout
+            fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} })
+             .then(() => {
+                 localStorage.clear();
+                 authChannel.postMessage('logout');
+                 window.location.href = "{% url 'canteen_landing' %}";
+             });
+        }
+    }, 1000);
 </script>
 </body>
 </html>

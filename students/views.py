@@ -391,37 +391,34 @@ def get_attendance_lists(request):
 @csrf_exempt
 @api_view(['POST'])
 def export_canteen_sheet(request):
-    # Generates a daily report in-memory to avoid file locking issues
+    # Generates a cumulative report in-memory from DB history
     today = date.today()
     date_str = today.strftime("%Y-%m-%d")
 
-    # Get data for today
-    present_attendances = CanteenAttendance.objects.filter(date=today).select_related('student')
+    # Get All History (Optimized)
+    # We want to export the log of attendance.
+    # If the user wants "Absent" records for past days, we'd need to generate them (since we only store presence).
+    # However, usually "Canteen Log" implies who ate.
+    # The prompt said: "Save attendance list... accumulate days".
+    # So we export all `CanteenAttendance` records.
 
-    if not present_attendances.exists():
-         return Response({'message': 'لا يوجد حضور مسجل اليوم لتصديره'}, status=status.HTTP_200_OK)
+    all_attendance = CanteenAttendance.objects.select_related('student').order_by('-date', 'student__class_name')
+
+    if not all_attendance.exists():
+         return Response({'message': 'لا يوجد سجلات حضور لتصديرها'}, status=status.HTTP_200_OK)
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "سجل_المطعم_اليومي"
+    ws.title = "سجل_المطعم_التراكمي"
     ws.append(["التاريخ", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
 
     for cell in ws[1]:
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal='center')
 
-    present_ids = set()
-
-    # Append Present
-    for att in present_attendances:
+    for att in all_attendance:
         s = att.student
-        present_ids.add(s.id)
-        ws.append([date_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
-
-    # Append Absent
-    absent_students = Student.objects.filter(attendance_system='نصف داخلي').exclude(id__in=present_ids)
-    for s in absent_students:
-        ws.append([date_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "غائب"])
+        ws.append([str(att.date), s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
 
     # Save to memory buffer
     output = BytesIO()
@@ -429,5 +426,5 @@ def export_canteen_sheet(request):
     output.seek(0)
 
     response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_{date_str}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_Full_{date_str}.xlsx"'
     return response

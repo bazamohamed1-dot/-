@@ -34,6 +34,8 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1', '*']
 
 # Session Security
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True # Logout on browser close
+
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
