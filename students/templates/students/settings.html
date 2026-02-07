@@ -288,7 +288,7 @@ function getCookie(name) {
 
 // User Management Logic
 async function loadUsers() {
-    if (localStorage.getItem('user_role') !== 'director') return;
+    if (sessionStorage.getItem('user_role') !== 'director') return;
     document.getElementById('userManagementSection').style.display = 'block';
 
     try {

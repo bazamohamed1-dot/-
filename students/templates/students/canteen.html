@@ -448,7 +448,7 @@
     updatePresentList();
 
     // Restrict Export Button
-    const userRole = localStorage.getItem('user_role');
+    const userRole = sessionStorage.getItem('user_role');
     if (userRole !== 'director') {
         const btn = document.getElementById('exportBtn');
         if(btn) btn.style.display = 'none';

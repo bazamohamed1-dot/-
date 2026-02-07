@@ -43,7 +43,7 @@ class OfflineManager {
             method: method,
             data: data,
             timestamp: Date.now(),
-            token: localStorage.getItem('session_token')
+            token: sessionStorage.getItem('session_token')
         };
 
         store.add(request);
@@ -72,7 +72,7 @@ class OfflineManager {
             const cursor = e.target.result;
             if (cursor) {
                 const req = cursor.value;
-                const currentToken = localStorage.getItem('session_token');
+                const currentToken = sessionStorage.getItem('session_token');
 
                 // Verify session matches
                 if (req.token !== currentToken) {

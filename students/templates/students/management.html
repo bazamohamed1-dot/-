@@ -136,7 +136,7 @@
 
     <!-- Table -->
     <div class="table-container">
-        <form id="printForm" action="{% url 'print_student_cards' %}" method="POST" target="_blank">
+        <form id="printForm" action="{% url 'print_student_cards' %}" method="POST">
             {% csrf_token %}
             <table id="studentsTable">
                 <thead>
