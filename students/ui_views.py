@@ -5,6 +5,7 @@ from .models import Student, CanteenAttendance, SchoolSettings
 from datetime import date
 from io import StringIO
 import os
+import tempfile
 from django.conf import settings
 
 def landing_view(request):
@@ -76,22 +77,28 @@ def import_eleve_view(request):
     if request.method == 'POST' and request.FILES.get('eleve_file'):
         eleve_file = request.FILES['eleve_file']
 
-        # Save temporary file
-        temp_path = os.path.join(settings.BASE_DIR, 'temp_import.xls')
-        with open(temp_path, 'wb+') as destination:
-            for chunk in eleve_file.chunks():
-                destination.write(chunk)
-
-        out = StringIO()
+        # Use tempfile for safe file handling
         try:
-            # Call command with the temp file path and update flag
-            call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
-            messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xls') as tmp:
+                for chunk in eleve_file.chunks():
+                    tmp.write(chunk)
+                temp_path = tmp.name
+
+            out = StringIO()
+            # Call command
+            try:
+                call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
+                messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
+            except Exception as e:
+                # Catch specific command errors
+                messages.error(request, f"فشل الاستيراد: {str(e)}")
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
         except Exception as e:
-            messages.error(request, f"حدث خطأ أثناء الاستيراد: {str(e)}")
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            # Catch file handling errors
+            messages.error(request, f"خطأ في معالجة الملف: {str(e)}")
 
         return redirect('settings')
 
