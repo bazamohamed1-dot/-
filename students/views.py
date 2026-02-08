@@ -197,7 +197,7 @@ def get_readers(request):
     # Since a student can have multiple loans, returning "distinct student" hides details.
     # The user wants "When clicking reader list, show loan date and book".
     # This implies listing LOANS, not just unique students.
-    loans = LibraryLoan.objects.select_related('student').order_by('-loan_date')
+    loans = LibraryLoan.objects.select_related('student').order_by('-loan_date', '-loan_time')
     data = []
     for loan in loans:
         s = loan.student
@@ -207,7 +207,8 @@ def get_readers(request):
             'last_name': s.last_name,
             'class_name': s.class_name,
             'book_title': loan.book_title,
-            'loan_date': loan.loan_date
+            'loan_date': loan.loan_date,
+            'loan_time': loan.loan_time.strftime("%H:%M:%S") if loan.loan_time else ""
         })
     return Response(data)
 
