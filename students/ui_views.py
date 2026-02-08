@@ -96,15 +96,21 @@ def import_eleve_view(request):
                 call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
                 messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
             except Exception as e:
-                # Catch specific command errors
-                messages.error(request, f"فشل الاستيراد: {str(e)}")
+                import traceback
+                error_details = traceback.format_exc()
+                # Catch specific command errors and show traceback for debugging
+                messages.error(request, f"فشل الاستيراد: {str(e)} \n التفاصيل: {error_details}")
             finally:
                 if temp_path and os.path.exists(temp_path):
-                    os.remove(temp_path)
+                    try:
+                        os.remove(temp_path)
+                    except: pass
 
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
             # Catch file handling errors
-            messages.error(request, f"خطأ في معالجة الملف: {str(e)}")
+            messages.error(request, f"خطأ في معالجة الملف: {str(e)} \n التفاصيل: {error_details}")
             if temp_path and os.path.exists(temp_path):
                  try:
                     os.remove(temp_path)
