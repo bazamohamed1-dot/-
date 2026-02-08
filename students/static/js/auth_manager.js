@@ -5,8 +5,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Auth Check
     if (!token) {
         // Redirect to landing if not there
+        // If we are on a protected page but have no token, we MUST logout from backend to clear cookies
+        // Otherwise, backend sees us as logged in and redirects back -> Infinite Loop
         if (window.location.pathname !== '/' && window.location.pathname !== '/canteen/') {
-             window.location.href = '/canteen/';
+             fetch('/canteen/auth/logout/', {
+                 method: 'POST',
+                 headers: {'X-CSRFToken': getCookie('csrftoken')}
+             }).finally(() => {
+                 window.location.href = '/canteen/';
+             });
         }
     } else {
         // If we have a token, just check role redirection first to avoid UI flash
