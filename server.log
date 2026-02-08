@@ -55,3 +55,28 @@ Method Not Allowed: /canteen/auth/login/
 [08/Feb/2026 11:55:29] "GET /static/rest_framework/img/grid.png HTTP/1.1" 200 1458
 [08/Feb/2026 11:56:06] "GET /canteen/ HTTP/1.1" 200 15838
 [08/Feb/2026 11:56:08] "POST /canteen/auth/forgot_password/ HTTP/1.1" 200 109
+/app/students/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 08, 2026 - 11:53:50
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/app/students/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+February 08, 2026 - 12:35:13
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+[08/Feb/2026 12:36:30] "GET /canteen/ HTTP/1.1" 200 13559

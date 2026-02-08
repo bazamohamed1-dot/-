@@ -247,6 +247,7 @@
                     <th>القسم</th>
                     <th>الكتاب المعار</th>
                     <th>تاريخ الإعارة</th>
+                    <th>الوقت</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -268,6 +269,7 @@
                     <th>التلميذ المستعير</th>
                     <th>القسم</th>
                     <th>تاريخ الإعارة</th>
+                    <th>الوقت</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -624,6 +626,7 @@ async function showReadersModal() {
                 <td>${s.class_name}</td>
                 <td>${s.book_title}</td>
                 <td class="western-nums" style="direction:ltr;">${s.loan_date}</td>
+                <td class="western-nums" style="direction:ltr;">${s.loan_time || '--'}</td>
             </tr>
         `).join('');
 
@@ -653,6 +656,7 @@ async function showBooksModal() {
                 <td>${s.last_name} ${s.first_name}</td>
                 <td>${s.class_name}</td>
                 <td class="western-nums" style="direction:ltr;">${s.loan_date}</td>
+                <td class="western-nums" style="direction:ltr;">${s.loan_time || '--'}</td>
             </tr>
         `).join('');
 

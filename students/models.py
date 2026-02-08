@@ -45,6 +45,7 @@ class LibraryLoan(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
     book_title = models.CharField(max_length=200, verbose_name="عنوان الكتاب")
     loan_date = models.DateField(default=date.today, verbose_name="تاريخ الإعارة")
+    loan_time = models.TimeField(auto_now_add=True, verbose_name="وقت الإعارة", null=True, blank=True)
     expected_return_date = models.DateField(verbose_name="تاريخ الإرجاع المحدد")
     is_returned = models.BooleanField(default=False, verbose_name="تم الإرجاع")
     actual_return_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الإرجاع الفعلي")
