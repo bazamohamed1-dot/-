@@ -14,16 +14,13 @@ class OfflineManager {
     async initDB() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
-
             request.onerror = (e) => reject(e);
-
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains('outbox')) {
                     db.createObjectStore('outbox', { autoIncrement: true });
                 }
             };
-
             request.onsuccess = (e) => {
                 this.db = e.target.result;
                 resolve(this.db);
@@ -34,10 +31,8 @@ class OfflineManager {
 
     async addToOutbox(url, method, data) {
         if (!this.db) await this.initDB();
-
         const transaction = this.db.transaction(['outbox'], 'readwrite');
         const store = transaction.objectStore('outbox');
-
         const request = {
             url: url,
             method: method,
@@ -45,19 +40,9 @@ class OfflineManager {
             timestamp: Date.now(),
             token: sessionStorage.getItem('session_token')
         };
-
         store.add(request);
         console.log('Saved to outbox', request);
-
-        // Show notification
-        if(window.alert) {
-             // Optional: visual feedback
-             const div = document.createElement('div');
-             div.textContent = 'تم حفظ البيانات محلياً (Offline)';
-             div.style.cssText = 'position:fixed;bottom:20px;left:20px;background:orange;color:white;padding:10px;border-radius:5px;z-index:10000;';
-             document.body.appendChild(div);
-             setTimeout(() => div.remove(), 3000);
-        }
+        // Silent save (User Requirement: "لا تضع أي أزرار للمزامنة... تتم في الخلفية تماماً")
     }
 
     async syncData() {
@@ -66,53 +51,49 @@ class OfflineManager {
 
         const transaction = this.db.transaction(['outbox'], 'readwrite');
         const store = transaction.objectStore('outbox');
-        const request = store.openCursor();
+        const request = store.getAll();
 
         request.onsuccess = async (e) => {
-            const cursor = e.target.result;
-            if (cursor) {
-                const req = cursor.value;
-                const currentToken = sessionStorage.getItem('session_token');
+            const items = e.target.result;
+            if (!items || items.length === 0) return;
 
-                // Verify session matches
-                if (req.token !== currentToken) {
-                    console.error("Skipping sync item from different session");
-                    cursor.delete();
-                    cursor.continue();
-                    return;
+            const currentToken = sessionStorage.getItem('session_token');
+            // Filter valid items for current session
+            const validItems = items.filter(i => i.token === currentToken);
+
+            if (validItems.length === 0) {
+                 // Clear old junk?
+                 // Maybe later.
+                 return;
+            }
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                };
+
+                // Add Device ID
+                const deviceId = localStorage.getItem('device_id');
+                if (deviceId) headers['X-Device-ID'] = deviceId;
+
+                // Send to Sync Endpoint
+                const response = await fetch('/canteen/api/sync/', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(validItems)
+                });
+
+                if (response.ok) {
+                    console.log("Synced items successfully");
+                    // Clear Outbox
+                    const clearTrans = this.db.transaction(['outbox'], 'readwrite');
+                    clearTrans.objectStore('outbox').clear();
+                } else {
+                    console.error("Sync failed", response.status);
                 }
-
-                try {
-                    const headers = {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    };
-
-                    const response = await fetch(req.url, {
-                        method: req.method,
-                        headers: headers,
-                        body: JSON.stringify(req.data)
-                    });
-
-                    if (response.ok || response.status === 400 || response.status === 500) {
-                        // If 400/500, it reached server. We delete to prevent infinite loop of bad requests.
-                        console.log("Synced item:", req.url);
-                        cursor.delete();
-
-                        // Notify
-                        const div = document.createElement('div');
-                        div.textContent = 'تمت مزامنة البيانات بنجاح';
-                        div.style.cssText = 'position:fixed;bottom:20px;left:20px;background:green;color:white;padding:10px;border-radius:5px;z-index:10000;';
-                        document.body.appendChild(div);
-                        setTimeout(() => div.remove(), 3000);
-                    } else {
-                        console.error("Sync failed (network?) for", req.url, response.status);
-                    }
-                } catch (err) {
-                    console.error("Sync error", err);
-                }
-
-                cursor.continue();
+            } catch (err) {
+                console.error("Sync error", err);
             }
         };
     }
@@ -125,10 +106,17 @@ window.apiFetch = async (url, options = {}) => {
     // Inject CSRF if missing
     if (!options.headers) options.headers = {};
     if (!options.headers['X-CSRFToken']) {
-        options.headers['X-CSRFToken'] = getCookie('csrftoken');
+        const token = getCookie('csrftoken');
+        if(token) options.headers['X-CSRFToken'] = token;
     }
     if (!options.headers['Content-Type']) {
         options.headers['Content-Type'] = 'application/json';
+    }
+
+    // Inject Device ID
+    const deviceId = localStorage.getItem('device_id');
+    if (deviceId) {
+        options.headers['X-Device-ID'] = deviceId;
     }
 
     if (navigator.onLine) {

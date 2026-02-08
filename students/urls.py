@@ -2,11 +2,15 @@ from django.urls import path, include
 from . import views
 from . import ui_views
 from . import auth_views
+from . import sync_views
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register(r'users', auth_views.UserManagementViewSet)
 router.register(r'archive/docs', views.ArchiveDocumentViewSet, basename='archive_docs')
+router.register(r'students', views.StudentViewSet)
+router.register(r'pending_updates', sync_views.PendingUpdateViewSet, basename='pending_updates')
+router.register(r'system_messages', sync_views.SystemMessageViewSet, basename='system_messages')
 
 urlpatterns = [
     # Landing
@@ -16,6 +20,10 @@ urlpatterns = [
     path('auth/logout/', auth_views.logout_view, name='auth_logout'),
     path('auth/forgot_password/', auth_views.forgot_password, name='auth_forgot_password'),
     path('auth/verify/', auth_views.verify_session, name='auth_verify'),
+
+    # Sync API
+    path('api/sync/', sync_views.SyncViewSet.as_view({'post': 'create'}), name='sync_data'),
+
     path('api/', include(router.urls)),
 
     # UI Views

@@ -1,5 +1,16 @@
 from rest_framework import serializers
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, PendingUpdate, SystemMessage
+
+class PendingUpdateSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    class Meta:
+        model = PendingUpdate
+        fields = '__all__'
+
+class SystemMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemMessage
+        fields = '__all__'
 
 class ArchiveDocumentSerializer(serializers.ModelSerializer):
     class Meta:

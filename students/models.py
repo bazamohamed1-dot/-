@@ -115,6 +115,7 @@ class EmployeeProfile(models.Model):
     failed_login_attempts = models.IntegerField(default=0, verbose_name="محاولات الدخول الفاشلة")
     is_locked = models.BooleanField(default=False, verbose_name="الحساب مقفل")
     current_session_token = models.CharField(max_length=100, null=True, blank=True, verbose_name="رمز الجلسة الحالي")
+    device_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="معرف الجهاز")
     permissions = models.JSONField(default=list, blank=True, verbose_name="الصلاحيات")
 
     def has_perm(self, perm):
@@ -124,3 +125,26 @@ class EmployeeProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.get_role_display()}"
+
+class PendingUpdate(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="المستخدم")
+    model_name = models.CharField(max_length=50, verbose_name="النموذج")
+    action = models.CharField(max_length=20, verbose_name="الإجراء") # create, update, delete
+    data = models.JSONField(verbose_name="البيانات")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="التوقيت")
+    status = models.CharField(max_length=20, default='pending', verbose_name="الحالة") # pending, approved, rejected
+
+    class Meta:
+        verbose_name = "تحديث معلق"
+        verbose_name_plural = "التحديثات المعلقة"
+        ordering = ['-timestamp']
+
+class SystemMessage(models.Model):
+    message = models.TextField(verbose_name="الرسالة")
+    active = models.BooleanField(default=True, verbose_name="نشطة")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name="تاريخ الانتهاء")
+
+    class Meta:
+        verbose_name = "رسالة النظام"
+        verbose_name_plural = "رسائل النظام"
