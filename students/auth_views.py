@@ -15,84 +15,89 @@ def forgot_password(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
-    username = request.data.get('username')
-    password = request.data.get('password')
-
     try:
-        user = User.objects.get(username=username)
-    except User.DoesNotExist:
-        return Response({'error': 'اسم المستخدم أو كلمة المرور غير صحيحة'}, status=status.HTTP_400_BAD_REQUEST)
+        username = request.data.get('username')
+        password = request.data.get('password')
 
-    if not hasattr(user, 'profile'):
-        # Auto-create profile for superuser or legacy users if missing, defaulting to director for safety if superuser
-        role = 'director' if user.is_superuser else 'secretariat'
-        EmployeeProfile.objects.create(user=user, role=role)
-
-    profile = user.profile
-
-    if profile.is_locked:
-        return Response({'error': 'الحساب مقفل. يرجى الاتصال بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
-
-    user_auth = authenticate(username=username, password=password)
-
-    if user_auth is not None:
-        # Success
-        profile.failed_login_attempts = 0
-
-        # Device Lock Logic
-        device_id_to_send = None
         try:
-            if profile.device_id:
-                if profile.device_id.startswith('PENDING:'):
-                    # Provisioning Mode
-                    real_id = profile.device_id.split(':')[1]
-                    profile.device_id = real_id
-                    device_id_to_send = real_id
-                    profile.save()
-                else:
-                    # Enforce Mode
-                    # Handle both META and headers for compatibility
-                    client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'اسم المستخدم أو كلمة المرور غير صحيحة'}, status=status.HTTP_400_BAD_REQUEST)
 
-                    # If client_id is missing, or doesn't match
-                    if not client_id or client_id != profile.device_id:
-                         # Strict Lock
-                         return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
-                    device_id_to_send = profile.device_id
-        except Exception as e:
-            # Fallback in case of unexpected error during lock check, log it but don't crash
-            print(f"Device Lock Error: {e}")
-            # Ensure we return JSON, not HTML 500
-            return Response({'error': 'خطأ في الخادم أثناء التحقق من الجهاز', 'code': 'SERVER_ERROR'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        if not hasattr(user, 'profile'):
+            # Auto-create profile for superuser or legacy users if missing, defaulting to director for safety if superuser
+            role = 'director' if user.is_superuser else 'secretariat'
+            EmployeeProfile.objects.create(user=user, role=role)
 
-        # Generate Session Token
-        token = secrets.token_hex(32)
-        profile.current_session_token = token
-        profile.save()
+        profile = user.profile
 
-        login(request, user)
+        if profile.is_locked:
+            return Response({'error': 'الحساب مقفل. يرجى الاتصال بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Log Activity
-        UserActivityLog.objects.create(user=user, action='login')
+        user_auth = authenticate(username=username, password=password)
 
-        return Response({
-            'message': 'تم تسجيل الدخول بنجاح',
-            'token': token,
-            'role': profile.role,
-            'username': user.username,
-            'device_id': device_id_to_send
-        })
-    else:
-        # Fail
-        profile.failed_login_attempts += 1
-        if profile.failed_login_attempts >= 3:
-            profile.is_locked = True
+        if user_auth is not None:
+            # Success
+            profile.failed_login_attempts = 0
+
+            # Device Lock Logic
+            device_id_to_send = None
+            try:
+                if profile.device_id:
+                    if profile.device_id.startswith('PENDING:'):
+                        # Provisioning Mode
+                        real_id = profile.device_id.split(':')[1]
+                        profile.device_id = real_id
+                        device_id_to_send = real_id
+                        profile.save()
+                    else:
+                        # Enforce Mode
+                        # Handle both META and headers for compatibility
+                        client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+
+                        # If client_id is missing, or doesn't match
+                        if not client_id or client_id != profile.device_id:
+                            # Strict Lock
+                            return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+                        device_id_to_send = profile.device_id
+            except Exception as e:
+                print(f"Device Lock Error: {e}")
+                # Don't block login if device check fails internally (allow access but log)
+                # Or block? User requested robust system. Let's return error but as JSON.
+                return Response({'error': f'خطأ في التحقق من الجهاز: {str(e)}', 'code': 'SERVER_ERROR'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Generate Session Token
+            token = secrets.token_hex(32)
+            profile.current_session_token = token
             profile.save()
-            return Response({'error': 'تم قفل الحساب بسبب تكرار المحاولات الخاطئة. اتصل بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
 
-        profile.save()
-        remaining = 3 - profile.failed_login_attempts
-        return Response({'error': f'معلومات غير صحيحة. بقي لديك {remaining} محاولات.', 'code': 'INVALID_CREDS'}, status=status.HTTP_400_BAD_REQUEST)
+            login(request, user)
+
+            # Log Activity
+            UserActivityLog.objects.create(user=user, action='login')
+
+            return Response({
+                'message': 'تم تسجيل الدخول بنجاح',
+                'token': token,
+                'role': profile.role,
+                'username': user.username,
+                'device_id': device_id_to_send
+            })
+        else:
+            # Fail
+            profile.failed_login_attempts += 1
+            if profile.failed_login_attempts >= 3:
+                profile.is_locked = True
+                profile.save()
+                return Response({'error': 'تم قفل الحساب بسبب تكرار المحاولات الخاطئة. اتصل بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+
+            profile.save()
+            remaining = 3 - profile.failed_login_attempts
+            return Response({'error': f'معلومات غير صحيحة. بقي لديك {remaining} محاولات.', 'code': 'INVALID_CREDS'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({'error': f'Internal Server Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 def verify_session(request):
