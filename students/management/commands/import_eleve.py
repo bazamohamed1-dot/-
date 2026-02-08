@@ -27,46 +27,46 @@ class Command(BaseCommand):
         self.to_update = []
         self.processed_ids_in_file = set()
 
-        # Try HTML (bs4) first
-        html_success = False
+        # Robust Multi-Format Strategy: HTML > XLS > XLSX
+
+        # 1. Try HTML (bs4) - Common for "Eleve.xls" exports
         try:
             success = self.import_html(file_path)
             if success:
-                self.process_batches(update_existing, mode="HTML")
-                html_success = True
-            else:
-                self.stdout.write(self.style.WARNING('HTML parser found 0 records. Attempting Excel parser...'))
+                self.process_batches(update_existing, mode="HTML (Spoofed XLS)")
+                return
         except Exception as e:
-            self.stdout.write(self.style.WARNING(f'HTML parsing failed or file is not HTML ({str(e)}). Attempting Excel parser...'))
+            self.stdout.write(self.style.WARNING(f'HTML parser skipped: {str(e)}'))
 
-        if html_success:
-            return
-
-        # Try Excel (openpyxl)
-        # Reset lists if HTML failed partially (though usually it fails before adding anything if format is wrong)
+        # Reset lists
         self.to_create = []
         self.to_update = []
         self.processed_ids_in_file = set()
 
-        # Try Excel .xlsx (openpyxl)
-        try:
-            success = self.import_excel_xlsx(file_path)
-            if success:
-                self.process_batches(update_existing, mode="Excel (xlsx)")
-                return
-        except Exception as e:
-            self.stdout.write(self.style.WARNING(f'XLSX parser failed: {str(e)}'))
-
-        # Try Excel .xls (xlrd)
+        # 2. Try Excel .xls (xlrd)
         try:
             success = self.import_excel_xls(file_path)
             if success:
                 self.process_batches(update_existing, mode="Excel (xls)")
                 return
         except Exception as e:
-            self.stdout.write(self.style.WARNING(f'XLS parser failed: {str(e)}'))
+            self.stdout.write(self.style.WARNING(f'XLS parser skipped: {str(e)}'))
 
-        raise Exception('All import methods failed.')
+        # Reset lists
+        self.to_create = []
+        self.to_update = []
+        self.processed_ids_in_file = set()
+
+        # 3. Try Excel .xlsx (openpyxl)
+        try:
+            success = self.import_excel_xlsx(file_path)
+            if success:
+                self.process_batches(update_existing, mode="Excel (xlsx)")
+                return
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'XLSX parser skipped: {str(e)}'))
+
+        raise Exception('فشل استيراد الملف بجميع الطرق المتاحة. تأكد من أن الملف سليم ويحتوي على بيانات.')
 
     def process_batches(self, update_existing, mode):
         created_count = 0
@@ -88,22 +88,44 @@ class Command(BaseCommand):
 
 
     def import_html(self, file_path):
+        # Attempt to read file as text
+        content = ""
         try:
             with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
-        except UnicodeDecodeError:
-            raise ValueError("File is binary or not UTF-8")
+        except Exception:
+            # Maybe binary?
+            pass
 
+        # Check signature
         if "<html" not in content.lower() and "<table" not in content.lower():
-             raise ValueError("Content does not look like HTML")
+             # Last ditch: try to parse with bs4 even if binary-ish (bs4 handles some mess)
+             # But if it's purely binary XLS, bs4 will just find nothing.
+             if not content:
+                 raise ValueError("File cannot be read as text")
+
+             # If no tags found, it's not HTML
+             if not BeautifulSoup(content, "html.parser").find("table"):
+                raise ValueError("Content does not look like HTML table")
 
         soup = BeautifulSoup(content, 'html.parser')
         rows = soup.find_all('tr')
 
         found_any = False
         for row in rows:
-            cols = [c.get_text(strip=True) for c in row.find_all('td')]
-            if not cols or len(cols) < 15:
+            # Handle both th and td, sometimes headers are mixed
+            cells = row.find_all(['td', 'th'])
+            cols = [c.get_text(strip=True) for c in cells]
+
+            # Remove empty strings from end if any
+            while cols and not cols[-1]:
+                cols.pop()
+
+            if not cols or len(cols) < 14: # Relaxed count slightly
+                continue
+
+            # Check if first col is ID (numeric)
+            if not cols[0].isdigit():
                 continue
 
             self.parse_and_prepare(cols)

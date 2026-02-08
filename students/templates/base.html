@@ -84,16 +84,19 @@
 
         /* Toggle Button */
         .toggle-sidebar {
-            display: none; background: none; border: none; font-size: 1.5rem; color: var(--primary); cursor: pointer; margin-left: 15px;
+            display: none; background: none; border: none; font-size: 1.8rem; color: var(--primary); cursor: pointer; margin-left: 15px; padding: 10px;
         }
 
         /* Responsive Design */
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(100%); /* Hide sidebar by moving it right */
+                width: 80%; /* Partial width on mobile for overlay effect */
+                max-width: 300px;
             }
             .sidebar.active {
                 transform: translateX(0); /* Show sidebar */
+                box-shadow: -5px 0 20px rgba(0,0,0,0.5);
             }
             .main {
                 margin-right: 0;
