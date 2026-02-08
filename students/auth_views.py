@@ -39,6 +39,24 @@ def login_view(request):
         # Success
         profile.failed_login_attempts = 0
 
+        # Device Lock Logic
+        device_id_to_send = None
+        if profile.device_id:
+            if profile.device_id.startswith('PENDING:'):
+                # Provisioning Mode
+                real_id = profile.device_id.split(':')[1]
+                profile.device_id = real_id
+                device_id_to_send = real_id
+                profile.save()
+            else:
+                # Enforce Mode
+                client_id = request.headers.get('X-Device-ID')
+                # If client_id is missing, or doesn't match
+                if not client_id or client_id != profile.device_id:
+                     # Strict Lock
+                     return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+                device_id_to_send = profile.device_id
+
         # Generate Session Token
         token = secrets.token_hex(32)
         profile.current_session_token = token
@@ -53,7 +71,8 @@ def login_view(request):
             'message': 'تم تسجيل الدخول بنجاح',
             'token': token,
             'role': profile.role,
-            'username': user.username
+            'username': user.username,
+            'device_id': device_id_to_send
         })
     else:
         # Fail
@@ -116,6 +135,11 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             seen.add(u.id)
             try:
                 prof = u.profile
+                device_status = 'غير مفعل'
+                if prof.device_id:
+                    if prof.device_id.startswith('PENDING:'): device_status = 'بانتظار التفعيل'
+                    else: device_status = 'مفعل'
+
                 data.append({
                     'id': u.id,
                     'username': u.username,
@@ -123,7 +147,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'role_display': prof.get_role_display(),
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
-                    'permissions': prof.permissions
+                    'permissions': prof.permissions,
+                    'device_status': device_status
                 })
             except:
                 pass
@@ -234,3 +259,21 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
         UserActivityLog.objects.all().delete()
         return Response({'message': 'Logs cleared'})
+
+    @action(detail=True, methods=['post'])
+    def activate_device(self, request, pk=None):
+        if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
+        user = self.get_object()
+        import uuid
+        new_id = str(uuid.uuid4())
+        user.profile.device_id = f"PENDING:{new_id}"
+        user.profile.save()
+        return Response({'message': 'تم تفعيل حماية الجهاز. سيتم ربط الجهاز عند تسجيل الدخول القادم.'})
+
+    @action(detail=True, methods=['post'])
+    def reset_device(self, request, pk=None):
+        if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
+        user = self.get_object()
+        user.profile.device_id = None
+        user.profile.save()
+        return Response({'message': 'تم تعطيل حماية الجهاز.'})

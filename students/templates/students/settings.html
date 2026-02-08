@@ -62,6 +62,39 @@
     </div>
 </div>
 
+<!-- Pending Updates Section -->
+<div class="card" id="pendingUpdatesSection" style="display:none; margin-bottom: 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+        <h3><i class="fas fa-sync-alt"></i> التحديثات المعلقة</h3>
+        <div style="display:flex; gap:10px;">
+             <button class="btn btn-success" onclick="approveAllUpdates()"><i class="fas fa-check-double"></i> اعتماد الكل</button>
+             <button class="btn btn-danger" onclick="rejectAllUpdates()"><i class="fas fa-trash"></i> رفض الكل</button>
+        </div>
+    </div>
+    <table style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background:#f8fafc; text-align:right;">
+                <th style="padding:10px;">المستخدم</th>
+                <th style="padding:10px;">النموذج</th>
+                <th style="padding:10px;">الإجراء</th>
+                <th style="padding:10px;">التوقيت</th>
+                <th style="padding:10px;">البيانات</th>
+                <th style="padding:10px;">إجراءات</th>
+            </tr>
+        </thead>
+        <tbody id="pendingUpdatesBody"></tbody>
+    </table>
+</div>
+
+<!-- System Messages Section -->
+<div class="card" id="systemMsgSection" style="display:none; margin-bottom: 20px;">
+    <h3><i class="fas fa-bullhorn"></i> رسائل النظام</h3>
+    <form onsubmit="postSystemMessage(event)" style="margin-top:15px;">
+        <textarea id="sysMsgText" class="form-input" placeholder="اكتب رسالة تظهر لجميع المستخدمين..." style="width:100%; height:80px; margin-bottom:10px; padding:10px;" required></textarea>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> نشر الرسالة</button>
+    </form>
+</div>
+
 <!-- User Management Section -->
 <div class="card" id="userManagementSection" style="display:none; margin-bottom: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
@@ -78,6 +111,7 @@
                 <th style="padding:10px;">اسم المستخدم</th>
                 <th style="padding:10px;">الدور</th>
                 <th style="padding:10px;">الحالة</th>
+                <th style="padding:10px;">حماية الجهاز</th>
                 <th style="padding:10px;">المحاولات</th>
                 <th style="padding:10px;">إجراءات</th>
             </tr>
@@ -202,6 +236,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadUsers();
+    loadPendingUpdates();
 });
 
 async function loadSettings() {
@@ -345,6 +380,8 @@ function getCookie(name) {
 async function loadUsers() {
     if (sessionStorage.getItem('user_role') !== 'director') return;
     document.getElementById('userManagementSection').style.display = 'block';
+    document.getElementById('pendingUpdatesSection').style.display = 'block';
+    document.getElementById('systemMsgSection').style.display = 'block';
 
     try {
         const response = await fetch('/canteen/api/users/');
@@ -356,12 +393,22 @@ async function loadUsers() {
 
         users.forEach(u => {
             const tr = document.createElement('tr');
+            let deviceBtn = '';
+            if (u.device_status === 'مفعل') {
+                deviceBtn = `<button class="btn btn-danger" onclick="resetDevice(${u.id})" style="padding:5px 10px;" title="تعطيل حماية الجهاز"><i class="fas fa-mobile-alt"></i> تعطيل</button>`;
+            } else if (u.device_status === 'بانتظار التفعيل') {
+                deviceBtn = `<span style="color:orange; font-size:0.8em">بانتظار الدخول...</span> <button class="btn btn-warning" onclick="resetDevice(${u.id})" style="padding:2px 5px;"><i class="fas fa-times"></i></button>`;
+            } else {
+                deviceBtn = `<button class="btn btn-success" onclick="activateDevice(${u.id})" style="padding:5px 10px;" title="تفعيل حماية الجهاز"><i class="fas fa-mobile-alt"></i> تفعيل</button>`;
+            }
+
             tr.innerHTML = `
                 <td class="western-nums" style="direction:ltr; text-align:left;">${u.username}</td>
                 <td>${u.role_display}</td>
                 <td>
                     ${u.is_locked ? '<span style="color:red; font-weight:bold;">مقفل</span>' : '<span style="color:green;">نشط</span>'}
                 </td>
+                <td>${deviceBtn}</td>
                 <td class="western-nums">${u.failed_attempts}</td>
                 <td>
                     <button class="btn btn-info" onclick='editUser(${JSON.stringify(u).replace(/'/g, "&#39;")})' style="padding:5px 10px;"><i class="fas fa-edit"></i></button>
@@ -375,6 +422,150 @@ async function loadUsers() {
     } catch (e) {
         console.error(e);
     }
+}
+
+async function activateDevice(id) {
+    if(!confirm("هل أنت متأكد من تفعيل حماية الجهاز لهذا المستخدم؟ سيتم ربط أول جهاز يقوم بتسجيل الدخول.")) return;
+    try {
+        const response = await fetch(`/canteen/api/users/${id}/activate_device/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if (response.ok) {
+            alert("تم التفعيل. سيتم الربط عند الدخول القادم.");
+            loadUsers();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+async function resetDevice(id) {
+    if(!confirm("هل أنت متأكد من تعطيل/إعادة ضبط حماية الجهاز؟")) return;
+    try {
+        const response = await fetch(`/canteen/api/users/${id}/reset_device/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if (response.ok) {
+            alert("تم تعطيل الحماية.");
+            loadUsers();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+// Pending Updates Logic
+async function loadPendingUpdates() {
+    if (sessionStorage.getItem('user_role') !== 'director') return;
+
+    try {
+        const response = await fetch('/canteen/api/pending_updates/');
+        const updates = await response.json();
+        const tbody = document.getElementById('pendingUpdatesBody');
+        tbody.innerHTML = '';
+
+        if (updates.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">لا توجد تحديثات معلقة</td></tr>';
+            return;
+        }
+
+        updates.forEach(u => {
+            let dataSummary = '';
+            try {
+                // Try to show something meaningful
+                const d = u.data.data || u.data;
+                if (u.model_name === 'Student') {
+                    dataSummary = `تلميذ: ${d.last_name || ''} ${d.first_name || ''}`;
+                } else if (u.model_name === 'CanteenAttendance') {
+                    dataSummary = `مطعم: ${d.barcode || d.student_id || 'Unknown'}`;
+                } else {
+                    dataSummary = JSON.stringify(d).substring(0, 50) + '...';
+                }
+            } catch(e) { dataSummary = 'Error parsing data'; }
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${u.username || 'Unknown'}</td>
+                <td>${u.model_name}</td>
+                <td>${u.action}</td>
+                <td class="western-nums" style="direction:ltr;">${new Date(u.timestamp).toLocaleString()}</td>
+                <td>${dataSummary}</td>
+                <td>
+                    <button class="btn btn-success" onclick="approveUpdate(${u.id})" style="padding:5px 10px;">اعتماد</button>
+                    <button class="btn btn-danger" onclick="rejectUpdate(${u.id})" style="padding:5px 10px;">رفض</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+    } catch(e) { console.error(e); }
+}
+
+async function approveUpdate(id) {
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/${id}/approve/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            loadPendingUpdates();
+        } else {
+            alert("حدث خطأ");
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+async function rejectUpdate(id) {
+    if(!confirm("هل أنت متأكد من الرفض؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/${id}/`, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) loadPendingUpdates();
+    } catch(e) { alert("خطأ"); }
+}
+
+async function approveAllUpdates() {
+    if(!confirm("اعتماد الكل؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/approve_all/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            alert("تم الاعتماد");
+            loadPendingUpdates();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+async function rejectAllUpdates() {
+     if(!confirm("رفض الكل وحذف القائمة؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/reject_all/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) loadPendingUpdates();
+    } catch(e) { alert("خطأ"); }
+}
+
+async function postSystemMessage(e) {
+    e.preventDefault();
+    const msg = document.getElementById('sysMsgText').value;
+    try {
+        const res = await fetch('/canteen/api/system_messages/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ message: msg, active: true })
+        });
+        if(res.ok) {
+            alert("تم نشر الرسالة");
+            document.getElementById('sysMsgText').value = '';
+        }
+    } catch(e) { alert("خطأ"); }
 }
 
 function openAddUserModal() {

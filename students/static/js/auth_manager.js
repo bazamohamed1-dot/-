@@ -22,12 +22,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Verify online if possible (Background Check)
         if (navigator.onLine) {
+            const deviceId = localStorage.getItem('device_id');
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            };
+            if(deviceId) headers['X-Device-ID'] = deviceId;
+
             fetch('/canteen/auth/verify/', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
+                headers: headers,
                 body: JSON.stringify({ token: token })
             })
             .then(res => {
@@ -55,9 +59,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const errorDiv = document.getElementById('loginError');
 
         try {
+            const deviceId = localStorage.getItem('device_id');
+            const headers = { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') };
+            if(deviceId) headers['X-Device-ID'] = deviceId;
+
             const response = await fetch('/canteen/auth/login/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                headers: headers,
                 body: JSON.stringify({ username, password })
             });
 
@@ -67,6 +75,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 sessionStorage.setItem('session_token', data.token);
                 sessionStorage.setItem('user_role', data.role);
                 sessionStorage.setItem('username', data.username);
+                if (data.device_id) {
+                    localStorage.setItem('device_id', data.device_id);
+                }
                 location.reload();
             } else {
                 errorDiv.textContent = data.error || 'فشل تسجيل الدخول';
