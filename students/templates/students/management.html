@@ -396,6 +396,9 @@ async function saveCurrent() {
             // We'll keep the alert but ensure no prior confirmation dialog existed (which it didn't in saveCurrent).
             alert("تم الحفظ بنجاح");
 
+            // Turn off edit mode immediately to prevent "Ignore changes?" prompt in fillForm
+            isEditMode = false;
+
             await fetchStudents();
 
             if (dbId && dbId !== "undefined" && dbId !== "") {
