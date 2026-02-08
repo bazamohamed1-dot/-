@@ -51,7 +51,10 @@
             </div>
             <input type="file" id="imageSelector" style="display:none" accept="image/*" onchange="handleImageSelection(this)">
             <button class="btn btn-primary" id="photoBtn" style="width:100%; background:#e2e8f0; color:#333;" onclick="triggerImageSelect()">
-                <i class="fas fa-camera"></i> صورة
+                <i class="fas fa-upload"></i> تنزيل صورة
+            </button>
+            <button class="btn btn-secondary" id="cameraBtn" style="width:100%; background:#e2e8f0; color:#333; margin-top:5px;" onclick="openCameraModal()">
+                <i class="fas fa-camera"></i> التقاط بالكاميرا
             </button>
             <button class="btn btn-danger" id="deletePhotoBtn" style="width:100%; display:none;" onclick="removePhotoImage()">
                 <i class="fas fa-trash-alt"></i> حذف
@@ -168,6 +171,19 @@
         </form>
     </div>
 </div>
+
+<!-- Camera Modal -->
+<div id="cameraModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:20px; border-radius:12px; width:400px; text-align:center;">
+        <h3 style="margin-top:0;">التقاط صورة</h3>
+        <video id="cameraFeed" autoplay playsinline style="width:100%; border-radius:8px; background:black; transform: scaleX(-1);"></video>
+        <canvas id="cameraCanvas" style="display:none;"></canvas>
+        <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
+            <button onclick="capturePhoto()" class="btn btn-success"><i class="fas fa-camera"></i> التقاط</button>
+            <button onclick="closeCameraModal()" class="btn btn-danger"><i class="fas fa-times"></i> إلغاء</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -242,6 +258,8 @@ function lockFields(lock) {
     });
     document.getElementById('photoBtn').disabled = lock;
     document.getElementById('photoBtn').style.opacity = lock ? "0.5" : "1";
+    document.getElementById('cameraBtn').disabled = lock;
+    document.getElementById('cameraBtn').style.opacity = lock ? "0.5" : "1";
     document.getElementById('deletePhotoBtn').style.display = (!lock && isEditMode) ? "block" : "none";
 }
 
@@ -378,17 +396,20 @@ async function saveCurrent() {
             // We'll keep the alert but ensure no prior confirmation dialog existed (which it didn't in saveCurrent).
             alert("تم الحفظ بنجاح");
 
-            // Wait for fetch to complete but DO NOT reset the form if it was an edit
-            // The user wants "Just press save...". Usually this implies staying on the record or seamless update.
-            // If we reset (prepareNew), the user loses context.
-            // Let's refresh the list but keep the form filled with updated data if needed.
             await fetchStudents();
 
-            // If it was a new entry, maybe clear? But if edit, keep it.
-            if (!method === 'POST') { // Edit
-                 // Ideally re-select the row.
+            if (dbId && dbId !== "undefined" && dbId !== "") {
+                 // Update the current view
+                 filterTable();
+                 const newIdx = filteredList.findIndex(s => s.dbId == dbId);
+                 if (newIdx !== -1) {
+                     const rows = document.querySelectorAll('#studentsTable tbody tr');
+                     if (rows[newIdx]) fillForm(newIdx, rows[newIdx]);
+                 } else {
+                     prepareNew();
+                 }
             } else {
-                 prepareNew(); // New entry -> Clear for next
+                 prepareNew();
             }
         } else {
             const err = await response.json();
@@ -586,6 +607,57 @@ function updatePhotoUI(data) {
     const icon = document.getElementById('placeholderIcon');
     if (data) { img.src = data; img.style.display = "block"; icon.style.display = "none"; }
     else { img.style.display = "none"; icon.style.display = "block"; }
+}
+
+// Camera Logic
+let videoStream = null;
+
+async function openCameraModal() {
+    const modal = document.getElementById('cameraModal');
+    const video = document.getElementById('cameraFeed');
+
+    try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = videoStream;
+        modal.style.display = 'flex';
+    } catch (err) {
+        alert("لا يمكن الوصول للكاميرا: " + err);
+        console.error(err);
+    }
+}
+
+function closeCameraModal() {
+    const modal = document.getElementById('cameraModal');
+    const video = document.getElementById('cameraFeed');
+
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+    video.srcObject = null;
+    modal.style.display = 'none';
+}
+
+function capturePhoto() {
+    const video = document.getElementById('cameraFeed');
+    const canvas = document.getElementById('cameraCanvas');
+    const context = canvas.getContext('2d');
+
+    if (video.videoWidth && video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Flip horizontally to match video mirror effect
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        document.getElementById('photoPath').value = dataUrl;
+        updatePhotoUI(dataUrl);
+        closeCameraModal();
+    }
 }
 </script>
 {% endblock %}

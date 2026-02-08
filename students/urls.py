@@ -14,6 +14,7 @@ urlpatterns = [
     # Auth API
     path('auth/login/', auth_views.login_view, name='auth_login'),
     path('auth/logout/', auth_views.logout_view, name='auth_logout'),
+    path('auth/forgot_password/', auth_views.forgot_password, name='auth_forgot_password'),
     path('auth/verify/', auth_views.verify_session, name='auth_verify'),
     path('api/', include(router.urls)),
 
