@@ -88,6 +88,7 @@
                             <th>الاسم واللقب</th>
                             <th>القسم</th>
                             <th>تاريخ الازدياد</th>
+                            <th>وقت الدخول</th>
                         </tr>
                     </thead>
                     <tbody id="presentList">
@@ -307,6 +308,7 @@
                         <td><b>${s.last_name} ${s.first_name}</b></td>
                         <td>${s.class_name}</td>
                         <td class="western-nums" style="direction:ltr;">${s.date_of_birth}</td>
+                        <td class="western-nums" style="direction:ltr;">${s.attendance_time || '--'}</td>
                     `;
                     list.appendChild(row);
                 });

@@ -1,0 +1,15 @@
+Watching for file changes with StatReloader
+[08/Feb/2026 11:31:33] "GET / HTTP/1.1" 200 15838
+[08/Feb/2026 11:31:39] "POST /canteen/auth/login/ HTTP/1.1" 200 168
+[08/Feb/2026 11:31:42] "GET /canteen/dashboard/ HTTP/1.1" 200 14598
+[08/Feb/2026 11:31:42] "GET /static/js/offline_manager.js HTTP/1.1" 200 6005
+[08/Feb/2026 11:31:42] "GET /static/js/auth_manager.js HTTP/1.1" 200 6212
+[08/Feb/2026 11:31:42] "GET /static/sw.js HTTP/1.1" 200 1991
+[08/Feb/2026 11:31:42] "GET /static/manifest.json HTTP/1.1" 200 409
+[08/Feb/2026 11:31:43] "GET /canteen/dashboard/ HTTP/1.1" 200 14598
+[08/Feb/2026 11:31:44] "POST /canteen/auth/verify/ HTTP/1.1" 200 32
+[08/Feb/2026 11:31:44] "GET /canteen/management/ HTTP/1.1" 200 39736
+[08/Feb/2026 11:31:44] "GET /static/js/xlsx.full.min.js HTTP/1.1" 200 951904
+[08/Feb/2026 11:31:44] "POST /canteen/auth/verify/ HTTP/1.1" 200 32
+[08/Feb/2026 11:31:45] "GET /api/students/ HTTP/1.1" 200 348878
+[08/Feb/2026 11:31:45] "GET /canteen/ui/ HTTP/1.1" 200 32429

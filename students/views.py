@@ -452,13 +452,19 @@ def manual_attendance(request):
 def get_attendance_lists(request):
     today = date.today()
     present_attendances = CanteenAttendance.objects.filter(date=today).select_related('student')
-    present_students = [att.student for att in present_attendances]
-    present_ids = [s.id for s in present_students]
+
+    present_data = []
+    present_ids = []
+    for att in present_attendances:
+        s_data = StudentSerializer(att.student).data
+        s_data['attendance_time'] = att.time.strftime("%H:%M:%S")
+        present_data.append(s_data)
+        present_ids.append(att.student.id)
 
     absent_students = Student.objects.filter(attendance_system='نصف داخلي').exclude(id__in=present_ids)
 
     return Response({
-        'present': StudentSerializer(present_students, many=True).data,
+        'present': present_data,
         'absent': StudentSerializer(absent_students, many=True).data
     })
 
@@ -488,7 +494,7 @@ def export_canteen_sheet(request):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "سجل_المطعم_التراكمي"
-    ws.append(["التاريخ", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
+    ws.append(["التاريخ", "التوقيت", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
 
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -496,7 +502,8 @@ def export_canteen_sheet(request):
 
     for att in all_attendance:
         s = att.student
-        ws.append([str(att.date), s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
+        time_str = att.time.strftime("%H:%M:%S")
+        ws.append([str(att.date), time_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
 
     # Save to memory buffer
     output = BytesIO()
