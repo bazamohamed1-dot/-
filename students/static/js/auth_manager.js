@@ -1,4 +1,28 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    // Loop Protection
+    try {
+        let loopHistory = JSON.parse(localStorage.getItem('auth_loop_check') || '[]');
+        const now = Date.now();
+        loopHistory = loopHistory.filter(t => now - t < 10000); // 10s window
+        loopHistory.push(now);
+        localStorage.setItem('auth_loop_check', JSON.stringify(loopHistory));
+
+        if (loopHistory.length > 5) {
+            console.error("Refresh Loop Detected! Stopping auth check.");
+            const banner = document.createElement('div');
+            banner.innerHTML = `<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);color:white;z-index:99999;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
+                <h1>⚠️ تم اكتشاف مشكلة في الاتصال</h1>
+                <p>المتصفح يقوم بالتحديث بشكل متكرر. يرجى محاولة تسجيل الخروج يدوياً.</p>
+                <button onclick="forceLogout()" style="padding:15px 30px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:1.2rem;cursor:pointer;margin-top:20px;">تسجيل خروج إجباري</button>
+            </div>`;
+            document.body.appendChild(banner);
+
+            // Try silent logout to clear backend cookie
+            fetch('/canteen/auth/logout/', {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}});
+            return; // Stop execution
+        }
+    } catch(e) { console.error(e); }
+
     const token = sessionStorage.getItem('session_token');
     const role = sessionStorage.getItem('user_role');
 
@@ -175,3 +199,7 @@ function getCookie(name) {
 }
 window.getCookie = getCookie;
 window.logout = logout;
+window.forceLogout = function() {
+    localStorage.removeItem('auth_loop_check');
+    logout();
+};

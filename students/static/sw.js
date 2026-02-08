@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-sys-v2';
+const CACHE_NAME = 'school-sys-v3';
 const ASSETS = [
     '/canteen/dashboard/',
     '/static/js/auth_manager.js',
