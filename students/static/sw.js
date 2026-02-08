@@ -42,6 +42,17 @@ self.addEventListener('activate', (event) => {
     self.clients.claim(); // Control all clients immediately
 });
 
+// Sync Event: Try to sync outbox when connection returns
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'sync-outbox') {
+        console.log('[Service Worker] Syncing outbox...');
+        // We can't easily access IndexedDB here without importing logic,
+        // but we can signal the clients or rely on the 'online' event in the window.
+        // However, a proper background sync implementation would go here.
+        // For now, we rely on the client-side 'online' event which is robust enough for this use case.
+    }
+});
+
 // Fetch Event: Stale-While-Revalidate Strategy for Assets, Network First for HTML
 self.addEventListener('fetch', (event) => {
     // Only cache GET requests
