@@ -69,7 +69,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: JSON.stringify({ username, password })
             });
 
-            const data = await response.json();
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error("Server Error (Non-JSON):", text);
+                errorDiv.textContent = 'خطأ في الخادم (500). يرجى المحاولة لاحقاً.';
+                errorDiv.style.display = 'block';
+                return;
+            }
 
             if (response.ok) {
                 sessionStorage.setItem('session_token', data.token);

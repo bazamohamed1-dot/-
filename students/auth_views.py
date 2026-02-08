@@ -41,21 +41,29 @@ def login_view(request):
 
         # Device Lock Logic
         device_id_to_send = None
-        if profile.device_id:
-            if profile.device_id.startswith('PENDING:'):
-                # Provisioning Mode
-                real_id = profile.device_id.split(':')[1]
-                profile.device_id = real_id
-                device_id_to_send = real_id
-                profile.save()
-            else:
-                # Enforce Mode
-                client_id = request.headers.get('X-Device-ID')
-                # If client_id is missing, or doesn't match
-                if not client_id or client_id != profile.device_id:
-                     # Strict Lock
-                     return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
-                device_id_to_send = profile.device_id
+        try:
+            if profile.device_id:
+                if profile.device_id.startswith('PENDING:'):
+                    # Provisioning Mode
+                    real_id = profile.device_id.split(':')[1]
+                    profile.device_id = real_id
+                    device_id_to_send = real_id
+                    profile.save()
+                else:
+                    # Enforce Mode
+                    # Handle both META and headers for compatibility
+                    client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+
+                    # If client_id is missing, or doesn't match
+                    if not client_id or client_id != profile.device_id:
+                         # Strict Lock
+                         return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+                    device_id_to_send = profile.device_id
+        except Exception as e:
+            # Fallback in case of unexpected error during lock check, log it but don't crash
+            print(f"Device Lock Error: {e}")
+            # Ensure we return JSON, not HTML 500
+            return Response({'error': 'خطأ في الخادم أثناء التحقق من الجهاز', 'code': 'SERVER_ERROR'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Generate Session Token
         token = secrets.token_hex(32)
