@@ -26,7 +26,7 @@
         .sidebar {
             width: var(--sidebar-width); background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
             color: white; display: flex; flex-direction: column; position: fixed; right: 0; height: 100%; z-index: 1000;
-            box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+            box-shadow: -4px 0 15px rgba(0,0,0,0.1); transition: transform 0.3s ease;
         }
         .brand { padding: 20px; font-size: 1.2rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center; }
         .nav-links { list-style: none; padding: 20px 10px; margin: 0; flex: 1; }
@@ -73,13 +73,49 @@
         }
 
         /* Main Content */
-        .main { flex: 1; margin-right: var(--sidebar-width); transition: 0.3s; }
+        .main { flex: 1; margin-right: var(--sidebar-width); transition: margin-right 0.3s ease; }
         .header {
             height: var(--header-height); background: white; border-bottom: 1px solid #e2e8f0;
             display: flex; align-items: center; justify-content: space-between; padding: 0 30px;
         }
         .page-title { font-size: 1.4rem; font-weight: 700; color: var(--primary); }
         .content { padding: 30px; }
+
+        /* Toggle Button */
+        .toggle-sidebar {
+            display: none; background: none; border: none; font-size: 1.5rem; color: var(--primary); cursor: pointer; margin-left: 15px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(100%); /* Hide sidebar by moving it right */
+            }
+            .sidebar.active {
+                transform: translateX(0); /* Show sidebar */
+            }
+            .main {
+                margin-right: 0;
+            }
+            .main.active {
+                /* Optional: push content or overlay. Usually overlay for mobile. */
+                /* margin-right: var(--sidebar-width); */
+            }
+            .toggle-sidebar {
+                display: block;
+            }
+            .grid-2, .grid-4 {
+                grid-template-columns: 1fr !important;
+            }
+            .content {
+                padding: 15px;
+            }
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+        }
 
         /* Cards & UI Elements */
         .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; }
@@ -150,9 +186,14 @@
     <!-- Main Content -->
     <main class="main">
         <header class="header">
-            <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
+            <div style="display: flex; align-items: center;">
+                <button class="toggle-sidebar" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
+            </div>
             <div class="user-info" style="display: flex; gap: 15px; align-items: center;">
-                <span id="userInfoDisplay"><i class="fas fa-user-circle"></i> المستخدم</span>
+                <span id="userInfoDisplay" class="d-none-mobile"><i class="fas fa-user-circle"></i> المستخدم</span>
                 <button id="logoutBtn" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9rem;">
                     <i class="fas fa-sign-out-alt"></i> خروج
                 </button>
@@ -271,6 +312,24 @@
              });
         }
     }, 1000);
+
+    // Sidebar Toggle
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+        });
+    }
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768) {
+            if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target) && sidebar.classList.contains('active')) {
+                sidebar.classList.remove('active');
+            }
+        }
+    });
 </script>
 </body>
 </html>

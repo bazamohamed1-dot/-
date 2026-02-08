@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-sys-v3-stale-revalidate';
+const CACHE_NAME = 'school-sys-v4-stale-revalidate';
 const ASSETS_TO_CACHE = [
     '/canteen/',  // Landing
     '/canteen/dashboard/',
@@ -42,33 +42,55 @@ self.addEventListener('activate', (event) => {
     self.clients.claim(); // Control all clients immediately
 });
 
-// Fetch Event: Stale-While-Revalidate Strategy
+// Fetch Event: Stale-While-Revalidate Strategy for Assets, Network First for HTML
 self.addEventListener('fetch', (event) => {
     // Only cache GET requests
     if (event.request.method !== 'GET') return;
 
+    const url = new URL(event.request.url);
+
     // Ignore API calls and Auth calls (Network First or Custom Offline Logic handled by App)
-    if (event.request.url.includes('/api/') || event.request.url.includes('/auth/')) {
+    if (url.pathname.includes('/api/') || url.pathname.includes('/auth/')) {
         return;
     }
 
+    // Check if it's a navigation request (HTML page)
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request)
+                .then((networkResponse) => {
+                    return caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, networkResponse.clone());
+                        return networkResponse;
+                    });
+                })
+                .catch(async () => {
+                    // Network failed, try cache
+                    const cachedResponse = await caches.match(event.request);
+                    if (cachedResponse) return cachedResponse;
+
+                    // Fallback to landing or dashboard if specific page not cached
+                    const landing = await caches.match('/canteen/');
+                    return landing || caches.match('/canteen/dashboard/');
+                })
+        );
+        return;
+    }
+
+    // For other assets (CSS, JS, Images) - Stale While Revalidate
     event.respondWith(
         caches.open(CACHE_NAME).then(async (cache) => {
             const cachedResponse = await cache.match(event.request);
 
-            // Network request for update
             const networkFetch = fetch(event.request).then((networkResponse) => {
-                // Update cache with new response
                 if (networkResponse.ok) {
                     cache.put(event.request, networkResponse.clone());
                 }
                 return networkResponse;
             }).catch(() => {
-                // Network failed?
                 return cachedResponse;
             });
 
-            // Return cached response immediately if available (Stale), otherwise wait for network
             return cachedResponse || networkFetch;
         })
     );
