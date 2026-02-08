@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from students.models import Student
 from bs4 import BeautifulSoup
 import openpyxl
+import xlrd
 import os
 from datetime import datetime
 
@@ -47,14 +48,25 @@ class Command(BaseCommand):
         self.to_update = []
         self.processed_ids_in_file = set()
 
+        # Try Excel .xlsx (openpyxl)
         try:
-            success = self.import_excel(file_path)
+            success = self.import_excel_xlsx(file_path)
             if success:
-                self.process_batches(update_existing, mode="Excel")
-            else:
-                self.stdout.write(self.style.ERROR('Excel parser found 0 records.'))
+                self.process_batches(update_existing, mode="Excel (xlsx)")
+                return
         except Exception as e:
-            raise Exception(f'All import methods failed. Ensure file is Eleve.xls (HTML) or .xlsx. Details: {str(e)}')
+            self.stdout.write(self.style.WARNING(f'XLSX parser failed: {str(e)}'))
+
+        # Try Excel .xls (xlrd)
+        try:
+            success = self.import_excel_xls(file_path)
+            if success:
+                self.process_batches(update_existing, mode="Excel (xls)")
+                return
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'XLS parser failed: {str(e)}'))
+
+        raise Exception('All import methods failed.')
 
     def process_batches(self, update_existing, mode):
         created_count = 0
@@ -99,7 +111,7 @@ class Command(BaseCommand):
 
         return found_any
 
-    def import_excel(self, file_path):
+    def import_excel_xlsx(self, file_path):
         wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
         ws = wb.active
 
@@ -111,6 +123,31 @@ class Command(BaseCommand):
             if not cols[0].isdigit():
                 continue
 
+            self.parse_and_prepare(cols)
+            found_any = True
+
+        return found_any
+
+    def import_excel_xls(self, file_path):
+        wb = xlrd.open_workbook(file_path)
+        ws = wb.sheet_by_index(0)
+
+        found_any = False
+        for row_idx in range(ws.nrows):
+            row = ws.row(row_idx)
+            cols = [str(c.value).strip() if c is not None else '' for c in row]
+
+            if not cols or len(cols) < 15:
+                continue
+
+            # Clean float ID if generic
+            id_val = cols[0]
+            if id_val.endswith('.0'): id_val = id_val[:-2]
+
+            if not id_val.isdigit():
+                continue
+
+            cols[0] = id_val
             self.parse_and_prepare(cols)
             found_any = True
 
