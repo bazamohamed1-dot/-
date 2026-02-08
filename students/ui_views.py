@@ -76,10 +76,16 @@ def import_eleve_view(request):
 
     if request.method == 'POST' and request.FILES.get('eleve_file'):
         eleve_file = request.FILES['eleve_file']
+        temp_path = None
 
         # Use tempfile for safe file handling
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.xls') as tmp:
+            # Determine suffix from original file
+            _, ext = os.path.splitext(eleve_file.name)
+            if not ext:
+                ext = '.xls' # Default fallback
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                 for chunk in eleve_file.chunks():
                     tmp.write(chunk)
                 temp_path = tmp.name
@@ -93,12 +99,16 @@ def import_eleve_view(request):
                 # Catch specific command errors
                 messages.error(request, f"فشل الاستيراد: {str(e)}")
             finally:
-                if os.path.exists(temp_path):
+                if temp_path and os.path.exists(temp_path):
                     os.remove(temp_path)
 
         except Exception as e:
             # Catch file handling errors
             messages.error(request, f"خطأ في معالجة الملف: {str(e)}")
+            if temp_path and os.path.exists(temp_path):
+                 try:
+                    os.remove(temp_path)
+                 except: pass
 
         return redirect('settings')
 
