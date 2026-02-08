@@ -12,7 +12,20 @@
     .photo-card img { width: 100%; height: 100%; object-fit: cover; display: none; }
 
     .main-form { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
-    .field-box { display: flex; flex-direction: column; gap: 5px; }
+    .field-box { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    /* Responsive grid for mobile */
+    @media (max-width: 768px) {
+        .main-form { grid-template-columns: 1fr; }
+        .span-2 { grid-column: span 1 !important; }
+        .layout-grid { grid-template-columns: 1fr !important; }
+        .action-tray { flex-direction: column; }
+        .action-tray .btn { width: 100%; }
+        /* Photo card centered on mobile */
+        .sidebar-photo-container { border-left: none; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 20px; }
+        /* Filter stack */
+        .search-box, .filter-input { width: 100% !important; margin-bottom: 5px; }
+        #filterContainer { flex-direction: column; }
+    }
     .field-box label { font-size: 0.85rem; font-weight: 700; color: #64748b; }
     .field-box input, .field-box select { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.95rem; outline: none; background: #fff; width: 100%; box-sizing: border-box; }
     /* Force Western numerals for date inputs */
@@ -136,7 +149,7 @@
 
     <!-- Search and Filter -->
     <!-- Filters enabled always as requested -->
-    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+    <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px;">
         <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
 
         <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="filterTable()">
@@ -179,6 +192,7 @@
         <video id="cameraFeed" autoplay playsinline style="width:100%; border-radius:8px; background:black; transform: scaleX(-1);"></video>
         <canvas id="cameraCanvas" style="display:none;"></canvas>
         <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
+            <button type="button" onclick="switchCamera()" class="btn btn-primary"><i class="fas fa-sync-alt"></i> قلب الكاميرا</button>
             <button type="button" onclick="capturePhoto()" class="btn btn-success"><i class="fas fa-camera"></i> التقاط</button>
             <button type="button" onclick="closeCameraModal()" class="btn btn-danger"><i class="fas fa-times"></i> إلغاء</button>
         </div>
@@ -614,16 +628,37 @@ function updatePhotoUI(data) {
 
 // Camera Logic
 let videoStream = null;
+let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
 
 async function openCameraModal() {
     const modal = document.getElementById('cameraModal');
+    modal.style.display = 'flex';
+    await startCamera(currentFacingMode);
+}
+
+async function startCamera(facingMode) {
     const video = document.getElementById('cameraFeed');
 
+    // Stop existing stream if any
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+    }
+
     try {
-        videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: facingMode
+            }
+        });
         video.srcObject = videoStream;
-        modal.style.display = 'flex';
-        // Explicitly play to avoid AbortError if interrupted
+
+        // Mirror effect only for front camera
+        if (facingMode === 'user') {
+            video.style.transform = "scaleX(-1)";
+        } else {
+            video.style.transform = "scaleX(1)";
+        }
+
         try {
             await video.play();
         } catch (e) {
@@ -633,6 +668,11 @@ async function openCameraModal() {
         alert("لا يمكن الوصول للكاميرا: " + err);
         console.error(err);
     }
+}
+
+async function switchCamera() {
+    currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+    await startCamera(currentFacingMode);
 }
 
 function closeCameraModal() {
