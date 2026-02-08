@@ -139,10 +139,28 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
         .mt-4 { margin-top: 1.5rem; }
+
+        #offlineBanner {
+            display: none;
+            background-color: #dc2626;
+            color: white;
+            text-align: center;
+            padding: 8px;
+            font-weight: bold;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 9999;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+
+<div id="offlineBanner">
+    <i class="fas fa-wifi-slash"></i> لا يوجد اتصال بالإنترنت - وضع العمل دون اتصال
+</div>
 
 <div class="wrapper">
     <!-- Sidebar -->
@@ -331,6 +349,19 @@
             }
         }
     });
+
+    // Offline Banner Logic
+    const offlineBanner = document.getElementById('offlineBanner');
+    function updateOnlineStatus() {
+        if (navigator.onLine) {
+            offlineBanner.style.display = 'none';
+        } else {
+            offlineBanner.style.display = 'block';
+        }
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus(); // Check on load
 </script>
 </body>
 </html>

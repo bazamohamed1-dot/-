@@ -129,29 +129,48 @@ class Command(BaseCommand):
         return found_any
 
     def import_excel_xls(self, file_path):
-        wb = xlrd.open_workbook(file_path)
-        ws = wb.sheet_by_index(0)
+        try:
+            # Use 'ignore_workbook_corruption=True' if using xlrd >= 2.0.1 and dealing with partial XLS files,
+            # but standard call is usually sufficient.
+            # Note: xlrd removed .xlsx support in v2.0. This function is strictly for .xls.
+            wb = xlrd.open_workbook(file_path, formatting_info=False)
+            ws = wb.sheet_by_index(0)
 
-        found_any = False
-        for row_idx in range(ws.nrows):
-            row = ws.row(row_idx)
-            cols = [str(c.value).strip() if c is not None else '' for c in row]
+            found_any = False
+            for row_idx in range(ws.nrows):
+                row = ws.row(row_idx)
+                # Handle cell types robustly
+                cols = []
+                for c in row:
+                    val = c.value
+                    if c.ctype == xlrd.XL_CELL_DATE:
+                        try:
+                            val = xlrd.xldate.xldate_as_datetime(val, wb.datemode).strftime('%Y-%m-%d')
+                        except:
+                            val = str(val)
+                    elif c.ctype == xlrd.XL_CELL_NUMBER:
+                        if val == int(val):
+                            val = str(int(val)) # "123.0" -> "123"
+                        else:
+                            val = str(val)
+                    else:
+                        val = str(val).strip()
+                    cols.append(val)
 
-            if not cols or len(cols) < 15:
-                continue
+                if not cols or len(cols) < 15:
+                    continue
 
-            # Clean float ID if generic
-            id_val = cols[0]
-            if id_val.endswith('.0'): id_val = id_val[:-2]
+                # ID Check
+                id_val = cols[0]
+                if not id_val.isdigit():
+                    continue
 
-            if not id_val.isdigit():
-                continue
+                self.parse_and_prepare(cols)
+                found_any = True
 
-            cols[0] = id_val
-            self.parse_and_prepare(cols)
-            found_any = True
-
-        return found_any
+            return found_any
+        except Exception as e:
+            raise ValueError(f"XLS parsing error: {str(e)}")
 
     def parse_and_prepare(self, cols):
         student_id = cols[0]
