@@ -179,8 +179,8 @@
         <video id="cameraFeed" autoplay playsinline style="width:100%; border-radius:8px; background:black; transform: scaleX(-1);"></video>
         <canvas id="cameraCanvas" style="display:none;"></canvas>
         <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
-            <button onclick="capturePhoto()" class="btn btn-success"><i class="fas fa-camera"></i> التقاط</button>
-            <button onclick="closeCameraModal()" class="btn btn-danger"><i class="fas fa-times"></i> إلغاء</button>
+            <button type="button" onclick="capturePhoto()" class="btn btn-success"><i class="fas fa-camera"></i> التقاط</button>
+            <button type="button" onclick="closeCameraModal()" class="btn btn-danger"><i class="fas fa-times"></i> إلغاء</button>
         </div>
     </div>
 </div>
@@ -623,6 +623,12 @@ async function openCameraModal() {
         videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = videoStream;
         modal.style.display = 'flex';
+        // Explicitly play to avoid AbortError if interrupted
+        try {
+            await video.play();
+        } catch (e) {
+            console.log("Play interrupted", e);
+        }
     } catch (err) {
         alert("لا يمكن الوصول للكاميرا: " + err);
         console.error(err);
