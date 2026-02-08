@@ -1,64 +1,75 @@
-const CACHE_NAME = 'school-sys-v2';
-const ASSETS = [
+const CACHE_NAME = 'school-sys-v3-stale-revalidate';
+const ASSETS_TO_CACHE = [
+    '/canteen/',  // Landing
     '/canteen/dashboard/',
+    '/canteen/ui/',
+    '/canteen/library/',
+    '/canteen/management/',
+    '/canteen/list/',
+    '/canteen/archive/',
     '/static/js/auth_manager.js',
     '/static/js/offline_manager.js',
     '/static/manifest.json',
+    '/static/styles.css',
+    '/static/images/logo.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
 ];
 
+// Install Event: Pre-cache core assets
 self.addEventListener('install', (event) => {
-    self.skipWaiting();
+    self.skipWaiting(); // Force activation
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(ASSETS);
+            console.log('[Service Worker] Pre-caching offline pages');
+            return cache.addAll(ASSETS_TO_CACHE);
         })
     );
 });
 
+// Activate Event: Clean up old caches
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
+        caches.keys().then((keyList) => {
+            return Promise.all(keyList.map((key) => {
+                if (key !== CACHE_NAME) {
+                    console.log('[Service Worker] Removing old cache', key);
+                    return caches.delete(key);
+                }
+            }));
         })
     );
+    self.clients.claim(); // Control all clients immediately
 });
 
+// Fetch Event: Stale-While-Revalidate Strategy
 self.addEventListener('fetch', (event) => {
-    // Skip non-GET requests for caching
-    if (event.request.method !== 'GET') {
-        return;
-    }
+    // Only cache GET requests
+    if (event.request.method !== 'GET') return;
 
-    // API & Auth: Network First
+    // Ignore API calls and Auth calls (Network First or Custom Offline Logic handled by App)
     if (event.request.url.includes('/api/') || event.request.url.includes('/auth/')) {
-        event.respondWith(
-            fetch(event.request).catch(() => {
-                return new Response(JSON.stringify({error: 'Offline'}), {
-                    headers: {'Content-Type': 'application/json'}
-                });
-            })
-        );
         return;
     }
 
-    // HTML/Static: Stale-While-Revalidate or Cache First
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            const fetchPromise = fetch(event.request).then((networkResponse) => {
-                caches.open(CACHE_NAME).then((cache) => {
+        caches.open(CACHE_NAME).then(async (cache) => {
+            const cachedResponse = await cache.match(event.request);
+
+            // Network request for update
+            const networkFetch = fetch(event.request).then((networkResponse) => {
+                // Update cache with new response
+                if (networkResponse.ok) {
                     cache.put(event.request, networkResponse.clone());
-                });
+                }
                 return networkResponse;
+            }).catch(() => {
+                // Network failed?
+                return cachedResponse;
             });
-            return cachedResponse || fetchPromise;
+
+            // Return cached response immediately if available (Stale), otherwise wait for network
+            return cachedResponse || networkFetch;
         })
     );
 });
