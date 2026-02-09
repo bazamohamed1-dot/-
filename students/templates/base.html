@@ -84,40 +84,71 @@
 
         /* Toggle Button */
         .toggle-sidebar {
-            display: none; background: none; border: none; font-size: 1.8rem; color: var(--primary); cursor: pointer; margin-left: 15px; padding: 10px;
+            display: none;
+        }
+
+        /* Bottom Navigation for Mobile */
+        .bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: white;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 2000;
+            justify-content: space-around;
+            padding: 10px 0;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .bottom-nav-item {
+            text-decoration: none;
+            color: #64748b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.75rem;
+            gap: 4px;
+        }
+
+        .bottom-nav-item i {
+            font-size: 1.4rem;
+        }
+
+        .bottom-nav-item.active {
+            color: var(--primary);
         }
 
         /* Responsive Design */
         @media (max-width: 768px) {
             .sidebar {
-                transform: translateX(100%); /* Hide sidebar by moving it right */
-                width: 80%; /* Partial width on mobile for overlay effect */
-                max-width: 300px;
-            }
-            .sidebar.active {
-                transform: translateX(0); /* Show sidebar */
-                box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+                display: none !important; /* Completely hide sidebar on mobile */
             }
             .main {
-                margin-right: 0;
-            }
-            .main.active {
-                /* Optional: push content or overlay. Usually overlay for mobile. */
-                /* margin-right: var(--sidebar-width); */
+                margin-right: 0 !important;
             }
             .toggle-sidebar {
-                display: block;
+                display: none !important;
             }
             .grid-2, .grid-4 {
                 grid-template-columns: 1fr !important;
             }
             .content {
                 padding: 15px;
+                padding-bottom: 90px; /* Space for bottom nav */
             }
             table {
                 display: block;
                 overflow-x: auto;
                 white-space: nowrap;
+            }
+            .bottom-nav {
+                display: flex; /* Show bottom nav on mobile */
+            }
+            /* Hide user info on mobile header to save space */
+            .user-info span {
+                display: none;
             }
         }
 
@@ -239,6 +270,25 @@
 </div>
 
 {% block extra_js %}{% endblock %}
+
+<!-- Bottom Navigation (Mobile Only) -->
+<nav class="bottom-nav">
+    <a href="{% url 'dashboard' %}" class="bottom-nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <i class="fas fa-home"></i> الرئيسية
+    </a>
+    <a href="{% url 'students_management' %}" class="bottom-nav-item {% if 'management' in request.path %}active{% endif %}">
+        <i class="fas fa-user-graduate"></i> التلاميذ
+    </a>
+    <a href="{% url 'canteen_home' %}" class="bottom-nav-item {% if request.resolver_match.url_name == 'canteen_home' %}active{% endif %}">
+        <i class="fas fa-utensils"></i> المطعم
+    </a>
+    <a href="{% url 'library_home' %}" class="bottom-nav-item {% if 'library' in request.path %}active{% endif %}">
+        <i class="fas fa-book"></i> المكتبة
+    </a>
+    <a href="{% url 'settings' %}" class="bottom-nav-item {% if 'settings' in request.path %}active{% endif %}">
+        <i class="fas fa-cog"></i> الإعدادات
+    </a>
+</nav>
 
 <!-- Login Modal removed as requested -->
 <script src="{% static 'js/offline_manager.js' %}"></script>
