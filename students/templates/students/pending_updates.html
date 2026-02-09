@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}تسيير التلاميذ - التحديثات المعلقة{% endblock %}
+{% block title %}تسيير التلاميذ - مركز المراجعة{% endblock %}
 
-{% block header_title %}التحديثات المعلقة{% endblock %}
+{% block header_title %}مركز المراجعة{% endblock %}
 
 {% block content %}
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h3 style="margin: 0;">طلبات التعديل ({{ updates|length }})</h3>
+        <h3 style="margin: 0;">البيانات المعلقة ({{ updates|length }})</h3>
         <div style="display: flex; gap: 10px;">
             <button class="btn btn-success" onclick="approveAll()"><i class="fas fa-check-double"></i> موافقة على الكل</button>
             <button class="btn btn-danger" onclick="rejectAll()"><i class="fas fa-trash"></i> رفض الكل</button>

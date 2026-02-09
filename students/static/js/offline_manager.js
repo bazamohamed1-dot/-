@@ -261,29 +261,40 @@ window.apiFetch = async (url, options = {}) => {
         options.headers['X-Device-ID'] = deviceId;
     }
 
-    if (navigator.onLine) {
-        try {
-            const response = await fetch(url, options);
-            if (!response.ok && !response.status.toString().startsWith('4')) {
-                throw new Error("Server Error");
-            }
-            return response;
-        } catch (e) {
-            console.log("Online fetch failed, checking if POST to save offline...", e);
-            if (options.method === 'POST') {
+    // ALWAYS try network first, then fall back to offline store on failure
+    try {
+        const response = await fetch(url, options);
+
+        // If server error (5xx), treat as offline scenario for reliability
+        if (response.status >= 500) {
+            throw new Error(`Server Error: ${response.status}`);
+        }
+
+        return response;
+    } catch (e) {
+        console.log("Network/Server request failed, attempting offline save...", e);
+
+        // Only save POST/PUT/PATCH/DELETE requests (data modification)
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method)) {
+            try {
                 const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
                 await offlineManager.addToOutbox(url, options.method, body);
-                // Fake a successful response
-                return new Response(JSON.stringify({message: 'Saved offline'}), {status: 200, statusText: 'Offline Saved'});
+
+                // Return a fake success response to the UI
+                console.log("Data saved locally to Outbox");
+                return new Response(JSON.stringify({message: 'تم الحفظ محلياً (سيتم المزامنة عند عودة الاتصال)'}), {
+                    status: 200,
+                    statusText: 'Offline Saved',
+                    headers: {'Content-Type': 'application/json'}
+                });
+            } catch (saveError) {
+                console.error("Failed to save offline:", saveError);
+                throw e; // Rethrow original error if we can't save locally either
             }
-            throw e;
         }
-    } else {
-         if (options.method === 'POST') {
-            const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-            await offlineManager.addToOutbox(url, options.method, body);
-            return new Response(JSON.stringify({message: 'Saved offline'}), {status: 200, statusText: 'Offline Saved'});
-        }
-        throw new Error("Offline and not a POST request");
+
+        // For GET requests, we might want to return cached data here if not handled elsewhere
+        // But usually GET handling is view-specific (like in management.html)
+        throw e;
     }
 };
