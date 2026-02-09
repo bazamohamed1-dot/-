@@ -25,6 +25,7 @@
         /* Filter stack */
         .search-box, .filter-input { width: 100% !important; margin-bottom: 5px; }
         #filterContainer { flex-direction: column; }
+        .mobile-only { display: inline-flex !important; }
     }
     .field-box label { font-size: 0.85rem; font-weight: 700; color: #64748b; }
     .field-box input, .field-box select { padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.95rem; outline: none; background: #fff; width: 100%; box-sizing: border-box; }
@@ -71,6 +72,11 @@
             </button>
             <button class="btn btn-danger" id="deletePhotoBtn" style="width:100%; display:none;" onclick="removePhotoImage()">
                 <i class="fas fa-trash-alt"></i> حذف
+            </button>
+
+            <!-- Quick Save for Mobile -->
+            <button class="btn btn-primary mobile-only" onclick="saveCurrent()" style="width:100%; margin-top:5px; background:var(--primary); color:white; display:none;">
+                <i class="fas fa-save"></i> حفظ التغييرات
             </button>
 
             <div style="margin-top: 20px; text-align: center;">
@@ -187,14 +193,14 @@
 
 <!-- Camera Modal -->
 <div id="cameraModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:white; padding:20px; border-radius:12px; width:400px; text-align:center;">
+    <div style="background:white; padding:10px; border-radius:12px; width:95%; max-width:500px; max-height:90vh; overflow-y:auto; text-align:center;">
         <h3 style="margin-top:0;">التقاط صورة</h3>
-        <video id="cameraFeed" autoplay playsinline style="width:100%; border-radius:8px; background:black; transform: scaleX(-1);"></video>
+        <video id="cameraFeed" autoplay playsinline style="width:100%; max-height:60vh; object-fit:contain; border-radius:8px; background:black; transform: scaleX(-1);"></video>
         <canvas id="cameraCanvas" style="display:none;"></canvas>
-        <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
-            <button type="button" onclick="switchCamera()" class="btn btn-primary"><i class="fas fa-sync-alt"></i> قلب الكاميرا</button>
-            <button type="button" onclick="capturePhoto()" class="btn btn-success"><i class="fas fa-camera"></i> التقاط</button>
-            <button type="button" onclick="closeCameraModal()" class="btn btn-danger"><i class="fas fa-times"></i> إلغاء</button>
+        <div style="margin-top:15px; display:flex; gap:5px; justify-content:center; flex-wrap:wrap;">
+            <button type="button" onclick="switchCamera()" class="btn btn-primary" style="flex:1;"><i class="fas fa-sync-alt"></i> قلب</button>
+            <button type="button" onclick="capturePhoto()" class="btn btn-success" style="flex:1;"><i class="fas fa-camera"></i> التقاط</button>
+            <button type="button" onclick="closeCameraModal()" class="btn btn-danger" style="flex:1;"><i class="fas fa-times"></i> إلغاء</button>
         </div>
     </div>
 </div>
@@ -304,7 +310,8 @@ function enableEditing() {
 }
 
 function fillForm(idx, row) {
-    if (isEditMode && !confirm("هل تريد تجاهل التغييرات غير المحفوظة؟")) return;
+    // Suppress confirmation message as requested by user
+    // if (isEditMode && !confirm("هل تريد تجاهل التغييرات غير المحفوظة؟")) return;
 
     selectedIndex = idx;
     const s = filteredList[idx]; // Use filtered list index
@@ -395,7 +402,11 @@ async function saveCurrent() {
     const url = (dbId && dbId !== "undefined" && dbId !== "") ? `/api/students/${dbId}/` : '/api/students/';
 
     try {
-        const response = await fetch(url, {
+        // Wrap in apiFetch to handle offline logic automatically (including Base64 photos)
+        // Ensure apiFetch is globally available from offline_manager.js
+        const fetchFunc = window.apiFetch || fetch;
+
+        const response = await fetchFunc(url, {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
