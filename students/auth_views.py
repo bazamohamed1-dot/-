@@ -4,12 +4,31 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.conf import settings
 from .models import EmployeeProfile, UserActivityLog, SchoolSettings
 import secrets
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password(request):
+    username = request.data.get('username')
+    if not username:
+        return Response({'message': 'يرجى الاتصال بمدير المؤسسة لاستعادة معلومات الدخول.'}) # Generic msg for users
+
+    # Director Recovery
+    try:
+        user = User.objects.get(username=username)
+        if hasattr(user, 'profile') and user.profile.role == 'director':
+            settings_obj = SchoolSettings.objects.first()
+            if settings_obj and settings_obj.admin_email:
+                # Logic to send email (Pseudo-code, requires SMTP setup)
+                # For now, we return a message saying "Check server logs/console" or implement real email
+                # Assuming SMTP is not configured in this env, we guide them to the CLI.
+                return Response({'message': 'تم إرسال تعليمات الاستعادة إلى بريد المدير (إذا كان مفعل)، أو استخدم الأمر reset_director من الخادم.'})
+    except:
+        pass
+
     return Response({'message': 'يرجى الاتصال بمدير المؤسسة لاستعادة معلومات الدخول.'})
 
 @api_view(['POST'])

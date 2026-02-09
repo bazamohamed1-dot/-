@@ -241,24 +241,32 @@ document.addEventListener('DOMContentLoaded', () => {
 async function fetchStudents() {
     try {
         let data = [];
-        // Try Network first
-        if (navigator.onLine) {
-            const response = await fetch('/api/students/');
+        let usedOffline = false;
+
+        // Strategy: Try Network -> Fail -> Try Offline DB
+        try {
+            // Set a timeout for the fetch to avoid hanging if network is flaky
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec timeout
+
+            const response = await fetch('/api/students/', { signal: controller.signal });
+            clearTimeout(timeoutId);
+
             if (!response.ok) throw new Error('Network response was not ok');
             data = await response.json();
-        } else {
-            // Fallback to Offline Manifest via IndexedDB
-            console.log("Offline mode: Loading from IndexedDB manifest");
-            if (typeof offlineManager === 'undefined') {
-                 // Try loading script if not there (though it should be in base)
-                 throw new Error("Offline Manager not loaded");
-            }
-            const manifest = await offlineManager.getOfflineManifest();
+        } catch (err) {
+            console.log("Network fetch failed, switching to offline store...", err);
+            usedOffline = true;
 
+            if (typeof offlineManager === 'undefined') throw new Error("Offline Manager not loaded");
+
+            const manifest = await offlineManager.getOfflineManifest();
             if (manifest && manifest.students) {
                 data = manifest.students;
+                document.getElementById('modeStatus').innerHTML = '<i class="fas fa-database"></i> وضع العمل دون اتصال';
+                document.getElementById('modeStatus').style.color = '#f59e0b';
             } else {
-                throw new Error("No offline data available in DB");
+                throw new Error("لا توجد بيانات محفوظة محلياً. يرجى الاتصال بالانترنت للمزامنة.");
             }
         }
 
