@@ -30,6 +30,7 @@ urlpatterns = [
     path('dashboard/', ui_views.dashboard, name='dashboard'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
+    path('api/import_json/', views.import_students_json, name='api_import_json'),
     path('ui/', ui_views.canteen_home, name='canteen_home'),
     path('list/', ui_views.student_list, name='student_list'),
     path('management/', ui_views.students_management, name='students_management'),
