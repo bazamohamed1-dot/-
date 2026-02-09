@@ -52,10 +52,22 @@
             <h3 style="margin-top: 0; margin-bottom: 20px; color: var(--primary); font-family: 'Cairo', sans-serif;">
                 <i class="fas fa-calendar-alt"></i> وجبة الإطعام ليوم : <span id="currentDateDisplay" style="color: var(--secondary);"></span>
             </h3>
-            <input type="text" id="barcodeInput" class="scanner-input" placeholder="امسح البطاقة هنا..." autofocus autocomplete="off">
-            <small style="display:block; margin-top:5px; color:#dc2626; font-weight:bold;">
-                <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
-            </small>
+
+            <div id="manualScanContainer">
+                <input type="text" id="barcodeInput" class="scanner-input" placeholder="امسح البطاقة هنا..." autofocus autocomplete="off">
+                <small style="display:block; margin-top:5px; color:#dc2626; font-weight:bold;">
+                    <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
+                </small>
+            </div>
+
+            <div id="cameraScanContainer" style="display:none; margin-top:15px;">
+                <div id="reader" style="width: 100%; max-width: 500px; margin: auto; border-radius: 10px; overflow: hidden;"></div>
+            </div>
+
+            <button class="btn btn-secondary mobile-only" onclick="toggleScanMode()" style="margin-top: 15px; width: 100%; max-width: 500px;">
+                <i class="fas fa-camera"></i> <span id="scanModeText">تبديل للمسح بالكاميرا</span>
+            </button>
+
             <div id="alertBox" style="margin-top: 15px; padding: 15px; border-radius: 8px; font-weight: bold; display: none;"></div>
         </div>
 
@@ -455,6 +467,65 @@
             console.error(e);
             alert("خطأ في الاتصال");
         }
+    }
+
+    // Camera Scanner Logic
+    let html5QrcodeScanner = null;
+    let isCameraMode = false;
+    let isProcessingScan = false;
+
+    function toggleScanMode() {
+        isCameraMode = !isCameraMode;
+        const manualDiv = document.getElementById('manualScanContainer');
+        const cameraDiv = document.getElementById('cameraScanContainer');
+        const btnText = document.getElementById('scanModeText');
+
+        if (isCameraMode) {
+            manualDiv.style.display = 'none';
+            cameraDiv.style.display = 'block';
+            btnText.textContent = "العودة للمسح اليدوي";
+            startCameraScanner();
+        } else {
+            manualDiv.style.display = 'block';
+            cameraDiv.style.display = 'none';
+            btnText.textContent = "تبديل للمسح بالكاميرا";
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            input.focus();
+        }
+    }
+
+    function startCameraScanner() {
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            { fps: 10, qrbox: {width: 250, height: 150}, aspectRatio: 1.0 },
+            /* verbose= */ false
+        );
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        if (isProcessingScan) return;
+
+        // Simple debounce
+        isProcessingScan = true;
+
+        // Play Beep
+        const audio = new Audio('https://media.geeksforgeeks.org/wp-content/uploads/20190531135120/beep.mp3');
+        audio.play().catch(e => console.log("Audio play failed"));
+
+        handleScan(decodedText);
+
+        // Pause for 2 seconds before next scan
+        setTimeout(() => {
+            isProcessingScan = false;
+        }, 2000);
+    }
+
+    function onScanFailure(error) {
+        // handle scan failure, usually better to ignore and keep scanning.
+        // console.warn(`Code scan error = ${error}`);
     }
 
     // Set Current Date

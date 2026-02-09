@@ -115,10 +115,21 @@
 <div class="scanner-box">
     <i class="fas fa-barcode fa-2x" style="color: #3b82f6; margin-bottom: 10px;"></i>
     <h3>امسح البطاقة من هنا</h3>
-    <input type="text" id="barcodeInput" class="scanner-input" placeholder="ضع المؤشر هنا وامسح البطاقة..." autofocus autocomplete="off">
-    <p style="color:#dc2626; font-weight:bold; margin-top:10px;">
-        <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
-    </p>
+
+    <div id="manualScanContainer">
+        <input type="text" id="barcodeInput" class="scanner-input" placeholder="ضع المؤشر هنا وامسح البطاقة..." autofocus autocomplete="off">
+        <p style="color:#dc2626; font-weight:bold; margin-top:10px;">
+            <i class="fas fa-exclamation-triangle"></i> تنبيه: يرجى التأكد من أن لغة لوحة المفاتيح هي الإنجليزية
+        </p>
+    </div>
+
+    <div id="cameraScanContainer" style="display:none; margin-top:15px;">
+        <div id="reader" style="width: 100%; max-width: 500px; margin: auto; border-radius: 10px; overflow: hidden;"></div>
+    </div>
+
+    <button class="btn btn-secondary mobile-only" onclick="toggleScanMode()" style="margin-top: 15px; width: 100%; max-width: 500px;">
+        <i class="fas fa-camera"></i> <span id="scanModeText">تبديل للمسح بالكاميرا</span>
+    </button>
 </div>
 {% endif %}
     <p style="color:#dc2626; font-weight:bold; margin-top:10px;">
@@ -340,24 +351,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto-focus barcode input
     const input = document.getElementById('barcodeInput');
-    input.focus();
+    if (input) {
+        input.focus();
 
-    // Check for Arabic chars
-    input.addEventListener('input', function(e) {
-        const val = this.value;
-        if (/[\u0600-\u06FF]/.test(val)) {
-             // Show a small toast or alert
-             showToast("تنبيه: يرجى استخدام اللغة الإنجليزية!");
-        }
-    });
+        // Check for Arabic chars
+        input.addEventListener('input', function(e) {
+            const val = this.value;
+            if (/[\u0600-\u06FF]/.test(val)) {
+                 // Show a small toast or alert
+                 showToast("تنبيه: يرجى استخدام اللغة الإنجليزية!");
+            }
+        });
 
-    // Handle Enter key
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            scanCard(input.value);
-            input.value = '';
-        }
-    });
+        // Handle Enter key
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                scanCard(input.value);
+                input.value = '';
+            }
+        });
+    }
 
     // Set Default Date to Today
     const today = new Date().toISOString().split('T')[0];
@@ -808,6 +821,65 @@ window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
         event.target.style.display = "none";
     }
+}
+
+// Camera Scanner Logic
+let html5QrcodeScanner = null;
+let isCameraMode = false;
+let isProcessingScan = false;
+
+function toggleScanMode() {
+    isCameraMode = !isCameraMode;
+    const manualDiv = document.getElementById('manualScanContainer');
+    const cameraDiv = document.getElementById('cameraScanContainer');
+    const btnText = document.getElementById('scanModeText');
+    const input = document.getElementById('barcodeInput');
+
+    if (isCameraMode) {
+        manualDiv.style.display = 'none';
+        cameraDiv.style.display = 'block';
+        btnText.textContent = "العودة للمسح اليدوي";
+        startCameraScanner();
+    } else {
+        manualDiv.style.display = 'block';
+        cameraDiv.style.display = 'none';
+        btnText.textContent = "تبديل للمسح بالكاميرا";
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.clear();
+        }
+        if(input) input.focus();
+    }
+}
+
+function startCameraScanner() {
+    html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: {width: 250, height: 150}, aspectRatio: 1.0 },
+        /* verbose= */ false
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+}
+
+function onScanSuccess(decodedText, decodedResult) {
+    if (isProcessingScan) return;
+
+    // Simple debounce
+    isProcessingScan = true;
+
+    // Play Beep
+    const audio = new Audio('https://media.geeksforgeeks.org/wp-content/uploads/20190531135120/beep.mp3');
+    audio.play().catch(e => console.log("Audio play failed"));
+
+    scanCard(decodedText);
+
+    // Pause for 2 seconds before next scan
+    setTimeout(() => {
+        isProcessingScan = false;
+    }, 2000);
+}
+
+function onScanFailure(error) {
+    // handle scan failure, usually better to ignore
 }
 </script>
 {% endblock %}

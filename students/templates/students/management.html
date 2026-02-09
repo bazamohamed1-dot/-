@@ -111,10 +111,10 @@
                 <div class="field-box"><label>تاريخ التسجيل *</label><input type="date" id="enrollmentDate" class="form-input" lang="fr-FR"></div>
                 <div class="field-box"><label>تاريخ الخروج</label><input type="date" id="exitDate" class="form-input" lang="fr-FR"></div>
 
-                <div class="field-box span-2"><label>اسم الولي الكامل *</label><input type="text" id="guardianName" class="form-input"></div>
-                <div class="field-box span-2"><label>لقب واسم الأم *</label><input type="text" id="motherName" class="form-input"></div>
-                <div class="field-box span-2"><label>رقم هاتف الولي *</label><input type="text" id="guardianPhone" class="form-input" maxlength="10"></div>
-                <div class="field-box span-2"><label>عنوان السكن *</label><input type="text" id="address" class="form-input"></div>
+                <div class="field-box span-2"><label>اسم الولي الكامل</label><input type="text" id="guardianName" class="form-input"></div>
+                <div class="field-box span-2"><label>لقب واسم الأم</label><input type="text" id="motherName" class="form-input"></div>
+                <div class="field-box span-2"><label>رقم هاتف الولي</label><input type="text" id="guardianPhone" class="form-input" maxlength="10"></div>
+                <div class="field-box span-2"><label>عنوان السكن</label><input type="text" id="address" class="form-input"></div>
                 <input type="hidden" id="photoPath">
                 <input type="hidden" id="dbId"> <!-- Django ID -->
             </div>
@@ -371,7 +371,7 @@ async function saveCurrent() {
     const required = ['lastName', 'firstName', 'studentID', 'academicYear', 'className'];
     for (let id of required) {
         if (!document.getElementById(id).value.trim()) {
-            alert("يرجى ملء الحقول الإجبارية (*)");
+            alert("يرجى ملء الحقول الإجبارية (اللقب، الاسم، رقم التعريف، المستوى، القسم)");
             return;
         }
     }
