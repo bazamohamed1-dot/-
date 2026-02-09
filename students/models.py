@@ -15,10 +15,10 @@ class Student(models.Model):
     enrollment_number = models.CharField(max_length=50, verbose_name="رقم القيد")
     enrollment_date = models.DateField(verbose_name="تاريخ التسجيل")
     exit_date = models.DateField(null=True, blank=True, verbose_name="تاريخ الخروج")
-    guardian_name = models.CharField(max_length=200, verbose_name="اسم الولي")
-    mother_name = models.CharField(max_length=200, verbose_name="لقب واسم الأم")
-    address = models.TextField(verbose_name="عنوان السكن")
-    guardian_phone = models.CharField(max_length=20, verbose_name="رقم هاتف الولي")
+    guardian_name = models.CharField(max_length=200, null=True, blank=True, verbose_name="اسم الولي")
+    mother_name = models.CharField(max_length=200, null=True, blank=True, verbose_name="لقب واسم الأم")
+    address = models.TextField(null=True, blank=True, verbose_name="عنوان السكن")
+    guardian_phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم هاتف الولي")
     photo_path = models.TextField(null=True, blank=True, verbose_name="مسار الصورة") # Changed to TextField to support Base64
 
     class Meta:
