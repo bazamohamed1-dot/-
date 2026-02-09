@@ -431,7 +431,37 @@ async function saveCurrent() {
     const url = (dbId && dbId !== "undefined" && dbId !== "") ? `/api/students/${dbId}/` : '/api/students/';
 
     try {
-        // Wrap in apiFetch to handle offline logic automatically (including Base64 photos)
+        // --- Offline Optimization: Save Blob directly if offline ---
+        // Requirement: "Stop using Base64... create record in IndexedDB... with original image file (Blob)"
+        // If we are offline (or if apiFetch determines offline logic should run), passing the File object
+        // allows IndexedDB to store it efficiently.
+
+        if (!navigator.onLine && window.offlineManager && document.getElementById('imageSelector').files[0]) {
+             console.log("Saving Blob to IndexedDB...");
+             const file = document.getElementById('imageSelector').files[0];
+             // We need to inject the file into the studentData for `offlineManager` to handle
+             // But `saveStudentOffline` logic handles the separation.
+             // Let's modify `studentData` to keep `photo_path` as a placeholder or remove it?
+             // Actually `offlineManager` needs to know about the file.
+             // We will bypass `apiFetch` here for the specialized Blob saving method we added.
+
+             await window.offlineManager.saveStudentOffline({
+                 url: url,
+                 method: method,
+                 data: studentData,
+                 file: file
+             });
+
+             // Simulate success response
+             alert("تم الحفظ محلياً (صورة عالية الجودة)");
+             isEditMode = false;
+             // Update local list (fetchStudents uses manifest/IDB)
+             await fetchStudents();
+             prepareNew();
+             return; // Stop here
+        }
+
+        // Standard Path (Online or Text-only Offline via apiFetch)
         // Ensure apiFetch is globally available from offline_manager.js
         const fetchFunc = window.apiFetch || fetch;
 

@@ -262,6 +262,7 @@
             <li class="nav-item">
                 <a href="{% url 'pending_updates_view' %}" class="nav-link {% if 'pending_updates' in request.path %}active{% endif %}">
                     <i class="fas fa-check-double"></i> مركز المراجعة
+                    <span id="reviewBadge" style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 50%; font-size: 0.7rem; margin-right: auto; display: none;">0</span>
                 </a>
             </li>
             {% endif %}
@@ -278,6 +279,10 @@
                 <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
             </div>
             <div class="user-info" style="display: flex; gap: 15px; align-items: center;">
+                <!-- Hard Reset Button (Replaces manual sync) -->
+                <button id="downloadOfflineBtn" class="btn btn-warning" onclick="resetApp()" style="padding: 5px 10px; font-size: 0.9rem;" title="اضغط هنا في حال واجهت مشاكل تقنية أو فشل التحديث">
+                    <i class="fas fa-tools"></i> إصلاح وتحديث
+                </button>
                 <div id="offlineStatusIndicator" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 5px 10px; border-radius: 20px; background: #e0f2fe; color: #0369a1;">
                     <i class="fas fa-sync fa-spin"></i> جاري التحقق...
                 </div>
@@ -488,6 +493,22 @@
             document.getElementById('pwa-install-btn').remove();
         }
     }
+
+    // Update Review Badge
+    {% if request.user.profile.role == 'director' or request.user.is_superuser %}
+    fetch('/canteen/api/pending_updates/count/')
+        .then(r => r.json())
+        .then(data => {
+            if(data.count > 0) {
+                const b = document.getElementById('reviewBadge');
+                if(b) {
+                    b.innerText = data.count;
+                    b.style.display = 'inline-block';
+                }
+            }
+        })
+        .catch(e => console.log(e));
+    {% endif %}
 </script>
 </body>
 </html>

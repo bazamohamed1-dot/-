@@ -150,6 +150,11 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
         self.get_queryset().delete()
         return Response({'message': 'Rejected All'})
 
+    @action(detail=False, methods=['get'])
+    def count(self, request):
+        count = self.get_queryset().count()
+        return Response({'count': count})
+
 class SystemMessageViewSet(viewsets.ModelViewSet):
     queryset = SystemMessage.objects.filter(active=True)
     serializer_class = SystemMessageSerializer
