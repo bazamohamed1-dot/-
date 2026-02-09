@@ -261,7 +261,7 @@
             {% if request.user.profile.role == 'director' or request.user.is_superuser %}
             <li class="nav-item">
                 <a href="{% url 'pending_updates_view' %}" class="nav-link {% if 'pending_updates' in request.path %}active{% endif %}">
-                    <i class="fas fa-sync-alt"></i> التحديثات المعلقة
+                    <i class="fas fa-check-double"></i> مركز المراجعة
                 </a>
             </li>
             {% endif %}
