@@ -17,6 +17,7 @@ from io import BytesIO
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 import logging
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,6 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # --- Lightweight JSON Import API ---
-@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def import_students_json(request):
