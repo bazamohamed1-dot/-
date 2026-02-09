@@ -54,10 +54,25 @@ class OfflineManager {
         // Alternative: Use LocalStorage for the manifest JSON (it's small < 1MB usually)
         // 1000 students * 200 chars = 200KB. Safe for LocalStorage.
         try {
-            localStorage.setItem('offline_manifest', JSON.stringify(data));
-            console.log("Manifest saved to LocalStorage");
+            const strData = JSON.stringify(data);
+            try {
+                localStorage.setItem('offline_manifest', strData);
+                console.log("Manifest saved to LocalStorage");
+            } catch(e) {
+                if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                     // Try IndexedDB Fallback
+                     if (!this.db) await this.initDB();
+                     const tx = this.db.transaction(['outbox'], 'readwrite');
+                     // Using outbox temporarily or create new store
+                     // Since schema upgrade is hard on the fly, let's just warn user for now.
+                     // Or clear old data?
+                     alert("مساحة التخزين المحلية ممتلئة. لا يمكن حفظ البيانات دون اتصال.");
+                }
+                throw e;
+            }
         } catch(e) {
-            console.error("LocalStorage full?", e);
+            console.error("Storage Error", e);
+            throw new Error("فشل حفظ البيانات محلياً (المساحة ممتلئة؟)");
         }
     }
 
@@ -132,13 +147,20 @@ window.downloadOfflineData = async () => {
         btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحميل...`;
 
         // 1. Fetch Manifest
+        // Using window.apiFetch which injects CSRF/Device-ID
         const response = await fetch('/api/offline_manifest/', {
-            headers: { 'Authorization': `Bearer ${sessionStorage.getItem('session_token')}` }
-            // Note: Views use Session/Cookies mainly, but let's ensure auth headers if needed.
-            // Actually our views use standard Session auth.
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+                // Note: Auth session cookie is sent automatically by browser for same-origin requests
+            }
         });
 
-        if (!response.ok) throw new Error("Failed to fetch manifest");
+        if (!response.ok) {
+            const txt = await response.text();
+            throw new Error(`Failed to fetch manifest: ${response.status} - ${txt}`);
+        }
 
         const data = await response.json();
 
