@@ -415,6 +415,44 @@
     window.addEventListener('online', updateOnlineStatus);
     window.addEventListener('offline', updateOnlineStatus);
     updateOnlineStatus(); // Check on load
+
+    // PWA Install Prompt
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67 and earlier from automatically showing the prompt
+        e.preventDefault();
+        // Stash the event so it can be triggered later.
+        deferredPrompt = e;
+        // Show our custom install button
+        showInstallPromotion();
+    });
+
+    function showInstallPromotion() {
+        const installBtn = document.createElement('div');
+        installBtn.id = 'pwa-install-btn';
+        installBtn.innerHTML = `
+            <div style="position: fixed; bottom: 80px; left: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 9999; display: flex; align-items: center; gap: 15px; animation: slideUp 0.5s ease;">
+                <img src="{% static 'images/logo.png' %}" style="width: 50px; height: 50px; border-radius: 10px;">
+                <div>
+                    <div style="font-weight: bold; font-size: 1rem;">تثبيت التطبيق</div>
+                    <div style="font-size: 0.8rem; color: #64748b;">أضف البرنامج لشاشتك الرئيسية</div>
+                </div>
+                <button onclick="installPWA()" style="background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">تثبيت</button>
+                <button onclick="document.getElementById('pwa-install-btn').remove()" style="background: transparent; color: #999; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+        `;
+        document.body.appendChild(installBtn);
+    }
+
+    async function installPWA() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response to the install prompt: ${outcome}`);
+            deferredPrompt = null;
+            document.getElementById('pwa-install-btn').remove();
+        }
+    }
 </script>
 </body>
 </html>
