@@ -91,14 +91,21 @@ def import_eleve_view(request):
                 temp_path = tmp.name
 
             out = StringIO()
-            # Call command
+            # Call command with Retry Logic for OperationalError
             try:
-                call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
+                from django.db import OperationalError
+                try:
+                    call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
+                except OperationalError:
+                    # Retry once if DB connection failed
+                    from django.db import connection
+                    connection.close()
+                    call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
+
                 messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
             except Exception as e:
                 import traceback
                 error_details = traceback.format_exc()
-                # Catch specific command errors and show traceback for debugging
                 messages.error(request, f"فشل الاستيراد: {str(e)} \n التفاصيل: {error_details}")
             finally:
                 if temp_path and os.path.exists(temp_path):

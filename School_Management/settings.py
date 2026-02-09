@@ -96,13 +96,22 @@ WSGI_APPLICATION = 'School_Management.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Database Configuration optimized for Neon (Postgres)
+# Using separate options dict to ensure SSL is forced correctly
+default_db_url = os.getenv('DATABASE_URL')
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL'), # يقرأ الرابط من ملف .env
-        conn_max_age=0, # Disable persistence to avoid SSL errors (Decryption failed)
+        default=default_db_url,
+        conn_max_age=0, # Force close connection to avoid SSL handshake issues
         ssl_require=True
     )
 }
+# Explicitly enforce SSL mode if not in URL
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default']['OPTIONS'] = {
+        'sslmode': 'require',
+        'connect_timeout': 10,
+    }
 
 if 'test' in sys.argv:
     DATABASES['default'] = {
