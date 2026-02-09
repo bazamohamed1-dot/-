@@ -203,6 +203,16 @@ def get_offline_manifest(request):
         'enrollment_number', 'enrollment_date', 'guardian_name',
         'mother_name', 'address', 'guardian_phone', 'exit_date'
     )
+    # Also need full offline capability for Editing:
+    # We might need to map field names to frontend expectations if they differ.
+    # Frontend management.html uses: ln, fn, id, dob, pob, gender, level, class, sys, enrollNum, enrollDate, exitDate, guard, mother, phone, addr, photo
+    # My `values()` query returns db field names.
+    # The frontend code in `management.html` (which I saw earlier) maps `s.last_name` to `ln`, etc.
+    # Wait, `management.html` fetchStudents() maps API response:
+    # s.ln = s.last_name
+    # So as long as keys match API serializers (which match model fields), we are good.
+    # The `get_offline_manifest` returns a list of dicts with model field names.
+    # Perfect.
 
     # Canteen Stats
     today = date.today()
