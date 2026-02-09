@@ -45,6 +45,22 @@ class OfflineManager {
         // Silent save (User Requirement: "لا تضع أي أزرار للمزامنة... تتم في الخلفية تماماً")
     }
 
+    async saveOfflineManifest(data) {
+        if (!this.db) await this.initDB();
+        // Store the manifest (Students list, etc) for offline usage
+        // We'll create a new store 'manifest' in next version upgrade,
+        // but for now let's reuse 'outbox' or just upgrade.
+        // Upgrading IDB version is tricky if DB is open.
+        // Alternative: Use LocalStorage for the manifest JSON (it's small < 1MB usually)
+        // 1000 students * 200 chars = 200KB. Safe for LocalStorage.
+        try {
+            localStorage.setItem('offline_manifest', JSON.stringify(data));
+            console.log("Manifest saved to LocalStorage");
+        } catch(e) {
+            console.error("LocalStorage full?", e);
+        }
+    }
+
     async syncData() {
         if (!this.db) await this.initDB();
         if (!navigator.onLine) return;
@@ -100,6 +116,89 @@ class OfflineManager {
 }
 
 const offlineManager = new OfflineManager();
+
+// Global function for the "Download Data" button
+window.downloadOfflineData = async () => {
+    const btn = document.getElementById('downloadOfflineBtn');
+    const originalText = btn.innerHTML;
+
+    if (!navigator.onLine) {
+        alert("يجب أن تكون متصلاً بالإنترنت لتحميل البيانات.");
+        return;
+    }
+
+    try {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحميل...`;
+
+        // 1. Fetch Manifest
+        const response = await fetch('/api/offline_manifest/', {
+            headers: { 'Authorization': `Bearer ${sessionStorage.getItem('session_token')}` }
+            // Note: Views use Session/Cookies mainly, but let's ensure auth headers if needed.
+            // Actually our views use standard Session auth.
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch manifest");
+
+        const data = await response.json();
+
+        // 2. Save Data locally
+        await offlineManager.saveOfflineManifest(data);
+
+        // 3. Cache Images
+        if ('caches' in window) {
+            const cache = await caches.open('offline-images-v1');
+            const students = data.students || [];
+            const total = students.length;
+            let count = 0;
+
+            // Collect URLs
+            const urls = students
+                .map(s => s.photo_path)
+                .filter(url => url && url.startsWith('http')); // Only valid HTTP URLs
+
+            // Batch process
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+                const batch = urls.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(url =>
+                    cache.add(url).catch(e => console.warn("Failed to cache image:", url))
+                ));
+                count += batch.length;
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> صور (${Math.min(count, urls.length)}/${urls.length})`;
+            }
+        }
+
+        btn.innerHTML = `<i class="fas fa-check"></i> تم التحديث`;
+        btn.classList.replace('btn-primary', 'btn-success');
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.replace('btn-success', 'btn-primary');
+            btn.disabled = false;
+        }, 3000);
+
+    } catch (e) {
+        console.error(e);
+        btn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> فشل`;
+        btn.classList.replace('btn-primary', 'btn-danger');
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.classList.replace('btn-danger', 'btn-primary');
+            btn.disabled = false;
+        }, 3000);
+    }
+};
+
+// Show/Hide Download Button based on connectivity
+function updateDownloadButton() {
+    const btn = document.getElementById('downloadOfflineBtn');
+    if (btn) {
+        btn.style.display = navigator.onLine ? 'inline-block' : 'none';
+    }
+}
+window.addEventListener('online', updateDownloadButton);
+window.addEventListener('offline', updateDownloadButton);
+document.addEventListener('DOMContentLoaded', updateDownloadButton);
 
 // Wrapper for Fetch to handle offline automatically
 window.apiFetch = async (url, options = {}) => {
