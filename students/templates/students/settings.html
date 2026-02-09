@@ -44,6 +44,35 @@
 </div>
 
 <div class="card" style="margin-bottom: 20px;">
+    <h3><i class="fas fa-utensils"></i> إعدادات المطعم</h3>
+    <form id="canteenSettingsForm" onsubmit="saveCanteenSettings(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+             <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">وقت الفتح</label>
+                <input type="time" id="canteenOpen" class="form-input western-nums" required style="width:100%; padding:10px; direction: ltr;">
+            </div>
+            <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">وقت الغلق</label>
+                <input type="time" id="canteenClose" class="form-input western-nums" required style="width:100%; padding:10px; direction: ltr;">
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <label style="display:block; margin-bottom:10px; font-weight:bold;">أيام العمل</label>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <label><input type="checkbox" class="day-check" value="6"> الأحد</label>
+                <label><input type="checkbox" class="day-check" value="0"> الاثنين</label>
+                <label><input type="checkbox" class="day-check" value="1"> الثلاثاء</label>
+                <label><input type="checkbox" class="day-check" value="2"> الأربعاء</label>
+                <label><input type="checkbox" class="day-check" value="3"> الخميس</label>
+                <label><input type="checkbox" class="day-check" value="4"> الجمعة</label>
+                <label><input type="checkbox" class="day-check" value="5"> السبت</label>
+            </div>
+        </div>
+         <button type="submit" class="btn btn-primary" style="margin-top: 15px;">حفظ إعدادات المطعم</button>
+    </form>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
     <h3><i class="fas fa-database"></i> إدارة قاعدة البيانات</h3>
     <div style="padding: 10px 0;">
         <div style="display: flex; align-items: center; gap: 15px;">
@@ -229,6 +258,16 @@ async function loadSettings() {
         if (data.director_name) document.getElementById('directorName').value = data.director_name;
         if (data.loan_limit) document.getElementById('loanLimit').value = data.loan_limit;
         if (data.admin_email) document.getElementById('adminEmail').value = data.admin_email;
+
+        // Canteen
+        if (data.canteen_open_time) document.getElementById('canteenOpen').value = data.canteen_open_time.substring(0,5);
+        if (data.canteen_close_time) document.getElementById('canteenClose').value = data.canteen_close_time.substring(0,5);
+        if (data.canteen_days) {
+            const days = data.canteen_days.split(',');
+            document.querySelectorAll('.day-check').forEach(chk => {
+                chk.checked = days.includes(chk.value);
+            });
+        }
     } catch (error) {
         console.error("Error loading settings", error);
     }
@@ -255,6 +294,40 @@ async function saveSchoolSettings(e) {
 
         if (response.ok) {
             alert("تم حفظ إعدادات المؤسسة بنجاح");
+        } else {
+            const errorText = await response.text();
+            console.error("Save Error:", errorText);
+            alert("حدث خطأ أثناء الحفظ: " + errorText);
+        }
+    } catch (error) {
+        console.error(error);
+        alert("خطأ في الاتصال: " + error);
+    }
+}
+
+async function saveCanteenSettings(e) {
+    e.preventDefault();
+    const days = [];
+    document.querySelectorAll('.day-check:checked').forEach(c => days.push(c.value));
+
+    const data = {
+        canteen_open_time: document.getElementById('canteenOpen').value,
+        canteen_close_time: document.getElementById('canteenClose').value,
+        canteen_days: days.join(',')
+    };
+
+    try {
+        const response = await fetch('/canteen/settings/data/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            alert("تم حفظ إعدادات المطعم بنجاح");
         } else {
             const errorText = await response.text();
             console.error("Save Error:", errorText);
