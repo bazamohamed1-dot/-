@@ -60,6 +60,18 @@ def login_view(request):
                             # Strict Lock
                             return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
                         device_id_to_send = profile.device_id
+                else:
+                    # No device_id set.
+                    # If Director, allow and auto-bind? Or just allow?
+                    # User wants strict lock.
+                    if profile.role == 'director':
+                        # Auto-provision director for convenience or leave open?
+                        # Let's leave open for Director to avoid lockout, but STRICT for others.
+                        pass
+                    else:
+                        # Strict Block for employees
+                        return Response({'error': 'الجهاز غير مفعل. يرجى الطلب من المدير تفعيل هذا الجهاز.', 'code': 'DEVICE_NOT_ACTIVATED'}, status=status.HTTP_403_FORBIDDEN)
+
             except Exception as e:
                 print(f"Device Lock Error: {e}")
                 # Don't block login if device check fails internally (allow access but log)

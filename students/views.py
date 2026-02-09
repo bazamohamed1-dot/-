@@ -187,6 +187,37 @@ class ArchiveDocumentViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="Archive_{date.today()}.xlsx"'
         return response
 
+# --- Offline Manifest ---
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_offline_manifest(request):
+    """
+    Returns data needed for offline mode:
+    1. Full Student List (ID, Name, Class, Photo URL, Barcode ID)
+    2. Canteen Stats (Today)
+    """
+    students = Student.objects.all().values(
+        'id', 'student_id_number', 'last_name', 'first_name',
+        'class_name', 'photo_path', 'attendance_system',
+        'gender', 'date_of_birth', 'place_of_birth', 'academic_year',
+        'enrollment_number', 'enrollment_date', 'guardian_name',
+        'mother_name', 'address', 'guardian_phone', 'exit_date'
+    )
+
+    # Canteen Stats
+    today = date.today()
+    total_half_board = Student.objects.filter(attendance_system='نصف داخلي').count()
+    present_count = CanteenAttendance.objects.filter(date=today).count()
+
+    return Response({
+        'students': list(students),
+        'canteen_stats': {
+            'total': total_half_board,
+            'present': present_count,
+            'date': str(today)
+        }
+    })
+
 # --- Library Views ---
 
 @csrf_exempt

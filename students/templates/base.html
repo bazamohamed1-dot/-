@@ -123,14 +123,38 @@
 
         /* Responsive Design */
         @media (max-width: 768px) {
-            .sidebar {
-                display: none !important; /* Completely hide sidebar on mobile */
+            /* Logic: Hide sidebar for everyone by default, but allow Director to toggle it */
+
+            /* For Non-Directors: Completely Hide Sidebar & Toggle */
+            body:not(.role-director) .sidebar {
+                display: none !important;
             }
+            body:not(.role-director) .toggle-sidebar {
+                display: none !important;
+            }
+
+            /* For Director: Hide by default, show if active */
+            body.role-director .sidebar {
+                display: none;
+            }
+            body.role-director .sidebar.active {
+                display: flex !important;
+                position: fixed;
+                right: 0;
+                top: 0;
+                height: 100%;
+                z-index: 9999;
+            }
+            body.role-director .toggle-sidebar {
+                display: block !important; /* Show toggle for Director */
+                font-size: 1.5rem;
+                background: none;
+                border: none;
+                cursor: pointer;
+            }
+
             .main {
                 margin-right: 0 !important;
-            }
-            .toggle-sidebar {
-                display: none !important;
             }
             .grid-2, .grid-4 {
                 grid-template-columns: 1fr !important;
@@ -191,7 +215,7 @@
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% if request.user.is_authenticated and request.user.profile.role == 'director' %}role-director{% else %}role-employee{% endif %}">
 
 <div id="offlineBanner">
     <i class="fas fa-wifi-slash"></i> لا يوجد اتصال بالإنترنت - وضع العمل دون اتصال
@@ -247,6 +271,9 @@
                 <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
             </div>
             <div class="user-info" style="display: flex; gap: 15px; align-items: center;">
+                <button id="downloadOfflineBtn" class="btn btn-primary" onclick="downloadOfflineData()" style="padding: 5px 10px; font-size: 0.9rem; display: none;">
+                    <i class="fas fa-download"></i> تحميل البيانات
+                </button>
                 <span id="userInfoDisplay" class="d-none-mobile"><i class="fas fa-user-circle"></i> المستخدم</span>
                 <button id="logoutBtn" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9rem;">
                     <i class="fas fa-sign-out-alt"></i> خروج

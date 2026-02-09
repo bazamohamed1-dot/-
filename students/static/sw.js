@@ -90,15 +90,18 @@ self.addEventListener('fetch', (event) => {
 
     // For other assets (CSS, JS, Images) - Stale While Revalidate
     event.respondWith(
-        caches.open(CACHE_NAME).then(async (cache) => {
-            const cachedResponse = await cache.match(event.request);
-
+        // Check ALL caches (including offline-images-v1)
+        caches.match(event.request).then(async (cachedResponse) => {
             const networkFetch = fetch(event.request).then((networkResponse) => {
+                // Update the main cache with new version if successful
                 if (networkResponse.ok) {
-                    cache.put(event.request, networkResponse.clone());
+                    caches.open(CACHE_NAME).then(cache => {
+                         cache.put(event.request, networkResponse.clone());
+                    });
                 }
                 return networkResponse;
             }).catch(() => {
+                // Network failed, return cached response if available
                 return cachedResponse;
             });
 

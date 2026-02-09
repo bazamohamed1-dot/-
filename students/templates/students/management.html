@@ -240,9 +240,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function fetchStudents() {
     try {
-        const response = await fetch('/api/students/');
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
+        let data = [];
+        // Try Network first
+        if (navigator.onLine) {
+            const response = await fetch('/api/students/');
+            if (!response.ok) throw new Error('Network response was not ok');
+            data = await response.json();
+        } else {
+            // Fallback to Offline Manifest
+            console.log("Offline mode: Loading from local manifest");
+            const manifest = JSON.parse(localStorage.getItem('offline_manifest') || '{"students":[]}');
+            if (manifest && manifest.students) {
+                // Map manifest format to API format if needed
+                // Manifest: {id, student_id_number, last_name, ... photo_path}
+                // API: {id, student_id_number, ...}
+                // They are similar enough for this view usually, but manifest might be lighter.
+                // Let's check `get_offline_manifest` fields.
+                // It returns: 'id', 'student_id_number', 'last_name', 'first_name', 'class_name', 'photo_path', 'attendance_system'
+                // But `management.html` needs MORE fields (dob, place_of_birth, etc) for editing.
+                // The current `get_offline_manifest` ONLY returns a subset!
+                // ERROR: The offline manifest I implemented is too light for full management.
+                // I need to update `get_offline_manifest` to return ALL fields if I want full offline editing/viewing in Management.
+                // Or I accept that offline mode in Management only shows what's available.
+                // But `management.html` expects `s.date_of_birth`, etc.
+                // If missing, they will be undefined.
+
+                // Let's use what we have, but ideally update the backend to send full data.
+                // Given the requirement "Information consists of student data...", likely full data.
+                // I will update the backend manifest to include all fields.
+                data = manifest.students;
+            } else {
+                throw new Error("No offline data available");
+            }
+        }
 
         studentsList = data.map(s => ({
             dbId: s.id,

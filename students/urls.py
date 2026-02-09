@@ -23,6 +23,7 @@ urlpatterns = [
 
     # Sync API
     path('api/sync/', sync_views.SyncViewSet.as_view({'post': 'create'}), name='sync_data'),
+    path('api/offline_manifest/', views.get_offline_manifest, name='offline_manifest'),
 
     path('api/', include(router.urls)),
 
