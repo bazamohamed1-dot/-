@@ -526,19 +526,6 @@ def scan_card(request):
                          'code': 'LATE_NOT_ATE',
                          'student': student_data
                      }, status=status.HTTP_403_FORBIDDEN)
-             student_data = StudentSerializer(student).data
-             if attended:
-                 return Response({
-                     'error': 'انتهى الوقت (أكل مسبقاً)',
-                     'code': 'LATE_ATE',
-                     'student': student_data
-                 }, status=status.HTTP_403_FORBIDDEN)
-             else:
-                 return Response({
-                     'error': 'انتهى الوقت (لم يأكل)',
-                     'code': 'LATE_NOT_ATE',
-                     'student': student_data
-                 }, status=status.HTTP_403_FORBIDDEN)
 
         # Check if Half-Board
         if student.attendance_system != 'نصف داخلي':
