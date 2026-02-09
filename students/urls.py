@@ -29,6 +29,7 @@ urlpatterns = [
 
     # UI Views
     path('dashboard/', ui_views.dashboard, name='dashboard'),
+    path('pending_updates/', ui_views.pending_updates_view, name='pending_updates_view'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
     path('api/import_json/', views.import_students_json, name='api_import_json'),
