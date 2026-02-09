@@ -99,7 +99,7 @@ WSGI_APPLICATION = 'School_Management.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL'), # يقرأ الرابط من ملف .env
-        conn_max_age=600,
+        conn_max_age=0, # Disable persistence to avoid SSL errors (Decryption failed)
         ssl_require=True
     )
 }
