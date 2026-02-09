@@ -149,6 +149,14 @@ window.downloadOfflineData = async (silent = true) => {
     const token = sessionStorage.getItem('session_token');
     if (!token) return;
 
+    // Update Status UI
+    const indicator = document.getElementById('offlineStatusIndicator');
+    if (indicator) {
+        indicator.innerHTML = '<i class="fas fa-sync fa-spin"></i> جاري التحديث...';
+        indicator.style.background = '#e0f2fe';
+        indicator.style.color = '#0369a1';
+    }
+
     try {
         console.log("Starting background data download...");
 
@@ -163,6 +171,11 @@ window.downloadOfflineData = async (silent = true) => {
 
         if (!response.ok) {
             console.error("Background Download Failed:", response.status);
+            if(indicator) {
+                indicator.innerHTML = '<i class="fas fa-exclamation-circle"></i> فشل التحديث';
+                indicator.style.background = '#fee2e2';
+                indicator.style.color = '#991b1b';
+            }
             return;
         }
 
@@ -199,9 +212,19 @@ window.downloadOfflineData = async (silent = true) => {
         }
 
         console.log("Background Data Download Completed.");
+        if (indicator) {
+            indicator.innerHTML = '<i class="fas fa-check-circle"></i> جاهز للعمل';
+            indicator.style.background = '#dcfce7';
+            indicator.style.color = '#166534';
+        }
 
     } catch (e) {
         console.error("Background Sync Error:", e);
+        if(indicator) {
+            indicator.innerHTML = '<i class="fas fa-wifi-slash"></i> وضع دون اتصال';
+            indicator.style.background = '#f3f4f6';
+            indicator.style.color = '#4b5563';
+        }
     }
 };
 

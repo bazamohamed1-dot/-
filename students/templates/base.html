@@ -278,6 +278,9 @@
                 <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
             </div>
             <div class="user-info" style="display: flex; gap: 15px; align-items: center;">
+                <div id="offlineStatusIndicator" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 5px 10px; border-radius: 20px; background: #e0f2fe; color: #0369a1;">
+                    <i class="fas fa-sync fa-spin"></i> جاري التحقق...
+                </div>
                 <span id="userInfoDisplay" class="d-none-mobile"><i class="fas fa-user-circle"></i> المستخدم</span>
                 <button id="logoutBtn" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9rem;">
                     <i class="fas fa-sign-out-alt"></i> خروج
