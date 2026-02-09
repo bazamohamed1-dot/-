@@ -216,8 +216,16 @@
     async function handleScan(barcode) {
         if(!barcode) return;
 
+        // Offline Mode Check
+        if (!navigator.onLine) {
+            return handleScanOffline(barcode);
+        }
+
         try {
-            const res = await fetch('/canteen/scan_card/', {
+            // Ensure we use apiFetch if defined, else standard fetch
+            const fetchFunc = window.apiFetch || fetch;
+
+            const res = await fetchFunc('/canteen/scan_card/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -226,49 +234,107 @@
                 body: JSON.stringify({ barcode })
             });
 
+            // Check if this is a "Fake" offline success from apiFetch
+            if (res.statusText === 'Offline Saved') {
+                 // Check local validity since server couldn't
+                 const localStudent = offlineStudents.find(s => s.student_id_number === barcode);
+                 if (localStudent) {
+                     if (localStudent.attendance_system !== 'نصف داخلي') {
+                         playAlert('error');
+                         showAlert('تنبيه: التلميذ ليس نصف داخلي (مسجل محلياً)', 'danger');
+                     } else {
+                         showStudent(localStudent);
+                         playAlert('success');
+                         showAlert('تم الحفظ محلياً (دون اتصال)', 'success');
+                     }
+                 } else {
+                     playAlert('warning');
+                     showAlert('تم الحفظ (معرف غير موجود محلياً)', 'warning');
+                 }
+                 return;
+            }
+
             let data;
             try {
                 data = await res.json();
             } catch (jsonError) {
                 console.error("JSON Parse Error:", jsonError);
+                playAlert('error');
                 showAlert('خطأ في استجابة الخادم (غير مقروءة)', 'danger');
                 return;
             }
 
             if (res.ok) {
                 showStudent(data.student);
+                playAlert('success');
                 showAlert('تم التسجيل بنجاح', 'success');
                 updateStats();
                 updatePresentList();
             } else {
+                playAlert('error');
                 if (data.student) showStudent(data.student);
 
                 if (data.code === 'LATE_ATE') {
                     showAlert('التلميذ أخذ وجبته مسبقاً', 'warning');
-                    setTimeout(() => {
-                        showAlert('انتهى وقت الإطعام (المطعم مغلق)', 'danger');
-                    }, 2500);
+                    setTimeout(() => showAlert('انتهى وقت الإطعام (المطعم مغلق)', 'danger'), 2500);
                 }
                 else if (data.code === 'LATE_NOT_ATE') {
                      showAlert('التلميذ لم يتناول الوجبة', 'warning');
-                     setTimeout(() => {
-                        showAlert('انتهى وقت الإطعام (المطعم مغلق)', 'danger');
-                    }, 2500);
+                     setTimeout(() => showAlert('انتهى وقت الإطعام (المطعم مغلق)', 'danger'), 2500);
                 }
                 else if (data.code === 'ALREADY_ATE') showAlert('تنبيه: التلميذ أخذ وجبته مسبقاً!', 'warning');
                 else if (data.code === 'NOT_HALF_BOARD') showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'danger');
                 else if (data.code === 'NOT_FOUND') showAlert('خطأ: التلميذ غير موجود!', 'danger');
                 else {
-                    // Check for DRF detail or generic error
                     const msg = data.error || data.detail || 'خطأ غير معروف';
                     showAlert('خطأ: ' + msg, 'danger');
-                    console.error("Scan Error Payload:", data);
                 }
             }
         } catch (e) {
-            showAlert('خطأ في الاتصال بالسيرفر', 'danger');
             console.error(e);
+            // Fallback to offline logic if network error (and apiFetch didn't catch it for some reason)
+            handleScanOffline(barcode);
         }
+    }
+
+    function handleScanOffline(barcode) {
+        // Validate locally
+        const s = offlineStudents.find(st => st.student_id_number === barcode);
+
+        if (!s) {
+            playAlert('error');
+            showAlert('غير موجود محلياً (تحقق من المزامنة)', 'danger');
+            return;
+        }
+
+        if (s.attendance_system !== 'نصف داخلي') {
+            playAlert('error');
+            showStudent(s);
+            showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'danger');
+            return;
+        }
+
+        // Save to Outbox via OfflineManager
+        if (window.offlineManager) {
+            window.offlineManager.addToOutbox('/canteen/scan_card/', 'POST', { barcode: barcode });
+            showStudent(s);
+            playAlert('success');
+            showAlert('تم الحفظ محلياً (وضع دون اتصال)', 'success');
+            // Add to present list visually
+            const list = document.getElementById('presentList');
+            const row = document.createElement('tr');
+            row.style.background = '#fffbeb';
+            row.innerHTML = `<td><b>${s.last_name} ${s.first_name}</b></td><td>${s.class_name}</td><td class="western-nums">${s.date_of_birth}</td><td>--:--</td>`;
+            list.insertBefore(row, list.firstChild);
+        } else {
+            playAlert('error');
+            showAlert('فشل الحفظ المحلي', 'danger');
+        }
+    }
+
+    function playAlert(type) {
+        if (type === 'success') audioSuccess.play().catch(e=>console.log(e));
+        else audioError.play().catch(e=>console.log(e));
     }
 
     function showStudent(s) {
@@ -589,15 +655,34 @@
         // console.warn(`Code scan error = ${error}`);
     }
 
+    // Sounds
+    const audioSuccess = new Audio('https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3'); // Ding
+    const audioError = new Audio('https://assets.mixkit.co/active_storage/sfx/950/950-preview.mp3'); // Buzzer
+
     // Set Current Date
     const today = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', numberingSystem: 'latn' };
     // Force Western Arabic Numerals
     document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-DZ', options);
 
+    // Offline Manifest Cache
+    let offlineStudents = [];
+    async function loadOfflineData() {
+        if (typeof offlineManager !== 'undefined') {
+            try {
+                const manifest = await offlineManager.getOfflineManifest();
+                if (manifest && manifest.students) {
+                    offlineStudents = manifest.students;
+                    console.log("Offline students loaded for scanning:", offlineStudents.length);
+                }
+            } catch(e) { console.log("No offline data available"); }
+        }
+    }
+
     // Initial load
     updateStats();
     updatePresentList();
+    loadOfflineData();
 
     // Export Button visibility is now handled by server-side permissions
 </script>
