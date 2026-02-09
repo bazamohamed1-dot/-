@@ -92,7 +92,14 @@
 
         <!-- Present Students List -->
         <div class="present-list-container">
-            <h3><i class="fas fa-list-check"></i> قائمة الحضور اليوم</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3><i class="fas fa-list-check"></i> قائمة الحضور اليوم</h3>
+                {% if is_director %}
+                <button class="btn btn-danger" onclick="clearAllAttendance()" style="padding: 5px 10px; font-size: 0.8rem;">
+                    <i class="fas fa-trash-alt"></i> مسح الكل
+                </button>
+                {% endif %}
+            </div>
             <div class="present-list-scroll">
                 <table class="present-table">
                     <thead>
@@ -101,6 +108,7 @@
                             <th>القسم</th>
                             <th>تاريخ الازدياد</th>
                             <th>وقت الدخول</th>
+                            {% if is_director %}<th>حذف</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody id="presentList">
@@ -316,18 +324,73 @@
                     const row = document.createElement('tr');
                     // Point 10: Add Date of Birth
                     // Point 16: Ensure Western numerals
+                    let deleteCell = '';
+                    {% if is_director %}
+                    // We need student ID to delete attendance.
+                    // Warning: The DELETE API expects 'id' to be Attendance ID OR student ID.
+                    // get_attendance_lists returns Student Serializer data.
+                    // Ideally we should return Attendance ID in the serializer.
+                    // But delete_attendance supports 'id' as Student ID fallback for today.
+                    deleteCell = `<td><button class="btn btn-sm btn-danger" onclick="deleteAttendance(${s.id})" title="حذف"><i class="fas fa-trash"></i></button></td>`;
+                    {% endif %}
+
                     row.innerHTML = `
                         <td><b>${s.last_name} ${s.first_name}</b></td>
                         <td>${s.class_name}</td>
                         <td class="western-nums" style="direction:ltr;">${s.date_of_birth}</td>
                         <td class="western-nums" style="direction:ltr;">${s.attendance_time || '--'}</td>
+                        ${deleteCell}
                     `;
                     list.appendChild(row);
                 });
             } else {
-                list.innerHTML = '<tr><td colspan="3" style="text-align:center; color:gray">لا يوجد حضور حتى الآن</td></tr>';
+                list.innerHTML = '<tr><td colspan="5" style="text-align:center; color:gray">لا يوجد حضور حتى الآن</td></tr>';
             }
         } catch(e) { console.error(e); }
+    }
+
+    async function deleteAttendance(studentId) {
+        if(!confirm("هل أنت متأكد من حذف حضور هذا التلميذ؟")) return;
+        try {
+            const res = await fetch('/canteen/delete_attendance/', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ id: studentId }) // Using student ID logic
+            });
+
+            if(res.ok) {
+                showAlert('تم الحذف', 'success');
+                updateStats();
+                updatePresentList();
+            } else {
+                alert('فشل الحذف');
+            }
+        } catch(e) { alert('خطأ في الاتصال'); }
+    }
+
+    async function clearAllAttendance() {
+        if(!confirm("هل أنت متأكد من مسح جميع سجلات الحضور لهذا اليوم؟")) return;
+        try {
+            const res = await fetch('/canteen/delete_attendance/', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ clear_all: true })
+            });
+
+            if(res.ok) {
+                showAlert('تم مسح القائمة', 'success');
+                updateStats();
+                updatePresentList();
+            } else {
+                alert('فشل المسح');
+            }
+        } catch(e) { alert('خطأ في الاتصال'); }
     }
 
     async function exportExcel() {

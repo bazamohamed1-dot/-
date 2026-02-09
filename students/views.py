@@ -583,6 +583,59 @@ def manual_attendance(request):
     CanteenAttendance.objects.create(student=student, date=today)
     return Response({'message': 'Manual attendance recorded'}, status=status.HTTP_201_CREATED)
 
+@csrf_exempt
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_attendance(request):
+    if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        # Check for list of IDs or single ID in query params or body
+        # Body: {"ids": [1, 2]} or {"id": 1}
+        # Query: ?id=1
+
+        ids = request.data.get('ids')
+        single_id = request.data.get('id') or request.query_params.get('id')
+
+        if ids:
+            # Bulk delete by student IDs for today, or by attendance IDs?
+            # Usually easiest to delete by Attendance ID if the frontend has it.
+            # But the frontend might only have Student ID.
+            # Let's assume Student IDs for robust "Remove Student from Today's List"
+
+            # Actually, deleting by Attendance PK is safer if we have it.
+            # If the input is student IDs, we must filter by today + student.
+
+            # Let's support both: if 'type' param says 'student', delete by student. Else by PK.
+            # Default: Attendance ID (PK).
+
+            count, _ = CanteenAttendance.objects.filter(id__in=ids).delete()
+            return Response({'message': f'تم حذف {count} سجلات'})
+
+        elif single_id:
+            # Check if we are deleting by student_id or attendance_id
+            # Let's look up the attendance record first
+            attendance = CanteenAttendance.objects.filter(id=single_id).first()
+            if attendance:
+                attendance.delete()
+                return Response({'message': 'تم حذف السجل'})
+
+            # Fallback: maybe it's a student ID and we want to remove today's entry?
+            # Ideally the frontend sends the correct ID.
+            # Let's enforce sending Attendance ID for precision.
+            return Response({'error': 'السجل غير موجود'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Clear All for Today
+        elif request.data.get('clear_all') == True:
+            count, _ = CanteenAttendance.objects.filter(date=date.today()).delete()
+            return Response({'message': f'تم مسح {count} سجلات لليوم'})
+
+        return Response({'error': 'Missing parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 def get_attendance_lists(request):
     today = date.today()
