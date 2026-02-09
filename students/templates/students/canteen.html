@@ -327,11 +327,9 @@
                     let deleteCell = '';
                     {% if is_director %}
                     // We need student ID to delete attendance.
-                    // Warning: The DELETE API expects 'id' to be Attendance ID OR student ID.
-                    // get_attendance_lists returns Student Serializer data.
-                    // Ideally we should return Attendance ID in the serializer.
-                    // But delete_attendance supports 'id' as Student ID fallback for today.
-                    deleteCell = `<td><button class="btn btn-sm btn-danger" onclick="deleteAttendance(${s.id})" title="حذف"><i class="fas fa-trash"></i></button></td>`;
+                    // Use attendance_id if available (added in recent fix), fallback to student id (s.id)
+                    const delId = s.attendance_id || s.id;
+                    deleteCell = `<td><button class="btn btn-sm btn-danger" onclick="deleteAttendance(${delId})" title="حذف"><i class="fas fa-trash"></i></button></td>`;
                     {% endif %}
 
                     row.innerHTML = `

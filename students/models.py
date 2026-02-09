@@ -65,6 +65,17 @@ class SchoolSettings(models.Model):
     loan_limit = models.IntegerField(default=2, verbose_name="الحد الأقصى للإعارات")
     admin_email = models.EmailField(null=True, blank=True, verbose_name="البريد الإلكتروني لاستعادة كلمة المرور")
 
+    # Canteen Settings
+    canteen_open_time = models.TimeField(default="12:00", verbose_name="وقت فتح المطعم")
+    canteen_close_time = models.TimeField(default="13:15", verbose_name="وقت غلق المطعم")
+    # Store days as comma-separated integers (0=Mon, 6=Sun).
+    # Python weekday: Mon=0, Sun=6. JS: Sun=0, Sat=6.
+    # We will use Python convention: 0=Monday, 6=Sunday.
+    # Default: Sun, Mon, Wed, Thu (0, 2, 3, 6) -> No Tue(1), Fri(4), Sat(5) usually in DZ?
+    # User said: "All except Tue, Fri, Sat".
+    # Tue=1, Fri=4, Sat=5. So keep 0, 2, 3, 6.
+    canteen_days = models.CharField(max_length=50, default="0,2,3,6", verbose_name="أيام عمل المطعم")
+
     class Meta:
         verbose_name = "إعدادات المؤسسة"
         verbose_name_plural = "إعدادات المؤسسة"

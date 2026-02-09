@@ -474,16 +474,58 @@ def scan_card(request):
             if not student:
                 return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Time Restriction Logic (13:15)
+        # Time Restriction Logic (Dynamic)
+        settings_obj = SchoolSettings.objects.first()
+        close_time = settings_obj.canteen_close_time if settings_obj else time(13, 15)
+        open_time = settings_obj.canteen_open_time if settings_obj else time(12, 0)
+
+        # Parse days (comma separated string "0,1,2")
+        allowed_days = [0, 2, 3, 6] # Default Sun, Mon, Wed, Thu
+        if settings_obj and settings_obj.canteen_days:
+            try:
+                allowed_days = [int(d) for d in settings_obj.canteen_days.split(',') if d.strip().isdigit()]
+            except: pass
+
         now = timezone.localtime()
-        cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
+        current_time = now.time()
+        current_weekday = now.weekday() # Mon=0, Sun=6
 
         # Only Director can bypass time limit
         is_director = request.user.profile.role == 'director'
 
-        if now.time() > cutoff_time.time() and not is_director:
-             today = date.today()
-             attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
+        if not is_director:
+            # Check Day
+            if current_weekday not in allowed_days:
+                 return Response({
+                     'error': 'المطعم مغلق اليوم',
+                     'code': 'CLOSED_DAY',
+                     'student': StudentSerializer(student).data
+                 }, status=status.HTTP_403_FORBIDDEN)
+
+            # Check Time
+            if current_time < open_time:
+                 return Response({
+                     'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}',
+                     'code': 'NOT_OPEN_YET',
+                     'student': StudentSerializer(student).data
+                 }, status=status.HTTP_403_FORBIDDEN)
+
+            if current_time > close_time:
+                 today = date.today()
+                 attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
+                 student_data = StudentSerializer(student).data
+                 if attended:
+                     return Response({
+                         'error': 'انتهى الوقت (أكل مسبقاً)',
+                         'code': 'LATE_ATE',
+                         'student': student_data
+                     }, status=status.HTTP_403_FORBIDDEN)
+                 else:
+                     return Response({
+                         'error': 'انتهى الوقت (لم يأكل)',
+                         'code': 'LATE_NOT_ATE',
+                         'student': student_data
+                     }, status=status.HTTP_403_FORBIDDEN)
              student_data = StudentSerializer(student).data
              if attended:
                  return Response({
@@ -553,15 +595,34 @@ def manual_attendance(request):
     if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('canteen_manual'):
         return Response({'error': 'Unauthorized'}, status=403)
 
-    # Time Restriction Logic (13:15)
+    # Time Restriction Logic (Dynamic)
+    settings_obj = SchoolSettings.objects.first()
+    close_time = settings_obj.canteen_close_time if settings_obj else time(13, 15)
+    open_time = settings_obj.canteen_open_time if settings_obj else time(12, 0)
+
+    # Parse days
+    allowed_days = [0, 2, 3, 6]
+    if settings_obj and settings_obj.canteen_days:
+        try:
+            allowed_days = [int(d) for d in settings_obj.canteen_days.split(',') if d.strip().isdigit()]
+        except: pass
+
     now = timezone.localtime()
-    cutoff_time = now.replace(hour=13, minute=15, second=0, microsecond=0)
+    current_time = now.time()
+    current_weekday = now.weekday()
 
     # Check if user is director
     is_director = request.user.profile.role == 'director'
 
-    if now.time() > cutoff_time.time() and not is_director:
-            return Response({'error': 'انتهى وقت الإطعام (13:15)'}, status=status.HTTP_403_FORBIDDEN)
+    if not is_director:
+        if current_weekday not in allowed_days:
+            return Response({'error': 'المطعم مغلق اليوم'}, status=status.HTTP_403_FORBIDDEN)
+
+        if current_time < open_time:
+            return Response({'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}'}, status=status.HTTP_403_FORBIDDEN)
+
+        if current_time > close_time:
+            return Response({'error': f'انتهى وقت الإطعام ({close_time.strftime("%H:%M")})'}, status=status.HTTP_403_FORBIDDEN)
 
     student_id = request.data.get('student_id')
     # Can search by internal ID or student_id_number
@@ -646,6 +707,7 @@ def get_attendance_lists(request):
     for att in present_attendances:
         s_data = StudentSerializer(att.student).data
         s_data['attendance_time'] = att.time.strftime("%H:%M:%S")
+        s_data['attendance_id'] = att.id # Include primary key for precise deletion
         present_data.append(s_data)
         present_ids.append(att.student.id)
 
