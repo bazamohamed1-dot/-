@@ -56,6 +56,99 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# --- Lightweight JSON Import API ---
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def import_students_json(request):
+    """
+    Receives a JSON list of students and performs bulk create/update.
+    This avoids server-side file parsing memory overhead.
+    """
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('import_data'):
+         return Response({'error': 'Unauthorized'}, status=403)
+
+    data = request.data
+    students_list = data.get('students', [])
+    update_existing = data.get('update_existing', False)
+
+    if not students_list:
+        return Response({'error': 'No data provided'}, status=400)
+
+    created_count = 0
+    updated_count = 0
+    errors = []
+
+    # Map existing students for fast lookup
+    existing_map = {s.student_id_number: s for s in Student.objects.all()}
+
+    to_create = []
+    to_update = []
+
+    for item in students_list:
+        try:
+            sid = str(item.get('student_id_number')).strip()
+            if not sid: continue
+
+            # Date parsing fallback
+            dob = item.get('date_of_birth')
+            if not dob or str(dob).lower() == 'invalid date': dob = '1900-01-01'
+
+            enroll_date = item.get('enrollment_date')
+            if not enroll_date or str(enroll_date).lower() == 'invalid date': enroll_date = date.today()
+
+            student_data = {
+                'student_id_number': sid,
+                'last_name': item.get('last_name', ''),
+                'first_name': item.get('first_name', ''),
+                'gender': item.get('gender', ''),
+                'date_of_birth': dob,
+                'place_of_birth': item.get('place_of_birth', ''),
+                'academic_year': item.get('academic_year', ''),
+                'class_name': item.get('class_name', ''),
+                'attendance_system': item.get('attendance_system', ''),
+                'enrollment_number': item.get('enrollment_number', ''),
+                'enrollment_date': enroll_date,
+                'guardian_name': item.get('guardian_name', ''),
+                'mother_name': item.get('mother_name', ''),
+                'address': item.get('address', ''),
+                'guardian_phone': item.get('guardian_phone', ''),
+            }
+
+            if sid in existing_map:
+                if update_existing:
+                    s = existing_map[sid]
+                    for key, val in student_data.items():
+                        if key != 'student_id_number': # Don't update PK
+                            setattr(s, key, val)
+                    to_update.append(s)
+            else:
+                to_create.append(Student(**student_data))
+
+        except Exception as e:
+            errors.append(f"Row error: {str(e)}")
+
+    try:
+        if to_create:
+            Student.objects.bulk_create(to_create)
+            created_count = len(to_create)
+
+        if to_update:
+            Student.objects.bulk_update(to_update, [
+                'last_name', 'first_name', 'gender', 'date_of_birth', 'place_of_birth',
+                'academic_year', 'class_name', 'attendance_system', 'enrollment_number',
+                'enrollment_date', 'guardian_name', 'mother_name', 'address', 'guardian_phone'
+            ])
+            updated_count = len(to_update)
+
+        return Response({
+            'created': created_count,
+            'updated': updated_count,
+            'errors': errors
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
 class ArchiveDocumentViewSet(viewsets.ModelViewSet):
     queryset = ArchiveDocument.objects.all().order_by('-entry_date')
     serializer_class = ArchiveDocumentSerializer

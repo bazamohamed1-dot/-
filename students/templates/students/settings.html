@@ -55,10 +55,13 @@
                 <label for="updateExisting" style="margin-right:8px; cursor:pointer;">تحديث البيانات الموجودة</label>
             </div>
         </div>
-        <input type="file" id="importFile" style="display:none;" onchange="submitImport()">
+        <input type="file" id="importFile" style="display:none;" onchange="handleFileSelect(this)">
         <p style="margin-top:10px; color:#64748b; font-size:0.9rem;">
-            * يرجى استخدام ملف Eleve.xls الأصلي لاستيراد البيانات بشكل صحيح.
+            * سيتم قراءة الملف محلياً لتفادي أخطاء السيرفر (يدعم .xls و .html).
         </p>
+        <div id="uploadProgress" style="display:none; margin-top:15px; padding:10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; color:#0369a1;">
+            <i class="fas fa-spinner fa-spin"></i> جاري استيراد البيانات... <span id="progressText">0%</span>
+        </div>
     </div>
 </div>
 
@@ -232,6 +235,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/xlsx.full.min.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
@@ -315,50 +319,127 @@ async function saveLibrarySettings(e) {
     }
 }
 
-function submitImport() {
-    const input = document.getElementById('importFile');
-    if(input.files && input.files[0]) {
-        if(!confirm("هل تريد استيراد البيانات من الملف المحدد؟")) return;
+function handleFileSelect(input) {
+    if (!input.files || !input.files[0]) return;
+    if (!confirm("هل تريد استيراد البيانات من الملف المحدد؟ (سيتم المعالجة محلياً)")) return;
 
-        // Since the current import logic is a management command on the server,
-        // we can either invoke it via a view or do client-side parsing.
-        // The original `import_eleve_view` invokes the command.
+    const file = input.files[0];
+    const reader = new FileReader();
+    const updateExisting = document.getElementById('updateExisting').checked;
 
-        // We will construct a FormData to send the file to `import_eleve_view`
-        // But `import_eleve_view` in `ui_views.py` expects a file named 'Eleve.xls' on disk currently.
-        // It should be updated to handle uploaded files.
-        // For now, let's just trigger the form submit to the view.
+    document.getElementById('uploadProgress').style.display = 'block';
+    document.getElementById('progressText').textContent = "جاري قراءة الملف...";
 
-        // Create a temporary form to submit to the existing view
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = "{% url 'import_eleve_view' %}";
-        form.enctype = 'multipart/form-data'; // Important!
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array', cellDates: true});
 
-        // Add CSRF
-        const csrf = document.createElement('input');
-        csrf.type = 'hidden';
-        csrf.name = 'csrfmiddlewaretoken';
-        csrf.value = getCookie('csrftoken');
-        form.appendChild(csrf);
+            // Assume first sheet
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
 
-        // Add file input - clone it
-        const fileClone = input.cloneNode(true);
-        fileClone.name = 'eleve_file'; // View needs to be updated to accept this
-        form.appendChild(fileClone);
+            // Convert to JSON (Array of Arrays)
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, raw: false, dateNF:'yyyy-mm-dd'});
 
-        // Add checkbox value
-        if (document.getElementById('updateExisting').checked) {
-            const updateInput = document.createElement('input');
-            updateInput.type = 'hidden';
-            updateInput.name = 'update_existing';
-            updateInput.value = 'on';
-            form.appendChild(updateInput);
+            if (!jsonData || jsonData.length < 5) {
+                alert("الملف يبدو فارغاً أو غير صالح");
+                resetImportUI();
+                return;
+            }
+
+            processRows(jsonData, updateExisting);
+
+        } catch (err) {
+            console.error(err);
+            alert("فشل قراءة الملف: تأكد أنه ملف Excel أو HTML صالح.");
+            resetImportUI();
         }
+    };
+    reader.readAsArrayBuffer(file);
+}
 
-        document.body.appendChild(form);
-        form.submit();
+async function processRows(rows, updateExisting) {
+    let students = [];
+
+    // Skip headers - find first row with numeric ID in column 0
+    for(let row of rows) {
+        if (row && row.length > 10) {
+            // Check if col 0 is numeric ID
+            let id = String(row[0]).trim();
+            if (/^\d+$/.test(id)) {
+                // Map columns (adjust indices based on your known structure)
+                // Assuming standard layout from previous code:
+                // 0: ID, 1: Last, 2: First, 3: Gender, 4: DOB ...
+
+                let dob = row[4];
+                // Clean DOB if needed (SheetJS usually handles dates if cellDates:true, returning Date obj or formatted string)
+
+                students.push({
+                    student_id_number: id,
+                    last_name: row[1],
+                    first_name: row[2],
+                    gender: row[3],
+                    date_of_birth: dob,
+                    place_of_birth: row[9],
+                    academic_year: row[10],
+                    class_name: (row[10] + " " + row[11]).trim(), // Level + ClassNum
+                    attendance_system: row[12],
+                    enrollment_number: row[13],
+                    enrollment_date: row[14]
+                });
+            }
+        }
     }
+
+    if (students.length === 0) {
+        alert("لم يتم العثور على بيانات تلاميذ صالحة في الملف.");
+        resetImportUI();
+        return;
+    }
+
+    // Send in batches
+    const BATCH_SIZE = 100;
+    const total = students.length;
+    let successCount = 0;
+
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = students.slice(i, i + BATCH_SIZE);
+        const progress = Math.round((i / total) * 100);
+        document.getElementById('progressText').textContent = `جاري رفع ${i} من ${total} (${progress}%)`;
+
+        try {
+            const response = await fetch('/canteen/api/import_json/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    students: batch,
+                    update_existing: updateExisting
+                })
+            });
+
+            if (response.ok) {
+                const res = await response.json();
+                successCount += res.created + res.updated;
+            } else {
+                console.error("Batch failed", await response.text());
+            }
+        } catch (e) {
+            console.error("Network error on batch", i, e);
+        }
+    }
+
+    document.getElementById('progressText').textContent = "100% - اكتمل!";
+    alert(`تمت العملية! تمت معالجة ${successCount} تلميذ.`);
+    resetImportUI();
+}
+
+function resetImportUI() {
+    document.getElementById('uploadProgress').style.display = 'none';
+    document.getElementById('importFile').value = '';
 }
 
 function getCookie(name) {
