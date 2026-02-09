@@ -203,6 +203,22 @@ class Command(BaseCommand):
             return
         self.processed_ids_in_file.add(student_id)
 
+        # Memory Optimization: Check list size
+        if len(self.to_create) > 500:
+            Student.objects.bulk_create(self.to_create)
+            self.to_create = [] # Clear memory
+            import gc
+            gc.collect()
+
+        if len(self.to_update) > 500:
+            fields = ['last_name', 'first_name', 'gender', 'date_of_birth', 'place_of_birth',
+                      'academic_year', 'class_name', 'attendance_system', 'enrollment_number',
+                      'enrollment_date']
+            Student.objects.bulk_update(self.to_update, fields)
+            self.to_update = [] # Clear memory
+            import gc
+            gc.collect()
+
         last_name = cols[1]
         first_name = cols[2]
         if not last_name or not first_name:

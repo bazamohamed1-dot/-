@@ -3,7 +3,7 @@ services:
     name: cem-bouchnafa-omar
     runtime: python
     buildCommand: ./build.sh
-    startCommand: gunicorn School_Management.wsgi:application
+    startCommand: gunicorn School_Management.wsgi:application --workers 2 --threads 2 --timeout 120 --max-requests 1000
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
