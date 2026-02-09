@@ -311,12 +311,25 @@
             spinner.style.display = 'block';
 
             try {
+                // Ensure Device ID
+                let deviceId = localStorage.getItem('device_id');
+                if (!deviceId) {
+                    deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                        return v.toString(16);
+                    });
+                    localStorage.setItem('device_id', deviceId);
+                }
+
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                };
+                if (deviceId) headers['X-Device-ID'] = deviceId;
+
                 const response = await fetch('/canteen/auth/login/', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
+                    headers: headers,
                     body: JSON.stringify({ username, password })
                 });
 
