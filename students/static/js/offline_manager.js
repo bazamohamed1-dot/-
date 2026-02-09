@@ -1,5 +1,5 @@
 const DB_NAME = 'SchoolSysDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bump version for new stores
 
 class OfflineManager {
     constructor() {
@@ -19,6 +19,9 @@ class OfflineManager {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains('outbox')) {
                     db.createObjectStore('outbox', { autoIncrement: true });
+                }
+                if (!db.objectStoreNames.contains('manifest')) {
+                    db.createObjectStore('manifest'); // Key-Value store (key: 'offline_manifest')
                 }
             };
             request.onsuccess = (e) => {
@@ -47,33 +50,36 @@ class OfflineManager {
 
     async saveOfflineManifest(data) {
         if (!this.db) await this.initDB();
-        // Store the manifest (Students list, etc) for offline usage
-        // We'll create a new store 'manifest' in next version upgrade,
-        // but for now let's reuse 'outbox' or just upgrade.
-        // Upgrading IDB version is tricky if DB is open.
-        // Alternative: Use LocalStorage for the manifest JSON (it's small < 1MB usually)
-        // 1000 students * 200 chars = 200KB. Safe for LocalStorage.
         try {
-            const strData = JSON.stringify(data);
-            try {
-                localStorage.setItem('offline_manifest', strData);
-                console.log("Manifest saved to LocalStorage");
-            } catch(e) {
-                if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-                     // Try IndexedDB Fallback
-                     if (!this.db) await this.initDB();
-                     const tx = this.db.transaction(['outbox'], 'readwrite');
-                     // Using outbox temporarily or create new store
-                     // Since schema upgrade is hard on the fly, let's just warn user for now.
-                     // Or clear old data?
-                     alert("مساحة التخزين المحلية ممتلئة. لا يمكن حفظ البيانات دون اتصال.");
-                }
-                throw e;
-            }
+            const tx = this.db.transaction(['manifest'], 'readwrite');
+            const store = tx.objectStore('manifest');
+            store.put(data, 'offline_manifest'); // Key is 'offline_manifest'
+
+            return new Promise((resolve, reject) => {
+                tx.oncomplete = () => {
+                    console.log("Manifest saved to IndexedDB");
+                    resolve();
+                };
+                tx.onerror = (e) => {
+                    console.error("IndexedDB Manifest Error", e);
+                    reject(e);
+                };
+            });
         } catch(e) {
             console.error("Storage Error", e);
-            throw new Error("فشل حفظ البيانات محلياً (المساحة ممتلئة؟)");
+            throw new Error("فشل حفظ البيانات محلياً (IndexedDB Error)");
         }
+    }
+
+    async getOfflineManifest() {
+        if (!this.db) await this.initDB();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(['manifest'], 'readonly');
+            const store = tx.objectStore('manifest');
+            const req = store.get('offline_manifest');
+            req.onsuccess = (e) => resolve(e.target.result);
+            req.onerror = (e) => reject(e);
+        });
     }
 
     async syncData() {
@@ -169,25 +175,38 @@ window.downloadOfflineData = async () => {
 
         // 3. Cache Images
         if ('caches' in window) {
-            const cache = await caches.open('offline-images-v1');
-            const students = data.students || [];
-            const total = students.length;
-            let count = 0;
+            try {
+                const cache = await caches.open('offline-images-v1');
+                const students = data.students || [];
+                const total = students.length;
+                let count = 0;
 
-            // Collect URLs
-            const urls = students
-                .map(s => s.photo_path)
-                .filter(url => url && url.startsWith('http')); // Only valid HTTP URLs
+                // Collect URLs
+                const urls = students
+                    .map(s => s.photo_path)
+                    .filter(url => url && url.startsWith('http')); // Only valid HTTP URLs
 
-            // Batch process
-            const BATCH_SIZE = 5;
-            for (let i = 0; i < urls.length; i += BATCH_SIZE) {
-                const batch = urls.slice(i, i + BATCH_SIZE);
-                await Promise.all(batch.map(url =>
-                    cache.add(url).catch(e => console.warn("Failed to cache image:", url))
-                ));
-                count += batch.length;
-                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> صور (${Math.min(count, urls.length)}/${urls.length})`;
+                // Batch process
+                const BATCH_SIZE = 5;
+                for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+                    const batch = urls.slice(i, i + BATCH_SIZE);
+                    await Promise.all(batch.map(async (url) => {
+                        try {
+                            // Check if already cached to save bandwidth
+                            const match = await cache.match(url);
+                            if (!match) {
+                                await cache.add(url);
+                            }
+                        } catch(e) {
+                            console.warn("Failed to cache image:", url, e);
+                        }
+                    }));
+                    count += batch.length;
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> صور (${Math.min(count, urls.length)}/${urls.length})`;
+                }
+            } catch (e) {
+                console.error("Cache Error:", e);
+                // Don't fail the whole process if image caching fails
             }
         }
 
