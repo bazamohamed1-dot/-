@@ -2,6 +2,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const token = sessionStorage.getItem('session_token');
     const role = sessionStorage.getItem('user_role');
 
+    // Ensure Device ID exists
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+        // Generate a random UUID-like string
+        deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+        localStorage.setItem('device_id', deviceId);
+        console.log("New Device ID generated:", deviceId);
+    }
+
     // Auth Check
     if (!token) {
         // Redirect to landing if not there

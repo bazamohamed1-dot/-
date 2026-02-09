@@ -61,16 +61,23 @@ def login_view(request):
                             return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
                         device_id_to_send = profile.device_id
                 else:
-                    # No device_id set.
-                    # If Director, allow and auto-bind? Or just allow?
-                    # User wants strict lock.
-                    if profile.role == 'director':
-                        # Auto-provision director for convenience or leave open?
-                        # Let's leave open for Director to avoid lockout, but STRICT for others.
-                        pass
+                    # No device_id set. (First Time Login)
+                    # Bind the current device ID to the account
+                    client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+
+                    if client_id:
+                        profile.device_id = client_id
+                        profile.save()
+                        device_id_to_send = client_id
+                        # First device bound successfully
                     else:
-                        # Strict Block for employees
-                        return Response({'error': 'الجهاز غير مفعل. يرجى الطلب من المدير تفعيل هذا الجهاز.', 'code': 'DEVICE_NOT_ACTIVATED'}, status=status.HTTP_403_FORBIDDEN)
+                        # If no device ID provided by client, we can't bind.
+                        # Should we block? The requirements say "First device enters... binds".
+                        # If the client app (JS) hasn't generated one yet, we might have an issue.
+                        # But auth_manager.js generates one on load.
+                        # Let's allow login but warn, or generate one?
+                        # Better to Block if missing, as we can't lock without it.
+                        return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
 
             except Exception as e:
                 print(f"Device Lock Error: {e}")

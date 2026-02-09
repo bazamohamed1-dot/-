@@ -138,34 +138,32 @@ class OfflineManager {
 
 const offlineManager = new OfflineManager();
 
-// Global function for the "Download Data" button
-window.downloadOfflineData = async () => {
-    const btn = document.getElementById('downloadOfflineBtn');
-    const originalText = btn.innerHTML;
-
+// Automated Background Download
+window.downloadOfflineData = async (silent = true) => {
     if (!navigator.onLine) {
-        alert("يجب أن تكون متصلاً بالإنترنت لتحميل البيانات.");
+        if (!silent) alert("يجب أن تكون متصلاً بالإنترنت لتحميل البيانات.");
         return;
     }
 
+    // Check if we logged in
+    const token = sessionStorage.getItem('session_token');
+    if (!token) return;
+
     try {
-        btn.disabled = true;
-        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحميل...`;
+        console.log("Starting background data download...");
 
         // 1. Fetch Manifest
-        // Using window.apiFetch which injects CSRF/Device-ID
-        const response = await fetch('/api/offline_manifest/', {
+        const response = await fetch('/canteen/api/offline_manifest/', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
-                // Note: Auth session cookie is sent automatically by browser for same-origin requests
             }
         });
 
         if (!response.ok) {
-            const txt = await response.text();
-            throw new Error(`Failed to fetch manifest: ${response.status} - ${txt}`);
+            console.error("Background Download Failed:", response.status);
+            return;
         }
 
         const data = await response.json();
@@ -178,13 +176,11 @@ window.downloadOfflineData = async () => {
             try {
                 const cache = await caches.open('offline-images-v1');
                 const students = data.students || [];
-                const total = students.length;
-                let count = 0;
 
                 // Collect URLs
                 const urls = students
                     .map(s => s.photo_path)
-                    .filter(url => url && url.startsWith('http')); // Only valid HTTP URLs
+                    .filter(url => url && url.startsWith('http'));
 
                 // Batch process
                 const BATCH_SIZE = 5;
@@ -192,54 +188,37 @@ window.downloadOfflineData = async () => {
                     const batch = urls.slice(i, i + BATCH_SIZE);
                     await Promise.all(batch.map(async (url) => {
                         try {
-                            // Check if already cached to save bandwidth
                             const match = await cache.match(url);
-                            if (!match) {
-                                await cache.add(url);
-                            }
-                        } catch(e) {
-                            console.warn("Failed to cache image:", url, e);
-                        }
+                            if (!match) await cache.add(url);
+                        } catch(e) { /* ignore */ }
                     }));
-                    count += batch.length;
-                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> صور (${Math.min(count, urls.length)}/${urls.length})`;
                 }
             } catch (e) {
                 console.error("Cache Error:", e);
-                // Don't fail the whole process if image caching fails
             }
         }
 
-        btn.innerHTML = `<i class="fas fa-check"></i> تم التحديث`;
-        btn.classList.replace('btn-primary', 'btn-success');
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-            btn.classList.replace('btn-success', 'btn-primary');
-            btn.disabled = false;
-        }, 3000);
+        console.log("Background Data Download Completed.");
 
     } catch (e) {
-        console.error(e);
-        btn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> فشل`;
-        btn.classList.replace('btn-primary', 'btn-danger');
-        setTimeout(() => {
-            btn.innerHTML = originalText;
-            btn.classList.replace('btn-danger', 'btn-primary');
-            btn.disabled = false;
-        }, 3000);
+        console.error("Background Sync Error:", e);
     }
 };
 
-// Show/Hide Download Button based on connectivity
-function updateDownloadButton() {
-    const btn = document.getElementById('downloadOfflineBtn');
-    if (btn) {
-        btn.style.display = navigator.onLine ? 'inline-block' : 'none';
-    }
-}
-window.addEventListener('online', updateDownloadButton);
-window.addEventListener('offline', updateDownloadButton);
-document.addEventListener('DOMContentLoaded', updateDownloadButton);
+// Auto-trigger on load if online
+document.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit to let the page load
+    setTimeout(() => {
+        if (navigator.onLine) {
+            window.downloadOfflineData(true);
+        }
+    }, 2000);
+});
+
+// Trigger when coming online
+window.addEventListener('online', () => {
+    setTimeout(() => window.downloadOfflineData(true), 1000);
+});
 
 // Wrapper for Fetch to handle offline automatically
 window.apiFetch = async (url, options = {}) => {
