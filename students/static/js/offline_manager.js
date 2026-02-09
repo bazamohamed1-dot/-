@@ -45,7 +45,30 @@ class OfflineManager {
         };
         store.add(request);
         console.log('Saved to outbox', request);
-        // Silent save (User Requirement: "لا تضع أي أزرار للمزامنة... تتم في الخلفية تماماً")
+    }
+
+    // New optimized Blob saver
+    async saveStudentOffline(payload) {
+        if (!this.db) await this.initDB();
+        const transaction = this.db.transaction(['outbox'], 'readwrite');
+        const store = transaction.objectStore('outbox');
+
+        // Payload has { url, method, data, file }
+        // We store the file separately in the record so it's not JSON stringified
+        const request = {
+            url: payload.url,
+            method: payload.method,
+            data: payload.data, // This has 'photo_path': 'base64...' usually, but we overwrite/ignore it in sync
+            blob: payload.file, // The raw File/Blob object
+            timestamp: Date.now(),
+            token: sessionStorage.getItem('session_token')
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = store.add(request);
+            req.onsuccess = () => resolve();
+            req.onerror = (e) => reject(e);
+        });
     }
 
     async saveOfflineManifest(data) {
@@ -105,6 +128,25 @@ class OfflineManager {
             }
 
             try {
+                // Pre-process items: Convert Blobs to Base64 for JSON transmission
+                // We do this lazily HERE, not at save time, to save memory during operation.
+                const processedItems = await Promise.all(validItems.map(async (item) => {
+                    if (item.blob) {
+                        // Convert Blob to Base64
+                        const base64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(item.blob);
+                        });
+
+                        // Update the data payload
+                        item.data.photo_path = base64;
+                        // Remove blob from the object sent to server (it's not serializable anyway)
+                        delete item.blob;
+                    }
+                    return item;
+                }));
+
                 const headers = {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
@@ -118,7 +160,7 @@ class OfflineManager {
                 const response = await fetch('/canteen/api/sync/', {
                     method: 'POST',
                     headers: headers,
-                    body: JSON.stringify(validItems)
+                    body: JSON.stringify(processedItems)
                 });
 
                 if (response.ok) {
@@ -225,6 +267,47 @@ window.downloadOfflineData = async (silent = true) => {
             indicator.style.background = '#f3f4f6';
             indicator.style.color = '#4b5563';
         }
+    }
+};
+
+// Hard Reset Function (Fix "Failed" Updates)
+window.resetApp = async () => {
+    if (!confirm("سيتم تحديث التطبيق وإصلاح أخطاء التخزين. هل تريد المتابعة؟")) return;
+
+    const btn = document.getElementById('downloadOfflineBtn');
+    if(btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التنظيف...';
+
+    try {
+        // 1. Unregister Service Workers
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+                await registration.unregister();
+            }
+        }
+
+        // 2. Clear Caches
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            for (let key of keys) {
+                await caches.delete(key);
+            }
+        }
+
+        // 3. Clear IndexedDB (Manifest only, keep outbox/pending if possible?
+        // User asked to fix "Stuck" files. Clearing everything is safest for a "Repair" button).
+        // But we want to preserve "Pending" data if possible.
+        // Let's try to preserve 'outbox'.
+        // Actually, "Update Software" implies clearing assets. IndexedDB is data.
+        // We will leave IndexedDB alone to prevent data loss, unless the DB structure itself is corrupted.
+        // We will ONLY clear the 'manifest' store if we can, but simpler to just reload SW and Cache.
+
+        alert("تم تنظيف الذاكرة المؤقتة. سيتم إعادة تحميل الصفحة.");
+        window.location.reload(true); // Hard Reload
+
+    } catch (e) {
+        console.error("Reset failed", e);
+        alert("فشل التنظيف الآلي. يرجى مسح بيانات المتصفح يدوياً.");
     }
 };
 
