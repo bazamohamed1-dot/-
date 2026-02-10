@@ -279,12 +279,9 @@
                 <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
             </div>
             <div class="user-info" style="display: flex; gap: 15px; align-items: center;">
-                <!-- Hard Reset Button (Replaces manual sync) -->
-                <button id="downloadOfflineBtn" class="btn btn-warning" onclick="resetApp()" style="padding: 5px 10px; font-size: 0.9rem;" title="اضغط هنا في حال واجهت مشاكل تقنية أو فشل التحديث">
-                    <i class="fas fa-tools"></i> إصلاح وتحديث
-                </button>
-                <div id="offlineStatusIndicator" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 5px 10px; border-radius: 20px; background: #e0f2fe; color: #0369a1;">
-                    <i class="fas fa-sync fa-spin"></i> جاري التحقق...
+                <!-- Hard Reset Button Removed -->
+                <div id="connectionStatus" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 5px 10px; border-radius: 20px; background: #dcfce7; color: #166534;">
+                    <i class="fas fa-wifi"></i> متصل
                 </div>
                 <span id="userInfoDisplay" class="d-none-mobile"><i class="fas fa-user-circle"></i> المستخدم</span>
                 <button id="logoutBtn" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9rem;">
@@ -331,15 +328,8 @@
 </nav>
 
 <!-- Login Modal removed as requested -->
-<script src="{% static 'js/offline_manager.js' %}"></script>
 <script src="{% static 'js/auth_manager.js' %}"></script>
 <script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register("{% static 'sw.js' %}")
-        .then(reg => console.log('SW registered', reg))
-        .catch(err => console.log('SW failed', err));
-    }
-
     // Enhanced Session Check on Load (Logout on Browser Close)
     // Removed duplicate logic to avoid race conditions with auth_manager.js
     // auth_manager.js handles the verify on DOMContentLoaded.

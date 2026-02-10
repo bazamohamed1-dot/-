@@ -32,7 +32,7 @@
                 <tr id="row-{{ update.id }}">
                     <td>{{ update.user.username }}</td>
                     <td>
-                        {% if update.model_name == 'Student' %}تلميذ
+                        {% if update.model_name|lower == 'student' %}تلميذ
                         {% elif update.model_name == 'CanteenAttendance' %}حضور مطعم
                         {% elif update.model_name == 'LibraryLoan' %}إعارة كتاب
                         {% else %}{{ update.model_name }}{% endif %}
@@ -45,8 +45,8 @@
                     </td>
                     <td style="max-width: 400px;">
                         <div class="data-preview">
-                            {% if update.model_name == 'Student' %}
-                                {% with payload=update.data.data %}
+                            {% if update.model_name|lower == 'student' %}
+                                {% with payload=update.data %}
                                     <strong>{{ payload.last_name }} {{ payload.first_name }}</strong><br>
                                     <small class="text-muted">{{ payload.class_name }}</small>
                                     {% if payload.photo_path and payload.photo_path|slice:":10" == "data:image" %}
