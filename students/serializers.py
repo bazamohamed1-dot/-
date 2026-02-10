@@ -70,6 +70,26 @@ class StudentSerializer(serializers.ModelSerializer):
                 validated_data['photo_path'] = upload_image_to_cloudinary(new_photo, instance.student_id_number)
         return super().update(instance, validated_data)
 
+    def to_representation(self, instance):
+        """
+        Dynamically optimize Cloudinary URLs for listing to save bandwidth and memory.
+        """
+        ret = super().to_representation(instance)
+        photo_path = ret.get('photo_path')
+
+        # Check if it's a valid Cloudinary URL
+        if photo_path and 'res.cloudinary.com' in photo_path and '/upload/' in photo_path:
+            try:
+                # Inject transformation: w_400,h_400,c_limit,q_auto,f_auto
+                # Example: .../upload/v1234/student.jpg -> .../upload/w_400,c_limit,q_auto,f_auto/v1234/student.jpg
+                parts = photo_path.split('/upload/')
+                if len(parts) == 2:
+                    ret['photo_path'] = f"{parts[0]}/upload/w_400,c_limit,q_auto,f_auto/{parts[1]}"
+            except Exception:
+                pass # Return original if splitting fails
+
+        return ret
+
 class CanteenAttendanceSerializer(serializers.ModelSerializer):
     student = StudentSerializer(read_only=True)
     
