@@ -31,24 +31,26 @@ def dashboard(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
 
-    # Strict Role Redirection
+    # Strict Role Redirection based on Permissions
     try:
         if hasattr(request.user, 'profile'):
-            role = request.user.profile.role
+            profile = request.user.profile
+            role = profile.role
 
-            if role == 'librarian':
-                return redirect('library_home')
-            elif role == 'storekeeper':
+            if role == 'director':
+                pass # Continue to dashboard
+            elif profile.has_perm('access_canteen'):
                 return redirect('canteen_home')
-            elif role == 'secretariat':
+            elif profile.has_perm('access_library'):
+                return redirect('library_home')
+            elif profile.has_perm('access_management'):
                 return redirect('students_management')
-            elif role == 'archivist':
+            elif profile.has_perm('access_archive'):
                 return redirect('archive_home')
-            elif role != 'director':
-                # Unknown role or unauthorized
+            else:
+                # No known access
                 logout(request)
                 return redirect('canteen_landing')
-            # Director continues
         else:
             # No profile (e.g., admin). If not superuser, redirect
             if not request.user.is_superuser:
