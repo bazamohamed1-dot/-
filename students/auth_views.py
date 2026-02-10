@@ -144,7 +144,10 @@ def login_view(request):
 
             # Skip Device Lock for Director/Superuser
             if profile.role == 'director' or user.is_superuser:
-                pass
+                # Explicitly clear any existing binding for Director to ensure complete removal of the property
+                if profile.device_id:
+                    profile.device_id = None
+                    profile.save()
             else:
                 try:
                     if profile.device_id:

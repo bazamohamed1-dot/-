@@ -63,11 +63,15 @@
                 <i class="fas fa-user fa-3x" id="placeholderIcon" style="color:#e2e8f0"></i>
                 <img id="displayImage">
             </div>
+            <!-- File Input for Gallery -->
             <input type="file" id="imageSelector" style="display:none" accept="image/*" onchange="handleImageSelection(this)">
+            <!-- File Input for Native Camera -->
+            <input type="file" id="nativeCameraInput" style="display:none" accept="image/*" capture="environment" onchange="handleImageSelection(this)">
+
             <button class="btn btn-primary" id="photoBtn" style="width:100%; background:#e2e8f0; color:#333;" onclick="triggerImageSelect()">
-                <i class="fas fa-upload"></i> تنزيل صورة
+                <i class="fas fa-upload"></i> تنزيل صورة (المعرض)
             </button>
-            <button class="btn btn-secondary" id="cameraBtn" style="width:100%; background:#e2e8f0; color:#333; margin-top:5px;" onclick="openCameraModal()">
+            <button class="btn btn-secondary" id="cameraBtn" style="width:100%; background:#e2e8f0; color:#333; margin-top:5px;" onclick="triggerNativeCamera()">
                 <i class="fas fa-camera"></i> التقاط بالكاميرا
             </button>
             <button class="btn btn-danger" id="deletePhotoBtn" style="width:100%; display:none;" onclick="removePhotoImage()">
@@ -186,24 +190,6 @@
     </div>
 </div>
 
-<!-- Camera Modal -->
-<div id="cameraModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:white; padding:15px; border-radius:12px; width:90%; max-width:500px; max-height:90vh; overflow-y:auto; text-align:center; position:relative; display:flex; flex-direction:column; align-items:center;">
-        <h3 style="margin-top:0; margin-bottom:10px;">التقاط صورة</h3>
-
-        <div style="position:relative; width:100%; display:flex; justify-content:center; background:black; border-radius:8px; overflow:hidden;">
-            <video id="cameraFeed" autoplay playsinline style="width:100%; max-height:50vh; object-fit:contain; transform: scaleX(-1);"></video>
-        </div>
-
-        <canvas id="cameraCanvas" style="display:none;"></canvas>
-
-        <div style="margin-top:15px; display:flex; gap:10px; justify-content:center; width:100%; flex-wrap:wrap;">
-            <button type="button" onclick="switchCamera()" class="btn btn-primary" style="flex:1; padding:12px;"><i class="fas fa-sync-alt"></i> قلب</button>
-            <button type="button" onclick="capturePhoto()" class="btn btn-success" style="flex:1; padding:12px;"><i class="fas fa-camera"></i> التقاط</button>
-            <button type="button" onclick="closeCameraModal()" class="btn btn-danger" style="flex:1; padding:12px;"><i class="fas fa-times"></i> إلغاء</button>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -436,9 +422,13 @@ async function saveCurrent() {
         // If we are offline (or if apiFetch determines offline logic should run), passing the File object
         // allows IndexedDB to store it efficiently.
 
-        if (!navigator.onLine && window.offlineManager && document.getElementById('imageSelector').files[0]) {
+        // Check both inputs for a file
+        const fileInput = document.getElementById('imageSelector').files[0] ? document.getElementById('imageSelector') : document.getElementById('nativeCameraInput');
+        const hasFile = fileInput && fileInput.files && fileInput.files[0];
+
+        if (!navigator.onLine && window.offlineManager && hasFile) {
              console.log("Saving Blob to IndexedDB...");
-             const file = document.getElementById('imageSelector').files[0];
+             const file = fileInput.files[0];
              // We need to inject the file into the studentData for `offlineManager` to handle
              // But `saveStudentOffline` logic handles the separation.
              // Let's modify `studentData` to keep `photo_path` as a placeholder or remove it?
@@ -675,8 +665,15 @@ function exportBackup() {
 }
 
 function triggerImageSelect() { document.getElementById('imageSelector').click(); }
+function triggerNativeCamera() { document.getElementById('nativeCameraInput').click(); }
+
 function handleImageSelection(input) {
     if (input.files && input.files[0]) {
+        // Keep file in imageSelector for potential offline saving (Blob)
+        // If nativeCameraInput triggered this, we might want to copy file reference if possible,
+        // but inputs are read-only.
+        // Solution: `saveCurrent` checks BOTH inputs.
+
         const reader = new FileReader();
         reader.onload = e => {
             document.getElementById('photoPath').value = e.target.result;
@@ -687,6 +684,8 @@ function handleImageSelection(input) {
 }
 function removePhotoImage() {
     document.getElementById('photoPath').value = "";
+    document.getElementById('imageSelector').value = ""; // Clear file inputs
+    document.getElementById('nativeCameraInput').value = "";
     updatePhotoUI("");
 }
 function updatePhotoUI(data) {
@@ -694,102 +693,6 @@ function updatePhotoUI(data) {
     const icon = document.getElementById('placeholderIcon');
     if (data) { img.src = data; img.style.display = "block"; icon.style.display = "none"; }
     else { img.style.display = "none"; icon.style.display = "block"; }
-}
-
-// Camera Logic
-let videoStream = null;
-let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
-
-async function openCameraModal() {
-    const modal = document.getElementById('cameraModal');
-    modal.style.display = 'flex';
-    await startCamera(currentFacingMode);
-}
-
-async function startCamera(facingMode) {
-    const video = document.getElementById('cameraFeed');
-
-    // Stop existing stream if any
-    if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-    }
-
-    try {
-        videoStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: facingMode
-            }
-        });
-        video.srcObject = videoStream;
-
-        // Mirror effect only for front camera
-        if (facingMode === 'user') {
-            video.style.transform = "scaleX(-1)";
-        } else {
-            video.style.transform = "scaleX(1)";
-        }
-
-        try {
-            await video.play();
-        } catch (e) {
-            console.log("Play interrupted", e);
-        }
-    } catch (err) {
-        alert("لا يمكن الوصول للكاميرا: " + err);
-        console.error(err);
-    }
-}
-
-async function switchCamera() {
-    currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
-    await startCamera(currentFacingMode);
-}
-
-function closeCameraModal() {
-    const modal = document.getElementById('cameraModal');
-    const video = document.getElementById('cameraFeed');
-
-    if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        videoStream = null;
-    }
-    video.srcObject = null;
-    modal.style.display = 'none';
-}
-
-function capturePhoto() {
-    const video = document.getElementById('cameraFeed');
-    const canvas = document.getElementById('cameraCanvas');
-    const context = canvas.getContext('2d');
-
-    if (video.videoWidth && video.videoHeight) {
-        // Limit dimensions for size optimization (max 800px)
-        const MAX_WIDTH = 800;
-        let width = video.videoWidth;
-        let height = video.videoHeight;
-
-        if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        // Handle mirroring if using front camera
-        if (currentFacingMode === 'user') {
-            context.translate(canvas.width, 0);
-            context.scale(-1, 1);
-        }
-
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Compress JPEG to 0.7 quality
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        document.getElementById('photoPath').value = dataUrl;
-        updatePhotoUI(dataUrl);
-        closeCameraModal();
-    }
 }
 </script>
 {% endblock %}
