@@ -126,44 +126,85 @@ def forgot_password(request):
         try:
             user = User.objects.get(username=username)
             if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
-                # Determine Email to send to
-                target_email = admin_email
-                if not target_email and user.email:
-                    target_email = user.email
+                # Use 2FA Code if provided
+                code = request.data.get('code')
 
-                # Fallback to first superuser email if no admin email
-                if not target_email:
-                    first_super = User.objects.filter(is_superuser=True).exclude(email='').first()
-                    if first_super:
-                        target_email = first_super.email
+                if code:
+                    # Verify 2FA
+                    if not hasattr(user, 'profile') or not user.profile.totp_secret:
+                        return Response({'error': 'المصادقة الثنائية غير مفعلة لهذا الحساب. يرجى الاتصال بمسؤول قاعدة البيانات.'}, status=400)
 
-                if target_email:
-                    # Generate Temp Password
-                    temp_pass = secrets.token_urlsafe(12)
-                    user.set_password(temp_pass)
-                    user.save()
+                    totp = pyotp.TOTP(user.profile.totp_secret)
+                    if totp.verify(code):
+                        # Success - Generate temporary session/password or allow login
+                        # For simplicity/security balance in this context: Log them in and return token + "must_change_password" flag?
+                        # Or return a temporary password?
+                        # User asked: "Use Google Auth... to restore."
+                        # Let's log them in directly as if they logged in.
 
-                    # Unlock Account
-                    if hasattr(user, 'profile'):
-                        user.profile.is_locked = False
+                        final_token = secrets.token_hex(32)
+                        user.profile.current_session_token = final_token
                         user.profile.failed_login_attempts = 0
+                        user.profile.is_locked = False
                         user.profile.save()
 
-                    # Send Email
-                    try:
-                        send_mail(
-                            subject='استعادة معلومات الدخول - المدير',
-                            message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول. سيتم تفعيل المصادقة الثنائية عند الدخول.',
-                            from_email=None,
-                            recipient_list=[target_email],
-                            fail_silently=False,
-                        )
-                        print(f"Recovery email sent to {target_email}")
-                    except Exception as e:
-                        print(f"Failed to send email: {e}")
+                        login(request, user)
+                        UserActivityLog.objects.create(user=user, action='login_recovery_2fa')
+
+                        return Response({
+                            'message': 'تم التحقق بنجاح. تم تسجيل الدخول.',
+                            'token': final_token,
+                            'role': user.profile.role,
+                            'username': user.username,
+                            'redirect': '/canteen/settings/' # Direct them to settings to change password
+                        })
+                    else:
+                        return Response({'error': 'رمز المصادقة غير صحيح'}, status=400)
                 else:
-                    print("No Admin Email configured and no Superuser email found.")
-        except:
+                    # Prompt for 2FA Code if secret exists
+                    if hasattr(user, 'profile') and user.profile.totp_secret:
+                        return Response({
+                            'require_2fa_reset': True,
+                            'message': 'يرجى إدخال رمز المصادقة الثنائية (Google Authenticator) لاستعادة الحساب.'
+                        })
+                    else:
+                        # Fallback to Email if 2FA NOT enabled (Old behavior)
+                        # Determine Email to send to
+                        target_email = admin_email
+                        if not target_email and user.email:
+                            target_email = user.email
+
+                        if not target_email:
+                            first_super = User.objects.filter(is_superuser=True).exclude(email='').first()
+                            if first_super:
+                                target_email = first_super.email
+
+                        if target_email:
+                            # Generate Temp Password
+                            temp_pass = secrets.token_urlsafe(12)
+                            user.set_password(temp_pass)
+                            user.save()
+
+                            if hasattr(user, 'profile'):
+                                user.profile.is_locked = False
+                                user.profile.failed_login_attempts = 0
+                                user.profile.save()
+
+                            try:
+                                send_mail(
+                                    subject='استعادة معلومات الدخول - المدير',
+                                    message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول.',
+                                    from_email=None,
+                                    recipient_list=[target_email],
+                                    fail_silently=False,
+                                )
+                                print(f"Recovery email sent to {target_email}")
+                            except Exception as e:
+                                print(f"Failed to send email: {e}")
+                        else:
+                            print("No Admin Email configured and no Superuser email found.")
+        except Exception as e:
+            print(f"Recovery Error: {e}")
             pass
 
     return Response({'message': GENERIC_MSG})
