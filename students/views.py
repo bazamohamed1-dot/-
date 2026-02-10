@@ -6,7 +6,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, PendingUpdate
 from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
@@ -30,12 +30,53 @@ class StudentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_add'):
              return Response({'error': 'Unauthorized'}, status=403)
-        return super().create(request, *args, **kwargs)
+
+        # If user is Director or Superuser, apply immediately
+        if request.user.profile.role == 'director' or request.user.is_superuser:
+            return super().create(request, *args, **kwargs)
+
+        # For other users, create a Pending Update
+        try:
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name='student',
+                action='create',
+                data=request.data,
+                status='pending'
+            )
+            return Response({'message': 'تم إرسال التلميذ الجديد إلى المدير للموافقة', 'pending': True}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def update(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_edit'):
              return Response({'error': 'Unauthorized'}, status=403)
-        return super().update(request, *args, **kwargs)
+
+        # If user is Director or Superuser, apply immediately
+        if request.user.profile.role == 'director' or request.user.is_superuser:
+            return super().update(request, *args, **kwargs)
+
+        # For other users, create a Pending Update
+        student = self.get_object()
+
+        # Serialize the data to validate it first?
+        # Or just store the raw request data.
+        # Storing raw data is safer for "Pending" state.
+
+        try:
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name='student',
+                action='update',
+                data={
+                    'id': student.id,
+                    **request.data
+                },
+                status='pending'
+            )
+            return Response({'message': 'تم إرسال التحديث إلى المدير للموافقة', 'pending': True}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def destroy(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_delete'):
@@ -186,47 +227,6 @@ class ArchiveDocumentViewSet(viewsets.ModelViewSet):
         response = FileResponse(open(file_path, 'rb'), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename="Archive_{date.today()}.xlsx"'
         return response
-
-# --- Offline Manifest ---
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_offline_manifest(request):
-    """
-    Returns data needed for offline mode:
-    1. Full Student List (ID, Name, Class, Photo URL, Barcode ID)
-    2. Canteen Stats (Today)
-    """
-    students = Student.objects.all().values(
-        'id', 'student_id_number', 'last_name', 'first_name',
-        'class_name', 'photo_path', 'attendance_system',
-        'gender', 'date_of_birth', 'place_of_birth', 'academic_year',
-        'enrollment_number', 'enrollment_date', 'guardian_name',
-        'mother_name', 'address', 'guardian_phone', 'exit_date'
-    )
-    # Also need full offline capability for Editing:
-    # We might need to map field names to frontend expectations if they differ.
-    # Frontend management.html uses: ln, fn, id, dob, pob, gender, level, class, sys, enrollNum, enrollDate, exitDate, guard, mother, phone, addr, photo
-    # My `values()` query returns db field names.
-    # The frontend code in `management.html` (which I saw earlier) maps `s.last_name` to `ln`, etc.
-    # Wait, `management.html` fetchStudents() maps API response:
-    # s.ln = s.last_name
-    # So as long as keys match API serializers (which match model fields), we are good.
-    # The `get_offline_manifest` returns a list of dicts with model field names.
-    # Perfect.
-
-    # Canteen Stats
-    today = date.today()
-    total_half_board = Student.objects.filter(attendance_system='نصف داخلي').count()
-    present_count = CanteenAttendance.objects.filter(date=today).count()
-
-    return Response({
-        'students': list(students),
-        'canteen_stats': {
-            'total': total_half_board,
-            'present': present_count,
-            'date': str(today)
-        }
-    })
 
 # --- Library Views ---
 
