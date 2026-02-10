@@ -121,90 +121,17 @@ def forgot_password(request):
         except Exception as e:
             print(f"Device Reset Error: {e}")
 
-    # Case 2: Director/Superuser Reset (Username based)
+    # Case 2: Director/Superuser Reset (Username based) - Informational only
+    # The actual recovery is now done via the Login Screen (Email + 2FA Code)
     if username:
         try:
             user = User.objects.get(username=username)
             if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
-                # Use 2FA Code if provided
-                code = request.data.get('code')
-
-                if code:
-                    # Verify 2FA
-                    if not hasattr(user, 'profile') or not user.profile.totp_secret:
-                        return Response({'error': 'المصادقة الثنائية غير مفعلة لهذا الحساب. يرجى الاتصال بمسؤول قاعدة البيانات.'}, status=400)
-
-                    totp = pyotp.TOTP(user.profile.totp_secret)
-                    if totp.verify(code):
-                        # Success - Generate temporary session/password or allow login
-                        # For simplicity/security balance in this context: Log them in and return token + "must_change_password" flag?
-                        # Or return a temporary password?
-                        # User asked: "Use Google Auth... to restore."
-                        # Let's log them in directly as if they logged in.
-
-                        final_token = secrets.token_hex(32)
-                        user.profile.current_session_token = final_token
-                        user.profile.failed_login_attempts = 0
-                        user.profile.is_locked = False
-                        user.profile.save()
-
-                        login(request, user)
-                        UserActivityLog.objects.create(user=user, action='login_recovery_2fa')
-
-                        return Response({
-                            'message': 'تم التحقق بنجاح. تم تسجيل الدخول.',
-                            'token': final_token,
-                            'role': user.profile.role,
-                            'username': user.username,
-                            'redirect': '/canteen/settings/' # Direct them to settings to change password
-                        })
-                    else:
-                        return Response({'error': 'رمز المصادقة غير صحيح'}, status=400)
-                else:
-                    # Prompt for 2FA Code if secret exists
-                    if hasattr(user, 'profile') and user.profile.totp_secret:
-                        return Response({
-                            'require_2fa_reset': True,
-                            'message': 'يرجى إدخال رمز المصادقة الثنائية (Google Authenticator) لاستعادة الحساب.'
-                        })
-                    else:
-                        # Fallback to Email if 2FA NOT enabled (Old behavior)
-                        # Determine Email to send to
-                        target_email = admin_email
-                        if not target_email and user.email:
-                            target_email = user.email
-
-                        if not target_email:
-                            first_super = User.objects.filter(is_superuser=True).exclude(email='').first()
-                            if first_super:
-                                target_email = first_super.email
-
-                        if target_email:
-                            # Generate Temp Password
-                            temp_pass = secrets.token_urlsafe(12)
-                            user.set_password(temp_pass)
-                            user.save()
-
-                            if hasattr(user, 'profile'):
-                                user.profile.is_locked = False
-                                user.profile.failed_login_attempts = 0
-                                user.profile.save()
-
-                            try:
-                                send_mail(
-                                    subject='استعادة معلومات الدخول - المدير',
-                                    message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول.',
-                                    from_email=None,
-                                    recipient_list=[target_email],
-                                    fail_silently=False,
-                                )
-                                print(f"Recovery email sent to {target_email}")
-                            except Exception as e:
-                                print(f"Failed to send email: {e}")
-                        else:
-                            print("No Admin Email configured and no Superuser email found.")
-        except Exception as e:
-            print(f"Recovery Error: {e}")
+                 return Response({
+                     'message': 'لاستعادة حساب المدير، يرجى استخدام "البريد الإلكتروني للإدارة" كاسم مستخدم، و "رمز المصادقة الثنائية (Google Auth)" ككلمة مرور في شاشة تسجيل الدخول الرئيسية.',
+                     'info_only': True
+                 })
+        except:
             pass
 
     return Response({'message': GENERIC_MSG})
@@ -236,6 +163,50 @@ def login_view(request):
         username = request.data.get('username')
         password = request.data.get('password')
 
+        # --- Director Recovery Login (Email + 2FA Code) ---
+        # If the input username looks like an email, check if it matches Admin Email
+        if '@' in username:
+            settings_obj = SchoolSettings.objects.first()
+            if settings_obj and settings_obj.admin_email and username.strip().lower() == settings_obj.admin_email.strip().lower():
+                # Attempt to find Director/Superuser
+                director_profile = EmployeeProfile.objects.filter(role='director').first()
+                target_user = None
+                if director_profile:
+                    target_user = director_profile.user
+                else:
+                    # Fallback to superuser
+                    target_user = User.objects.filter(is_superuser=True).first()
+
+                if target_user and hasattr(target_user, 'profile') and target_user.profile.totp_secret:
+                    # Verify 2FA code (passed in password field)
+                    try:
+                        totp = pyotp.TOTP(target_user.profile.totp_secret)
+                        # Check if password matches the TOTP code (6 digits)
+                        if password.isdigit() and len(password) == 6 and totp.verify(password):
+                             # Success! Log them in.
+                             profile = target_user.profile
+                             profile.failed_login_attempts = 0
+                             profile.is_locked = False
+
+                             # Generate Session
+                             token = secrets.token_hex(32)
+                             profile.current_session_token = token
+                             profile.save()
+
+                             login(request, target_user)
+                             UserActivityLog.objects.create(user=target_user, action='login_recovery_email_2fa')
+
+                             return Response({
+                                'message': 'تم استعادة الدخول بنجاح',
+                                'token': token,
+                                'role': profile.role,
+                                'username': target_user.username,
+                                'device_id': profile.device_id
+                            })
+                    except Exception as e:
+                        print(f"Recovery Login Error: {e}")
+
+        # --- Standard Login ---
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
