@@ -122,7 +122,7 @@
         }
 
         /* Responsive Design */
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
             /* Logic: Hide sidebar for everyone by default, but allow Director to toggle it */
 
             /* For Non-Directors: Completely Hide Sidebar & Toggle */
@@ -169,7 +169,7 @@
                 white-space: nowrap;
             }
             .bottom-nav {
-                display: flex; /* Show bottom nav on mobile */
+                display: flex; /* Show bottom nav on mobile/tablet */
             }
             /* Hide user info on mobile header to save space */
             .user-info span {
@@ -426,7 +426,7 @@
 
     // Close sidebar when clicking outside on mobile
     document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768) {
+        if (window.innerWidth <= 1024) {
             if (!sidebar.contains(e.target) && !sidebarToggle.contains(e.target) && sidebar.classList.contains('active')) {
                 sidebar.classList.remove('active');
             }
