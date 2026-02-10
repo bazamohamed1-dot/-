@@ -77,8 +77,18 @@ def login_view(request):
                         # If client_id is missing, or doesn't match
                         if not client_id or client_id != profile.device_id:
                             # Strict Lock
-                            return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
-                        device_id_to_send = profile.device_id
+                            # Exception: Director/Superuser always allowed (Auto-Rebind)
+                            if profile.role == 'director' or user.is_superuser:
+                                if client_id:
+                                    profile.device_id = client_id
+                                    profile.save()
+                                    device_id_to_send = client_id
+                                else:
+                                    return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
+                            else:
+                                return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+                        else:
+                            device_id_to_send = profile.device_id
                 else:
                     # No device_id set. (First Time Login)
                     # Bind the current device ID to the account
