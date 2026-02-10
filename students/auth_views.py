@@ -103,24 +103,44 @@ def forgot_password(request):
     settings_obj = SchoolSettings.objects.first()
     admin_email = settings_obj.admin_email if settings_obj else None
 
-    # Case 1: Device-based Employee Reset Request
+    # Case 1: Device-based Reset Request
     if device_id:
         try:
             # Find profile by device ID
-            # Assuming strict 1-to-1 binding, though DB field is just CharField.
             profile = EmployeeProfile.objects.filter(device_id=device_id).first()
-            if profile and profile.role != 'director':
-                if admin_email:
-                    try:
-                        send_mail(
-                            subject='طلب استعادة كلمة مرور من مستخدم',
-                            message=f'مرحباً أيها المدير،\n\nالمستخدم "{profile.user.username}" (الدور: {profile.role}) يطلب إعادة تعيين كلمة المرور.\nتم إرسال الطلب من جهازه الموثوق (ID: {device_id}).\n\nيرجى الدخول إلى حسابك وتغيير كلمة المرور الخاصة به.',
-                            from_email=None,
-                            recipient_list=[admin_email],
-                            fail_silently=False,
-                        )
-                        return Response({'message': 'تم إرسال طلب استعادة كلمة المرور إلى المدير بنجاح.'})
-                    except: pass
+            if profile:
+                if profile.role != 'director':
+                    # Employee: Notify Director
+                    if admin_email:
+                        try:
+                            send_mail(
+                                subject='طلب استعادة كلمة مرور من مستخدم',
+                                message=f'مرحباً أيها المدير،\n\nالمستخدم "{profile.user.username}" (الدور: {profile.role}) يطلب إعادة تعيين كلمة المرور.\nتم إرسال الطلب من جهازه الموثوق (ID: {device_id}).\n\nيرجى الدخول إلى حسابك وتغيير كلمة المرور الخاصة به.',
+                                from_email=None,
+                                recipient_list=[admin_email],
+                                fail_silently=False,
+                            )
+                            return Response({'message': 'تم إرسال طلب استعادة كلمة المرور إلى المدير بنجاح.'})
+                        except: pass
+                else:
+                    # Director on Trusted Device: Send Credentials to Admin Email
+                    if admin_email:
+                        # Generate Temp Password
+                        temp_pass = secrets.token_urlsafe(12)
+                        user = profile.user
+                        user.set_password(temp_pass)
+                        user.save()
+
+                        try:
+                            send_mail(
+                                subject='استعادة معلومات الدخول - المدير',
+                                message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول من جهازك الموثوق.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول. المصادقة الثنائية لا تزال مفعلة.',
+                                from_email=None,
+                                recipient_list=[admin_email],
+                                fail_silently=False,
+                            )
+                            return Response({'message': 'تم إرسال معلومات الدخول إلى بريدك الإلكتروني.'})
+                        except: pass
         except Exception as e:
             print(f"Device Reset Error: {e}")
 
