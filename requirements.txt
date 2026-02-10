@@ -24,3 +24,5 @@ tzdata==2025.3
 urllib3==2.6.3
 whitenoise==6.6.0
 xlrd==2.0.1
+qrcode==7.4.2
+pyotp==2.9.0

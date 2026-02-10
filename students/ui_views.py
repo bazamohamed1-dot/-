@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.auth import logout
 from django.core.management import call_command
 from .models import Student, CanteenAttendance, SchoolSettings, PendingUpdate
 from datetime import date
@@ -45,14 +46,17 @@ def dashboard(request):
                 return redirect('archive_home')
             elif role != 'director':
                 # Unknown role or unauthorized
+                logout(request)
                 return redirect('canteen_landing')
             # Director continues
         else:
             # No profile (e.g., admin). If not superuser, redirect
             if not request.user.is_superuser:
+                logout(request)
                 return redirect('canteen_landing')
 
     except Exception:
+        logout(request)
         return redirect('canteen_landing')
 
     context = {
