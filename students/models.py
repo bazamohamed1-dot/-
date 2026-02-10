@@ -129,6 +129,10 @@ class EmployeeProfile(models.Model):
     device_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="معرف الجهاز")
     permissions = models.JSONField(default=list, blank=True, verbose_name="الصلاحيات")
 
+    # 2FA Fields
+    totp_secret = models.CharField(max_length=100, null=True, blank=True, verbose_name="مفتاح المصادقة الثنائية")
+    totp_enabled = models.BooleanField(default=False, verbose_name="تفعيل المصادقة الثنائية")
+
     def has_perm(self, perm):
         if self.role == 'director' or self.user.is_superuser:
             return True

@@ -95,6 +95,16 @@
 </div>
 
 
+<!-- 2FA Section (Director Only) -->
+<div class="card" id="2faSection" style="display:none; margin-bottom: 20px;">
+    <h3><i class="fas fa-shield-alt"></i> المصادقة الثنائية</h3>
+    <p style="color:#64748b;">قم بحماية حساب المدير باستخدام تطبيق المصادقة (Google Authenticator أو Microsoft Authenticator).</p>
+
+    <div id="2faStatusArea" style="margin-top:15px;">
+        <!-- Filled by JS -->
+    </div>
+</div>
+
 <!-- System Messages Section -->
 <div class="card" id="systemMsgSection" style="display:none; margin-bottom: 20px;">
     <h3><i class="fas fa-bullhorn"></i> رسائل النظام</h3>
@@ -246,6 +256,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadUsers();
+    check2FA();
 });
 
 async function loadSettings() {
@@ -763,6 +774,84 @@ async function clearLogs() {
             openLogsModal();
         }
     } catch(e) { alert('خطأ'); }
+}
+
+// 2FA Logic
+async function check2FA() {
+    if (sessionStorage.getItem('user_role') !== 'director') return;
+    document.getElementById('2faSection').style.display = 'block';
+
+    // We can't check status easily without API, let's assume if role is director we show the section.
+    // Ideally we fetch current status. For now, simple "Setup" button.
+    render2FAInitial();
+}
+
+function render2FAInitial() {
+    const area = document.getElementById('2faStatusArea');
+    area.innerHTML = `
+        <button class="btn btn-info" onclick="setup2FA()"><i class="fas fa-qrcode"></i> إعداد / إعادة ضبط المصادقة</button>
+        <button class="btn btn-danger" onclick="disable2FA()"><i class="fas fa-ban"></i> تعطيل المصادقة</button>
+    `;
+}
+
+async function setup2FA() {
+    try {
+        const res = await fetch('/canteen/auth/2fa/setup/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+
+        const area = document.getElementById('2faStatusArea');
+        area.innerHTML = `
+            <div style="background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0; text-align:center;">
+                <p>امسح الرمز التالي بتطبيق المصادقة:</p>
+                <img src="${data.qr_code}" style="width:150px; height:150px; border:1px solid #ddd; padding:5px; background:white;">
+                <p style="margin-top:10px; font-family:monospace; direction:ltr;">Secret: ${data.secret}</p>
+
+                <div style="margin-top:15px; max-width:300px; margin-left:auto; margin-right:auto;">
+                    <input type="text" id="verify2fa" class="form-input western-nums" placeholder="أدخل الرمز (6 أرقام)" style="text-align:center; font-size:1.2rem; letter-spacing:3px;" maxlength="6">
+                    <button class="btn btn-success" style="width:100%; margin-top:10px;" onclick="confirm2FA()">تأكيد وتفعيل</button>
+                    <button class="btn" style="width:100%; margin-top:5px; background:#ddd;" onclick="render2FAInitial()">إلغاء</button>
+                </div>
+            </div>
+        `;
+    } catch(e) { alert("Error setting up 2FA"); }
+}
+
+async function confirm2FA() {
+    const code = document.getElementById('verify2fa').value;
+    if(!code) return alert("أدخل الرمز");
+
+    try {
+        const res = await fetch('/canteen/auth/2fa/confirm/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ code: code })
+        });
+
+        if (res.ok) {
+            alert("تم تفعيل المصادقة الثنائية بنجاح!");
+            render2FAInitial();
+        } else {
+            alert("الرمز غير صحيح");
+        }
+    } catch(e) { alert("Error"); }
+}
+
+async function disable2FA() {
+    if(!confirm("هل أنت متأكد من تعطيل المصادقة الثنائية؟ سيقلل هذا من أمان الحساب.")) return;
+    try {
+        const res = await fetch('/canteen/auth/2fa/disable/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) alert("تم التعطيل");
+    } catch(e) { alert("Error"); }
 }
 </script>
 {% endblock %}
