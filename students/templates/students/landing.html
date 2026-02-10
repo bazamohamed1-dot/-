@@ -468,7 +468,10 @@
 
         async function sendResetRequest() {
             const username = document.getElementById('forgotUsername').value;
-            if (!username) return alert("الرجاء إدخال اسم المستخدم");
+            // Allow empty username if device ID is present (handled by backend)
+            // But visually, asking for username is good for confirmation.
+            // The prompt said "In case of forgetting username... send email... from device".
+            // So username should be optional if device is trusted.
 
             const btn = document.getElementById('sendResetBtn');
             const spinner = document.getElementById('resetSpinner');
@@ -476,12 +479,16 @@
             spinner.style.display = 'inline-block';
 
             try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                };
+                const deviceId = localStorage.getItem('device_id');
+                if (deviceId) headers['X-Device-ID'] = deviceId;
+
                 const response = await fetch('/canteen/auth/forgot_password/', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
+                    headers: headers,
                     body: JSON.stringify({ username })
                 });
 

@@ -7,7 +7,8 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
-from .models import EmployeeProfile, UserActivityLog, SchoolSettings
+from .models import EmployeeProfile, UserActivityLog, SchoolSettings, UserRole
+from .serializers import UserRoleSerializer
 import secrets
 import pyotp
 import qrcode
@@ -94,53 +95,84 @@ def verify_2fa_login(request):
 @permission_classes([AllowAny])
 def forgot_password(request):
     username = request.data.get('username')
+    device_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
 
     # Generic message for all cases to prevent enumeration and hide email
-    GENERIC_MSG = 'إذا كان الحساب موجوداً ولديه بريد استرجاع، فقد تم إرسال كلمة مرور مؤقتة إليه.'
+    GENERIC_MSG = 'إذا كان الحساب موجوداً ولديه بريد استرجاع، فقد تم إرسال التعليمات إليه.'
 
-    if not username:
-        return Response({'message': GENERIC_MSG})
+    settings_obj = SchoolSettings.objects.first()
+    admin_email = settings_obj.admin_email if settings_obj else None
 
-    try:
-        user = User.objects.get(username=username)
+    # Case 1: Device-based Employee Reset Request
+    if device_id:
+        try:
+            # Find profile by device ID
+            # Assuming strict 1-to-1 binding, though DB field is just CharField.
+            profile = EmployeeProfile.objects.filter(device_id=device_id).first()
+            if profile and profile.role != 'director':
+                if admin_email:
+                    try:
+                        send_mail(
+                            subject='طلب استعادة كلمة مرور من مستخدم',
+                            message=f'مرحباً أيها المدير،\n\nالمستخدم "{profile.user.username}" (الدور: {profile.role}) يطلب إعادة تعيين كلمة المرور.\nتم إرسال الطلب من جهازه الموثوق (ID: {device_id}).\n\nيرجى الدخول إلى حسابك وتغيير كلمة المرور الخاصة به.',
+                            from_email=None,
+                            recipient_list=[admin_email],
+                            fail_silently=False,
+                        )
+                        return Response({'message': 'تم إرسال طلب استعادة كلمة المرور إلى المدير بنجاح.'})
+                    except: pass
+        except Exception as e:
+            print(f"Device Reset Error: {e}")
 
-        # Only allow Director/Superuser recovery via this method as requested ("Using Email found in Settings")
-        # Standard users should contact Director.
-        if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
-            settings_obj = SchoolSettings.objects.first()
+    # Case 2: Director/Superuser Reset (Username based)
+    if username:
+        try:
+            user = User.objects.get(username=username)
+            if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
+                if admin_email:
+                    # Generate Temp Password
+                    temp_pass = secrets.token_urlsafe(12)
+                    user.set_password(temp_pass)
+                    user.save()
 
-            # Use the email from Settings as requested
-            admin_email = settings_obj.admin_email if settings_obj else None
-
-            if admin_email:
-                # Generate Temp Password
-                temp_pass = secrets.token_urlsafe(12)
-                user.set_password(temp_pass)
-                user.save()
-
-                # IMPORTANT: Ensure 2FA is NOT disabled
-                # user.set_password does not touch profile fields, so 2FA remains active if enabled.
-
-                # Send Email
-                try:
-                    send_mail(
-                        subject='استعادة كلمة المرور - نظام تسيير المؤسسة',
-                        message=f'مرحباً {user.username}،\n\nلقد طلبت استعادة كلمة المرور.\nكلمة المرور المؤقتة الخاصة بك هي:\n{temp_pass}\n\nيرجى تغييرها فور تسجيل الدخول.\n\nتنبيه: المصادقة الثنائية (2FA) لا تزال مفعلة إذا كنت قد قمت بتفعيلها مسبقاً.',
-                        from_email=None, # Uses DEFAULT_FROM_EMAIL
-                        recipient_list=[admin_email],
-                        fail_silently=False,
-                    )
-                    print(f"Recovery email sent to {admin_email}")
-                except Exception as e:
-                    print(f"Failed to send email: {e}")
-                    # In production, maybe log to Sentry. For now, just log.
-            else:
-                print("No Admin Email configured in School Settings.")
-    except Exception as e:
-        print(f"Forgot Password Error: {e}")
-        pass
+                    # Send Email (Username + Temp Password + 2FA Notice)
+                    try:
+                        send_mail(
+                            subject='استعادة معلومات الدخول - المدير',
+                            message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول مرة واحدة. سيطلب منك النظام تفعيل المصادقة الثنائية (إذا كانت مفعلة) ثم يمكنك تغيير بياناتك من الإعدادات.',
+                            from_email=None,
+                            recipient_list=[admin_email],
+                            fail_silently=False,
+                        )
+                        print(f"Recovery email sent to {admin_email}")
+                    except Exception as e:
+                        print(f"Failed to send email: {e}")
+                else:
+                    print("No Admin Email configured.")
+        except:
+            pass
 
     return Response({'message': GENERIC_MSG})
+
+class UserRoleViewSet(viewsets.ModelViewSet):
+    queryset = UserRole.objects.all()
+    serializer_class = UserRoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def check_permission(self, request):
+        return hasattr(request.user, 'profile') and request.user.profile.role == 'director'
+
+    def list(self, request):
+        if not self.check_permission(request): return Response({'error': 'Unauthorized'}, status=403)
+        return super().list(request)
+
+    def create(self, request):
+        if not self.check_permission(request): return Response({'error': 'Unauthorized'}, status=403)
+        return super().create(request)
+
+    def destroy(self, request, pk=None):
+        if not self.check_permission(request): return Response({'error': 'Unauthorized'}, status=403)
+        return super().destroy(request, pk)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

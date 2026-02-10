@@ -114,6 +114,26 @@
     </form>
 </div>
 
+<!-- Role Management Section -->
+<div class="card" id="roleManagementSection" style="display:none; margin-bottom: 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+        <h3><i class="fas fa-user-tag"></i> إدارة الأدوار المخصصة</h3>
+        <button class="btn btn-success" onclick="openRoleModal()"><i class="fas fa-plus"></i> إضافة دور جديد</button>
+    </div>
+    <table style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background:#f8fafc; text-align:right;">
+                <th style="padding:10px;">اسم الدور</th>
+                <th style="padding:10px;">عدد الصلاحيات</th>
+                <th style="padding:10px;">إجراءات</th>
+            </tr>
+        </thead>
+        <tbody id="rolesTableBody">
+            <!-- Populated via JS -->
+        </tbody>
+    </table>
+</div>
+
 <!-- User Management Section -->
 <div class="card" id="userManagementSection" style="display:none; margin-bottom: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
@@ -160,12 +180,17 @@
             </div>
             <div style="margin-bottom:15px;">
                 <label style="display:block; margin-bottom:5px;">الدور</label>
-                <select id="uRole" class="form-input" style="width:100%; padding:10px;" required>
-                    <option value="librarian">مكتبي</option>
-                    <option value="storekeeper">مخزني (مطعم)</option>
-                    <option value="archivist">أرشيفي</option>
-                    <option value="secretariat">أمانة</option>
-                    <!-- Director option removed to prevent multiple directors -->
+                <select id="uRole" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()" required>
+                    <option value="">اختر...</option>
+                    <optgroup label="أدوار النظام">
+                        <option value="librarian" data-perms='["access_library","library_scan","library_loan","library_return","library_readers_list"]'>مكتبي</option>
+                        <option value="storekeeper" data-perms='["access_canteen","canteen_scan","canteen_manual","canteen_export"]'>مخزني (مطعم)</option>
+                        <option value="archivist" data-perms='["access_archive"]'>أرشيفي</option>
+                        <option value="secretariat" data-perms='["access_management","student_add","student_edit","student_print","import_data"]'>أمانة</option>
+                    </optgroup>
+                    <optgroup label="أدوار مخصصة" id="customRolesOptGroup">
+                        <!-- Populated via JS -->
+                    </optgroup>
                 </select>
             </div>
 
@@ -250,6 +275,31 @@
     </div>
 </div>
 
+<!-- Role Modal -->
+<div id="roleModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
+    <div class="card" style="width:400px; padding:20px;">
+        <h3 style="margin-bottom:20px;">إضافة دور جديد</h3>
+        <form onsubmit="saveRole(event)">
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">اسم الدور</label>
+                <input type="text" id="roleName" class="form-input" required style="width:100%; padding:10px;">
+            </div>
+
+            <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
+                <label style="display:block; margin-bottom:10px; font-weight:bold;">الصلاحيات</label>
+                <div style="max-height: 200px; overflow-y: auto; padding: 10px; border: 1px solid #ddd; border-radius: 5px;" id="rolePermsContainer">
+                    <!-- Cloned from user modal logic via JS -->
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;">حفظ</button>
+                <button type="button" class="btn btn-danger" onclick="document.getElementById('roleModal').style.display='none'" style="flex:1;">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -258,7 +308,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadUsers();
+    loadRoles(); // Load roles
     check2FA();
+
+    // Copy permissions structure to Role Modal
+    const permsHTML = document.querySelector('#userModal .max-height-200').innerHTML; // We need to target the container inside userModal
+    // Let's rely on a cleaner selector. The user modal has specific structure.
+    // We will clone content on openRoleModal.
 });
 
 async function loadSettings() {
@@ -517,6 +573,113 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// Role Management Logic
+let customRoles = [];
+
+async function loadRoles() {
+    if (sessionStorage.getItem('user_role') !== 'director') return;
+    document.getElementById('roleManagementSection').style.display = 'block';
+
+    try {
+        const res = await fetch('/canteen/api/roles/');
+        customRoles = await res.json();
+
+        const tbody = document.getElementById('rolesTableBody');
+        tbody.innerHTML = '';
+        const optGroup = document.getElementById('customRolesOptGroup');
+        optGroup.innerHTML = '';
+
+        customRoles.forEach(r => {
+            // Table Row
+            tbody.innerHTML += `
+                <tr style="border-bottom:1px solid #eee;">
+                    <td>${r.name}</td>
+                    <td class="western-nums">${r.permissions.length}</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="deleteRole(${r.id})" style="padding:5px 10px;"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+
+            // Dropdown Option
+            const opt = document.createElement('option');
+            opt.value = r.name;
+            opt.textContent = r.name;
+            // Store perms as data attribute
+            opt.setAttribute('data-perms', JSON.stringify(r.permissions));
+            optGroup.appendChild(opt);
+        });
+    } catch(e) { console.error(e); }
+}
+
+async function saveRole(e) {
+    e.preventDefault();
+    const name = document.getElementById('roleName').value;
+    const perms = [];
+    document.querySelectorAll('#roleModal .perm-check:checked').forEach(c => perms.push(c.value));
+
+    try {
+        const res = await fetch('/canteen/api/roles/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            body: JSON.stringify({ name: name, permissions: perms })
+        });
+        if(res.ok) {
+            alert("تم حفظ الدور");
+            document.getElementById('roleModal').style.display = 'none';
+            loadRoles();
+        } else {
+            alert("خطأ (ربما الاسم مكرر)");
+        }
+    } catch(e) { alert("Error"); }
+}
+
+async function deleteRole(id) {
+    if(!confirm("حذف هذا الدور؟ لن يؤثر على المستخدمين الحاليين.")) return;
+    try {
+        const res = await fetch(`/canteen/api/roles/${id}/`, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) loadRoles();
+    } catch(e) { alert("Error"); }
+}
+
+function openRoleModal() {
+    document.getElementById('roleModal').style.display = 'flex';
+    document.getElementById('roleName').value = '';
+    // Clone permissions from User Modal to Role Modal if empty
+    const source = document.querySelector('#userModal .max-height-200, #userModal div[style*="max-height: 200px"]');
+    const target = document.getElementById('rolePermsContainer');
+    if(source && target.innerHTML.trim() === '') {
+        target.innerHTML = source.innerHTML;
+        // Ensure IDs are unique to avoid conflict
+        target.querySelectorAll('input').forEach(inp => {
+            inp.id = 'role_' + inp.id;
+            inp.nextElementSibling.setAttribute('for', inp.id);
+        });
+    }
+    // Uncheck all
+    target.querySelectorAll('input').forEach(i => i.checked = false);
+}
+
+function onRoleChange() {
+    const select = document.getElementById('uRole');
+    const selectedOpt = select.options[select.selectedIndex];
+    const permsData = selectedOpt.getAttribute('data-perms');
+
+    if (permsData) {
+        const perms = JSON.parse(permsData);
+        // Uncheck all first
+        document.querySelectorAll('#userModal .perm-check').forEach(c => c.checked = false);
+        // Check matching
+        perms.forEach(p => {
+            const chk = document.querySelector(`#userModal .perm-check[value="${p}"]`);
+            if(chk) chk.checked = true;
+        });
+    }
 }
 
 // User Management Logic

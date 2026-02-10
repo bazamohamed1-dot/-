@@ -7,6 +7,7 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register(r'users', auth_views.UserManagementViewSet)
+router.register(r'roles', auth_views.UserRoleViewSet)
 router.register(r'archive/docs', views.ArchiveDocumentViewSet, basename='archive_docs')
 router.register(r'students', views.StudentViewSet)
 router.register(r'pending_updates', sync_views.PendingUpdateViewSet, basename='pending_updates')

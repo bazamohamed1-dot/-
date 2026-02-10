@@ -113,16 +113,9 @@ class ArchiveDocument(models.Model):
         return f"{self.reference_number} - {self.document_type}"
 
 class EmployeeProfile(models.Model):
-    ROLE_CHOICES = [
-        ('director', 'مدير'),
-        ('librarian', 'مكتبي'),
-        ('storekeeper', 'مخزني'), # Canteen
-        ('archivist', 'أرشيفي'),
-        ('secretariat', 'أمانة'),
-    ]
-
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name="المستخدم")
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, verbose_name="الدور")
+    # Removed strict choices to allow custom role names
+    role = models.CharField(max_length=100, verbose_name="الدور")
     failed_login_attempts = models.IntegerField(default=0, verbose_name="محاولات الدخول الفاشلة")
     is_locked = models.BooleanField(default=False, verbose_name="الحساب مقفل")
     current_session_token = models.CharField(max_length=100, null=True, blank=True, verbose_name="رمز الجلسة الحالي")
@@ -163,3 +156,14 @@ class SystemMessage(models.Model):
     class Meta:
         verbose_name = "رسالة النظام"
         verbose_name_plural = "رسائل النظام"
+
+class UserRole(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="اسم الدور")
+    permissions = models.JSONField(default=list, verbose_name="الصلاحيات")
+
+    class Meta:
+        verbose_name = "دور مخصص"
+        verbose_name_plural = "أدوار مخصصة"
+
+    def __str__(self):
+        return self.name
