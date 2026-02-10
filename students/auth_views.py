@@ -106,21 +106,18 @@ def forgot_password(request):
     # Case 1: Device-based Employee Reset Request
     if device_id:
         try:
-            # Find profile by device ID
-            # Assuming strict 1-to-1 binding, though DB field is just CharField.
             profile = EmployeeProfile.objects.filter(device_id=device_id).first()
             if profile and profile.role != 'director':
-                if admin_email:
-                    try:
-                        send_mail(
-                            subject='طلب استعادة كلمة مرور من مستخدم',
-                            message=f'مرحباً أيها المدير،\n\nالمستخدم "{profile.user.username}" (الدور: {profile.role}) يطلب إعادة تعيين كلمة المرور.\nتم إرسال الطلب من جهازه الموثوق (ID: {device_id}).\n\nيرجى الدخول إلى حسابك وتغيير كلمة المرور الخاصة به.',
-                            from_email=None,
-                            recipient_list=[admin_email],
-                            fail_silently=False,
-                        )
-                        return Response({'message': 'تم إرسال طلب استعادة كلمة المرور إلى المدير بنجاح.'})
-                    except: pass
+                # Create System Message for Director
+                try:
+                    from .models import SystemMessage
+                    msg_text = f"طلب استعادة كلمة مرور: المستخدم '{profile.user.username}' (الدور: {profile.role}) يطلب إعادة تعيين كلمة المرور. (ID الجهاز: {device_id})"
+                    # Check if message already exists to prevent spam
+                    if not SystemMessage.objects.filter(message=msg_text, active=True).exists():
+                         SystemMessage.objects.create(message=msg_text, active=True)
+                    return Response({'message': 'تم إرسال إشعار إلى المدير بنجاح.'})
+                except Exception as e:
+                    print(f"System Message Error: {e}")
         except Exception as e:
             print(f"Device Reset Error: {e}")
 
@@ -129,26 +126,43 @@ def forgot_password(request):
         try:
             user = User.objects.get(username=username)
             if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
-                if admin_email:
+                # Determine Email to send to
+                target_email = admin_email
+                if not target_email and user.email:
+                    target_email = user.email
+
+                # Fallback to first superuser email if no admin email
+                if not target_email:
+                    first_super = User.objects.filter(is_superuser=True).exclude(email='').first()
+                    if first_super:
+                        target_email = first_super.email
+
+                if target_email:
                     # Generate Temp Password
                     temp_pass = secrets.token_urlsafe(12)
                     user.set_password(temp_pass)
                     user.save()
 
-                    # Send Email (Username + Temp Password + 2FA Notice)
+                    # Unlock Account
+                    if hasattr(user, 'profile'):
+                        user.profile.is_locked = False
+                        user.profile.failed_login_attempts = 0
+                        user.profile.save()
+
+                    # Send Email
                     try:
                         send_mail(
                             subject='استعادة معلومات الدخول - المدير',
-                            message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول مرة واحدة. سيطلب منك النظام تفعيل المصادقة الثنائية (إذا كانت مفعلة) ثم يمكنك تغيير بياناتك من الإعدادات.',
+                            message=f'مرحباً،\n\nلقد طلبت استعادة معلومات الدخول.\n\nاسم المستخدم: {user.username}\nكلمة المرور المؤقتة: {temp_pass}\n\nيرجى استخدامها للدخول. سيتم تفعيل المصادقة الثنائية عند الدخول.',
                             from_email=None,
-                            recipient_list=[admin_email],
+                            recipient_list=[target_email],
                             fail_silently=False,
                         )
-                        print(f"Recovery email sent to {admin_email}")
+                        print(f"Recovery email sent to {target_email}")
                     except Exception as e:
                         print(f"Failed to send email: {e}")
                 else:
-                    print("No Admin Email configured.")
+                    print("No Admin Email configured and no Superuser email found.")
         except:
             pass
 
@@ -193,14 +207,18 @@ def login_view(request):
 
         profile = user.profile
 
-        if profile.is_locked:
+        # Allow Director to attempt login even if locked (will unlock on success)
+        if profile.is_locked and profile.role != 'director':
             return Response({'error': 'الحساب مقفل. يرجى الاتصال بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
 
         user_auth = authenticate(username=username, password=password)
 
         if user_auth is not None:
-            # Success
+            # Success - Unlock if was locked (for Director)
             profile.failed_login_attempts = 0
+            if profile.is_locked and (profile.role == 'director' or user.is_superuser):
+                profile.is_locked = False
+            profile.save() # Save the reset attempts/lock status
 
             # Device Lock Logic
             device_id_to_send = None

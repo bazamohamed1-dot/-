@@ -1,5 +1,34 @@
 from rest_framework import serializers
 from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, PendingUpdate, SystemMessage, UserRole
+import cloudinary
+import cloudinary.uploader
+from django.conf import settings
+import uuid
+
+def upload_image_to_cloudinary(image_data, student_id):
+    if not image_data or len(str(image_data)) < 500: # Assuming URL < 500 chars, Base64 >> 500
+        return image_data
+
+    try:
+        # Configure Cloudinary if needed
+        if not cloudinary.config().cloud_name:
+             cloudinary.config(
+                cloud_name=settings.CLOUDINARY_STORAGE['CLOUD_NAME'],
+                api_key=settings.CLOUDINARY_STORAGE['API_KEY'],
+                api_secret=settings.CLOUDINARY_STORAGE['API_SECRET']
+            )
+
+        public_id = f"student_{student_id}_{uuid.uuid4().hex[:8]}"
+        response = cloudinary.uploader.upload(
+            image_data,
+            folder="students_photos",
+            public_id=public_id,
+            resource_type="image"
+        )
+        return response.get('secure_url', image_data)
+    except Exception as e:
+        print(f"Cloudinary Upload Error: {e}")
+        return image_data # Fallback
 
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -26,6 +55,20 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = '__all__'
+
+    def create(self, validated_data):
+        if 'photo_path' in validated_data:
+            student_id = validated_data.get('student_id_number', 'unknown')
+            validated_data['photo_path'] = upload_image_to_cloudinary(validated_data['photo_path'], student_id)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'photo_path' in validated_data:
+            new_photo = validated_data['photo_path']
+            # Only upload if changed and is long (Base64)
+            if new_photo != instance.photo_path and len(str(new_photo)) > 500:
+                validated_data['photo_path'] = upload_image_to_cloudinary(new_photo, instance.student_id_number)
+        return super().update(instance, validated_data)
 
 class CanteenAttendanceSerializer(serializers.ModelSerializer):
     student = StudentSerializer(read_only=True)
