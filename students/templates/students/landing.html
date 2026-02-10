@@ -278,11 +278,25 @@
         </form>
 
         <div style="margin-top:15px;">
-            <a href="#" onclick="alert('يرجى الاتصال بمدير المؤسسة لاستعادة معلومات الدخول.')" style="color:var(--primary); font-size:0.9rem; text-decoration:none;">نسيت اسم المستخدم أو كلمة المرور؟</a>
+            <a href="#" onclick="openForgotModal()" style="color:var(--primary); font-size:0.9rem; text-decoration:none;">نسيت اسم المستخدم أو كلمة المرور؟</a>
         </div>
 
         <div class="footer">
             &copy; 2025 جميع الحقوق محفوظة
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9000; justify-content:center; align-items:center;">
+        <div class="login-container" style="max-width:350px;">
+            <h3><i class="fas fa-key"></i> استعادة كلمة المرور</h3>
+            <p style="font-size:0.9rem; color:#64748b; margin-bottom:20px;">أدخل اسم المستخدم لاستلام تعليمات الاستعادة عبر البريد المسجل (المدير فقط).</p>
+            <input type="text" id="forgotUsername" placeholder="اسم المستخدم" style="text-align:left; direction:ltr;" class="form-input">
+            <button class="btn" id="sendResetBtn" style="margin-top:15px; width:100%; background:var(--primary); color:white;" onclick="sendResetRequest()">
+                <span>إرسال</span>
+                <i class="fas fa-spinner fa-spin" id="resetSpinner" style="display:none;"></i>
+            </button>
+            <button class="btn" style="margin-top:10px; width:100%; background:#e2e8f0; color:#333;" onclick="document.getElementById('forgotModal').style.display='none'">إغلاق</button>
         </div>
     </div>
 
@@ -445,6 +459,41 @@
                 }
             }
             return cookieValue;
+        }
+
+        function openForgotModal() {
+            document.getElementById('forgotModal').style.display = 'flex';
+            document.getElementById('forgotUsername').value = '';
+        }
+
+        async function sendResetRequest() {
+            const username = document.getElementById('forgotUsername').value;
+            if (!username) return alert("الرجاء إدخال اسم المستخدم");
+
+            const btn = document.getElementById('sendResetBtn');
+            const spinner = document.getElementById('resetSpinner');
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+
+            try {
+                const response = await fetch('/canteen/auth/forgot_password/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ username })
+                });
+
+                const data = await response.json();
+                alert(data.message);
+                document.getElementById('forgotModal').style.display = 'none';
+            } catch(e) {
+                alert("حدث خطأ في الاتصال");
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
         }
 
     </script>
