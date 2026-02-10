@@ -143,7 +143,7 @@
 
         <div style="flex-grow: 1;"></div>
 
-        {% if is_director or 'canteen_export' in permissions %} <!-- Using canteen_export as generic export or import_data permission? Let's assume import_data or new export permission. The prompt implies explicit permissions. Using import_data for export backup for now or define a new one. Let's use 'import_data' as generic data handling or Director only. -->
+        {% if is_director or 'import_data' in permissions %}
         <button class="btn" style="background:#334155; color:white" onclick="exportBackup()"><i class="fas fa-database"></i> نسخة احتياطية</button>
         {% endif %}
 
