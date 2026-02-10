@@ -717,21 +717,20 @@ def export_canteen_sheet(request):
     # The prompt said: "Save attendance list... accumulate days".
     # So we export all `CanteenAttendance` records.
 
+    # Optimized Export using iterator and write_only mode for memory efficiency
     all_attendance = CanteenAttendance.objects.select_related('student').order_by('-date', 'student__class_name')
 
     if not all_attendance.exists():
          return Response({'message': 'لا يوجد سجلات حضور لتصديرها'}, status=status.HTTP_200_OK)
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "سجل_المطعم_التراكمي"
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet("سجل_المطعم_التراكمي")
+
+    # Header
     ws.append(["التاريخ", "التوقيت", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
 
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal='center')
-
-    for att in all_attendance:
+    # Use iterator() to prevent loading all objects into memory
+    for att in all_attendance.iterator(chunk_size=1000):
         s = att.student
         time_str = att.time.strftime("%H:%M:%S")
         ws.append([str(att.date), time_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
