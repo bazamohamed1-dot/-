@@ -6,6 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils import timezone
 from .models import EmployeeProfile, UserActivityLog, SchoolSettings
 import secrets
 import pyotp
@@ -93,23 +94,53 @@ def verify_2fa_login(request):
 @permission_classes([AllowAny])
 def forgot_password(request):
     username = request.data.get('username')
-    if not username:
-        return Response({'message': 'يرجى الاتصال بمدير المؤسسة لاستعادة معلومات الدخول.'}) # Generic msg for users
 
-    # Director Recovery
+    # Generic message for all cases to prevent enumeration and hide email
+    GENERIC_MSG = 'إذا كان الحساب موجوداً ولديه بريد استرجاع، فقد تم إرسال كلمة مرور مؤقتة إليه.'
+
+    if not username:
+        return Response({'message': GENERIC_MSG})
+
     try:
         user = User.objects.get(username=username)
-        if hasattr(user, 'profile') and user.profile.role == 'director':
+
+        # Only allow Director/Superuser recovery via this method as requested ("Using Email found in Settings")
+        # Standard users should contact Director.
+        if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
             settings_obj = SchoolSettings.objects.first()
-            if settings_obj and settings_obj.admin_email:
-                # Logic to send email (Pseudo-code, requires SMTP setup)
-                # For now, we return a message saying "Check server logs/console" or implement real email
-                # Assuming SMTP is not configured in this env, we guide them to the CLI.
-                return Response({'message': 'تم إرسال تعليمات الاستعادة إلى بريد المدير (إذا كان مفعل)، أو استخدم الأمر reset_director من الخادم.'})
-    except:
+
+            # Use the email from Settings as requested
+            admin_email = settings_obj.admin_email if settings_obj else None
+
+            if admin_email:
+                # Generate Temp Password
+                temp_pass = secrets.token_urlsafe(12)
+                user.set_password(temp_pass)
+                user.save()
+
+                # IMPORTANT: Ensure 2FA is NOT disabled
+                # user.set_password does not touch profile fields, so 2FA remains active if enabled.
+
+                # Send Email
+                try:
+                    send_mail(
+                        subject='استعادة كلمة المرور - نظام تسيير المؤسسة',
+                        message=f'مرحباً {user.username}،\n\nلقد طلبت استعادة كلمة المرور.\nكلمة المرور المؤقتة الخاصة بك هي:\n{temp_pass}\n\nيرجى تغييرها فور تسجيل الدخول.\n\nتنبيه: المصادقة الثنائية (2FA) لا تزال مفعلة إذا كنت قد قمت بتفعيلها مسبقاً.',
+                        from_email=None, # Uses DEFAULT_FROM_EMAIL
+                        recipient_list=[admin_email],
+                        fail_silently=False,
+                    )
+                    print(f"Recovery email sent to {admin_email}")
+                except Exception as e:
+                    print(f"Failed to send email: {e}")
+                    # In production, maybe log to Sentry. For now, just log.
+            else:
+                print("No Admin Email configured in School Settings.")
+    except Exception as e:
+        print(f"Forgot Password Error: {e}")
         pass
 
-    return Response({'message': 'يرجى الاتصال بمدير المؤسسة لاستعادة معلومات الدخول.'})
+    return Response({'message': GENERIC_MSG})
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -284,6 +315,14 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         users = User.objects.select_related('profile').all().distinct()
         data = []
         seen = set()
+
+        # Get last activity for all users
+        from django.db.models import Max
+        last_activities = UserActivityLog.objects.values('user').annotate(last_active=Max('timestamp'))
+        activity_map = {item['user']: item['last_active'] for item in last_activities}
+
+        now = timezone.now()
+
         for u in users:
             if u.id in seen: continue
             seen.add(u.id)
@@ -294,6 +333,14 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     if prof.device_id.startswith('PENDING:'): device_status = 'بانتظار التفعيل'
                     else: device_status = 'مفعل'
 
+                # Calculate Online Status
+                last_active = activity_map.get(u.id)
+                is_online = False
+                if last_active:
+                    diff = (now - last_active).total_seconds()
+                    if diff < 300: # 5 minutes
+                        is_online = True
+
                 data.append({
                     'id': u.id,
                     'username': u.username,
@@ -302,7 +349,10 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
                     'permissions': prof.permissions,
-                    'device_status': device_status
+                    'device_status': device_status,
+                    'last_login': u.last_login,
+                    'last_activity': last_active,
+                    'is_online': is_online
                 })
             except:
                 pass

@@ -129,7 +129,9 @@
             <tr style="background:#f8fafc; text-align:right;">
                 <th style="padding:10px;">اسم المستخدم</th>
                 <th style="padding:10px;">الدور</th>
-                <th style="padding:10px;">الحالة</th>
+                <th style="padding:10px;">متصل</th>
+                <th style="padding:10px;">آخر نشاط</th>
+                <th style="padding:10px;">آخر دخول</th>
                 <th style="padding:10px;">حماية الجهاز</th>
                 <th style="padding:10px;">المحاولات</th>
                 <th style="padding:10px;">إجراءات</th>
@@ -542,12 +544,21 @@ async function loadUsers() {
                 deviceBtn = `<button class="btn btn-success" onclick="activateDevice(${u.id})" style="padding:5px 10px;" title="تفعيل حماية الجهاز"><i class="fas fa-mobile-alt"></i> تفعيل</button>`;
             }
 
+            const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('en-GB') : '-';
+            const lastActive = u.last_activity ? new Date(u.last_activity).toLocaleTimeString('en-GB') : '-';
+            const onlineDot = u.is_online
+                ? '<i class="fas fa-circle" style="color:#10b981; font-size:0.8rem;"></i> متصل'
+                : '<i class="fas fa-circle" style="color:#cbd5e1; font-size:0.8rem;"></i> غير متصل';
+
             tr.innerHTML = `
-                <td class="western-nums" style="direction:ltr; text-align:left;">${u.username}</td>
-                <td>${u.role_display}</td>
-                <td>
-                    ${u.is_locked ? '<span style="color:red; font-weight:bold;">مقفل</span>' : '<span style="color:green;">نشط</span>'}
+                <td class="western-nums" style="direction:ltr; text-align:left;">
+                    ${u.username}
+                    ${u.is_locked ? '<span style="color:red; font-size:0.8rem; margin-left:5px;">(مقفل)</span>' : ''}
                 </td>
+                <td>${u.role_display}</td>
+                <td>${onlineDot}</td>
+                <td class="western-nums" style="direction:ltr;">${lastActive}</td>
+                <td class="western-nums" style="direction:ltr;">${lastLogin}</td>
                 <td>${deviceBtn}</td>
                 <td class="western-nums">${u.failed_attempts}</td>
                 <td>

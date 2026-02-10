@@ -490,42 +490,39 @@ def scan_card(request):
         current_time = now.time()
         current_weekday = now.weekday() # Mon=0, Sun=6
 
-        # Only Director can bypass time limit
-        is_director = request.user.profile.role == 'director'
+        # Schedule Check (Strict for EVERYONE, including Director)
+        # Check Day
+        if current_weekday not in allowed_days:
+             return Response({
+                 'error': 'المطعم مغلق اليوم',
+                 'code': 'CLOSED_DAY',
+                 'student': StudentSerializer(student).data
+             }, status=status.HTTP_403_FORBIDDEN)
 
-        if not is_director:
-            # Check Day
-            if current_weekday not in allowed_days:
+        # Check Time
+        if current_time < open_time:
+             return Response({
+                 'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}',
+                 'code': 'NOT_OPEN_YET',
+                 'student': StudentSerializer(student).data
+             }, status=status.HTTP_403_FORBIDDEN)
+
+        if current_time > close_time:
+             today = date.today()
+             attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
+             student_data = StudentSerializer(student).data
+             if attended:
                  return Response({
-                     'error': 'المطعم مغلق اليوم',
-                     'code': 'CLOSED_DAY',
-                     'student': StudentSerializer(student).data
+                     'error': 'انتهى الوقت (أكل مسبقاً)',
+                     'code': 'LATE_ATE',
+                     'student': student_data
                  }, status=status.HTTP_403_FORBIDDEN)
-
-            # Check Time
-            if current_time < open_time:
+             else:
                  return Response({
-                     'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}',
-                     'code': 'NOT_OPEN_YET',
-                     'student': StudentSerializer(student).data
+                     'error': 'انتهى الوقت (لم يأكل)',
+                     'code': 'LATE_NOT_ATE',
+                     'student': student_data
                  }, status=status.HTTP_403_FORBIDDEN)
-
-            if current_time > close_time:
-                 today = date.today()
-                 attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
-                 student_data = StudentSerializer(student).data
-                 if attended:
-                     return Response({
-                         'error': 'انتهى الوقت (أكل مسبقاً)',
-                         'code': 'LATE_ATE',
-                         'student': student_data
-                     }, status=status.HTTP_403_FORBIDDEN)
-                 else:
-                     return Response({
-                         'error': 'انتهى الوقت (لم يأكل)',
-                         'code': 'LATE_NOT_ATE',
-                         'student': student_data
-                     }, status=status.HTTP_403_FORBIDDEN)
 
         # Check if Half-Board
         if student.attendance_system != 'نصف داخلي':
@@ -598,18 +595,15 @@ def manual_attendance(request):
     current_time = now.time()
     current_weekday = now.weekday()
 
-    # Check if user is director
-    is_director = request.user.profile.role == 'director'
+    # Enforce Schedule for EVERYONE
+    if current_weekday not in allowed_days:
+        return Response({'error': 'المطعم مغلق اليوم'}, status=status.HTTP_403_FORBIDDEN)
 
-    if not is_director:
-        if current_weekday not in allowed_days:
-            return Response({'error': 'المطعم مغلق اليوم'}, status=status.HTTP_403_FORBIDDEN)
+    if current_time < open_time:
+        return Response({'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}'}, status=status.HTTP_403_FORBIDDEN)
 
-        if current_time < open_time:
-            return Response({'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}'}, status=status.HTTP_403_FORBIDDEN)
-
-        if current_time > close_time:
-            return Response({'error': f'انتهى وقت الإطعام ({close_time.strftime("%H:%M")})'}, status=status.HTTP_403_FORBIDDEN)
+    if current_time > close_time:
+        return Response({'error': f'انتهى وقت الإطعام ({close_time.strftime("%H:%M")})'}, status=status.HTTP_403_FORBIDDEN)
 
     student_id = request.data.get('student_id')
     # Can search by internal ID or student_id_number
