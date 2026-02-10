@@ -216,16 +216,8 @@
     async function handleScan(barcode) {
         if(!barcode) return;
 
-        // Offline Mode Check
-        if (!navigator.onLine) {
-            return handleScanOffline(barcode);
-        }
-
         try {
-            // Ensure we use apiFetch if defined, else standard fetch
-            const fetchFunc = window.apiFetch || fetch;
-
-            const res = await fetchFunc('/canteen/scan_card/', {
+            const res = await fetch('/canteen/scan_card/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -233,26 +225,6 @@
                 },
                 body: JSON.stringify({ barcode })
             });
-
-            // Check if this is a "Fake" offline success from apiFetch
-            if (res.statusText === 'Offline Saved') {
-                 // Check local validity since server couldn't
-                 const localStudent = offlineStudents.find(s => s.student_id_number === barcode);
-                 if (localStudent) {
-                     if (localStudent.attendance_system !== 'نصف داخلي') {
-                         playAlert('error');
-                         showAlert('تنبيه: التلميذ ليس نصف داخلي (مسجل محلياً)', 'danger');
-                     } else {
-                         showStudent(localStudent);
-                         playAlert('success');
-                         showAlert('تم الحفظ محلياً (دون اتصال)', 'success');
-                     }
-                 } else {
-                     playAlert('warning');
-                     showAlert('تم الحفظ (معرف غير موجود محلياً)', 'warning');
-                 }
-                 return;
-            }
 
             let data;
             try {
@@ -292,43 +264,8 @@
             }
         } catch (e) {
             console.error(e);
-            // Fallback to offline logic if network error (and apiFetch didn't catch it for some reason)
-            handleScanOffline(barcode);
-        }
-    }
-
-    function handleScanOffline(barcode) {
-        // Validate locally
-        const s = offlineStudents.find(st => st.student_id_number === barcode);
-
-        if (!s) {
             playAlert('error');
-            showAlert('غير موجود محلياً (تحقق من المزامنة)', 'danger');
-            return;
-        }
-
-        if (s.attendance_system !== 'نصف داخلي') {
-            playAlert('error');
-            showStudent(s);
-            showAlert('تنبيه: التلميذ ليس نصف داخلي!', 'danger');
-            return;
-        }
-
-        // Save to Outbox via OfflineManager
-        if (window.offlineManager) {
-            window.offlineManager.addToOutbox('/canteen/scan_card/', 'POST', { barcode: barcode });
-            showStudent(s);
-            playAlert('success');
-            showAlert('تم الحفظ محلياً (وضع دون اتصال)', 'success');
-            // Add to present list visually
-            const list = document.getElementById('presentList');
-            const row = document.createElement('tr');
-            row.style.background = '#fffbeb';
-            row.innerHTML = `<td><b>${s.last_name} ${s.first_name}</b></td><td>${s.class_name}</td><td class="western-nums">${s.date_of_birth}</td><td>--:--</td>`;
-            list.insertBefore(row, list.firstChild);
-        } else {
-            playAlert('error');
-            showAlert('فشل الحفظ المحلي', 'danger');
+            showAlert('خطأ في الاتصال', 'danger');
         }
     }
 
@@ -392,10 +329,10 @@
                     // Point 16: Ensure Western numerals
                     let deleteCell = '';
                     {% if is_director %}
-                    // We need student ID to delete attendance.
-                    // Use attendance_id if available (added in recent fix), fallback to student id (s.id)
-                    const delId = s.attendance_id || s.id;
-                    deleteCell = `<td><button class="btn btn-sm btn-danger" onclick="deleteAttendance(${delId})" title="حذف"><i class="fas fa-trash"></i></button></td>`;
+                    // Use attendance_id for safe deletion
+                    if (s.attendance_id) {
+                        deleteCell = `<td><button class="btn btn-sm btn-danger" onclick="deleteAttendance(${s.attendance_id})" title="حذف"><i class="fas fa-trash"></i></button></td>`;
+                    }
                     {% endif %}
 
                     row.innerHTML = `
@@ -413,7 +350,7 @@
         } catch(e) { console.error(e); }
     }
 
-    async function deleteAttendance(studentId) {
+    async function deleteAttendance(attendanceId) {
         if(!confirm("هل أنت متأكد من حذف حضور هذا التلميذ؟")) return;
         try {
             const res = await fetch('/canteen/delete_attendance/', {
@@ -422,7 +359,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({ id: studentId }) // Using student ID logic
+                body: JSON.stringify({ id: attendanceId })
             });
 
             if(res.ok) {
@@ -665,24 +602,9 @@
     // Force Western Arabic Numerals
     document.getElementById('currentDateDisplay').textContent = today.toLocaleDateString('ar-DZ', options);
 
-    // Offline Manifest Cache
-    let offlineStudents = [];
-    async function loadOfflineData() {
-        if (typeof offlineManager !== 'undefined') {
-            try {
-                const manifest = await offlineManager.getOfflineManifest();
-                if (manifest && manifest.students) {
-                    offlineStudents = manifest.students;
-                    console.log("Offline students loaded for scanning:", offlineStudents.length);
-                }
-            } catch(e) { console.log("No offline data available"); }
-        }
-    }
-
     // Initial load
     updateStats();
     updatePresentList();
-    loadOfflineData();
 
     // Export Button visibility is now handled by server-side permissions
 </script>

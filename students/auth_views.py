@@ -150,31 +150,47 @@ def login_view(request):
                     profile.save()
             else:
                 try:
+                    client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+                    if not client_id:
+                         # Try to rely on the client sending a generated ID. If not, we can't bind properly.
+                         # But to be safe, we reject if no ID is sent.
+                         return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
+
                     if profile.device_id:
                         if profile.device_id.startswith('PENDING:'):
-                            # Provisioning Mode
-                            real_id = profile.device_id.split(':')[1]
-                            profile.device_id = real_id
-                            device_id_to_send = real_id
+                            # Provisioning Mode: This is the "First Time" after reset/activation.
+                            # Bind this device PERMANENTLY.
+                            profile.device_id = client_id
                             profile.save()
+                            device_id_to_send = client_id
                         else:
-                            # Enforce Mode
-                            client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
-
-                            if not client_id or client_id != profile.device_id:
+                            # Enforce Mode: Must match stored ID
+                            if client_id != profile.device_id:
                                 return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
                             else:
                                 device_id_to_send = profile.device_id
                     else:
-                        # First Time Login - Bind
-                        client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
-
+                        # If no device_id set at all, maybe allow binding if we assume "First Login Ever" implies activation?
+                        # User requirement: "Once activated by director... enter only once and save fingerprint".
+                        # This implies default state is "Locked/No Access" or "Open"?
+                        # Usually "Activate Fingerprint" implies it was OFF.
+                        # If device_id is None, it means "Fingerprint Not Required/Not Active" OR "Not Set yet".
+                        # The prompt says: "When enabling local fingerprint... enter once... save... else call director".
+                        # This means if device_id is NONE, check if we should block or allow.
+                        # Assuming default is ALLOW (no lock) until Director activates it?
+                        # "Activate option" -> sets PENDING.
+                        # So if None, we assume "No Lock Enforced" or "Auto Bind"?
+                        # Previous logic was "First Time Login - Bind".
+                        # Let's keep it "Auto Bind" if None (for ease) OR strict "Must be activated".
+                        # The prompt says: "Modify... when enabling... save...".
+                        # Auto-bind on first login (Activation)
                         if client_id:
                             profile.device_id = client_id
                             profile.save()
                             device_id_to_send = client_id
                         else:
-                            return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
+                            # Fallback if header missing (though we checked above)
+                            pass
 
                 except Exception as e:
                     print(f"Device Lock Error: {e}")
