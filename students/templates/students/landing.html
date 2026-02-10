@@ -294,7 +294,20 @@
         <div class="spinner" style="border-color:var(--primary); border-top-color:transparent; width:40px; height:40px; margin-top:20px; display:block;"></div>
     </div>
 
+    <!-- 2FA Modal -->
+    <div id="2faModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9000; justify-content:center; align-items:center;">
+        <div class="login-container" style="max-width:350px;">
+            <h3><i class="fas fa-shield-alt"></i> المصادقة الثنائية</h3>
+            <p style="font-size:0.9rem; color:#64748b; margin-bottom:20px;">أدخل الرمز من تطبيق المصادقة الخاص بك</p>
+            <input type="text" id="2faCode" placeholder="xxxxxx" style="text-align:center; font-size:1.5rem; letter-spacing:5px;" maxlength="6" class="western-nums">
+            <button class="btn" style="margin-top:15px; width:100%; background:var(--primary); color:white;" onclick="verify2FA()">تحقق</button>
+            <button class="btn" style="margin-top:10px; width:100%; background:#e2e8f0; color:#333;" onclick="close2FA()">إلغاء</button>
+        </div>
+    </div>
+
     <script>
+        let temp2FAToken = null;
+
         async function handleLogin(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;
@@ -336,31 +349,17 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Success
-                    sessionStorage.setItem('session_token', data.token);
-                    sessionStorage.setItem('user_role', data.role);
-                    sessionStorage.setItem('username', data.username);
+                    if (data.require_2fa) {
+                        // Show 2FA Modal
+                        temp2FAToken = data.temp_token;
+                        document.getElementById('2faModal').style.display = 'flex';
+                        btn.disabled = false;
+                        btnText.style.display = 'block';
+                        spinner.style.display = 'none';
+                        return;
+                    }
 
-                    // Show Welcome Overlay
-                    document.getElementById('welcomeUser').textContent = data.username;
-                    document.getElementById('welcomeOverlay').style.display = 'flex';
-
-                    // Simulate loading delay
-                    setTimeout(() => {
-                        // Redirect based on role
-                        if (data.role === 'storekeeper') {
-                            window.location.href = '/canteen/ui/';
-                        } else if (data.role === 'librarian') {
-                            window.location.href = '/canteen/library/';
-                        } else if (data.role === 'archivist') {
-                            window.location.href = '/canteen/archive/';
-                        } else if (data.role === 'secretariat') {
-                            window.location.href = '/canteen/management/';
-                        } else {
-                            // Director
-                            window.location.href = '/canteen/dashboard/';
-                        }
-                    }, 2000); // 2 seconds delay
+                    completeLogin(data);
                 } else {
                     // Error
                     errorMsg.textContent = data.error || 'حدث خطأ غير معروف';
@@ -377,6 +376,60 @@
                 btnText.style.display = 'block';
                 spinner.style.display = 'none';
             }
+        }
+
+        async function verify2FA() {
+            const code = document.getElementById('2faCode').value;
+            if(!code) return;
+
+            try {
+                const response = await fetch('/canteen/auth/2fa/login/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    body: JSON.stringify({ temp_token: temp2FAToken, code: code })
+                });
+
+                const data = await response.json();
+                if(response.ok) {
+                    document.getElementById('2faModal').style.display = 'none';
+                    completeLogin(data);
+                } else {
+                    alert(data.error || 'Invalid Code');
+                }
+            } catch(e) { alert("Error"); }
+        }
+
+        function close2FA() {
+            document.getElementById('2faModal').style.display = 'none';
+            temp2FAToken = null;
+        }
+
+        function completeLogin(data) {
+            // Success
+            sessionStorage.setItem('session_token', data.token);
+            sessionStorage.setItem('user_role', data.role);
+            sessionStorage.setItem('username', data.username);
+
+            // Show Welcome Overlay
+            document.getElementById('welcomeUser').textContent = data.username;
+            document.getElementById('welcomeOverlay').style.display = 'flex';
+
+            // Simulate loading delay
+            setTimeout(() => {
+                // Redirect based on role
+                if (data.role === 'storekeeper') {
+                    window.location.href = '/canteen/ui/';
+                } else if (data.role === 'librarian') {
+                    window.location.href = '/canteen/library/';
+                } else if (data.role === 'archivist') {
+                    window.location.href = '/canteen/archive/';
+                } else if (data.role === 'secretariat') {
+                    window.location.href = '/canteen/management/';
+                } else {
+                    // Director
+                    window.location.href = '/canteen/dashboard/';
+                }
+            }, 2000);
         }
 
         function getCookie(name) {

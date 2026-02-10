@@ -20,6 +20,10 @@ urlpatterns = [
     path('auth/logout/', auth_views.logout_view, name='auth_logout'),
     path('auth/forgot_password/', auth_views.forgot_password, name='auth_forgot_password'),
     path('auth/verify/', auth_views.verify_session, name='auth_verify'),
+    path('auth/2fa/setup/', auth_views.setup_2fa, name='auth_2fa_setup'),
+    path('auth/2fa/confirm/', auth_views.confirm_2fa, name='auth_2fa_confirm'),
+    path('auth/2fa/disable/', auth_views.disable_2fa, name='auth_2fa_disable'),
+    path('auth/2fa/login/', auth_views.verify_2fa_login, name='auth_2fa_login'),
 
     # Sync API
     path('api/sync/', sync_views.SyncViewSet.as_view({'post': 'create'}), name='sync_data'),

@@ -8,6 +8,86 @@ from django.core.mail import send_mail
 from django.conf import settings
 from .models import EmployeeProfile, UserActivityLog, SchoolSettings
 import secrets
+import pyotp
+import qrcode
+import base64
+from io import BytesIO
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def setup_2fa(request):
+    if request.user.profile.role != 'director':
+        return Response({'error': 'Unauthorized'}, status=403)
+
+    secret = pyotp.random_base32()
+    request.user.profile.totp_secret = secret
+    request.user.profile.save()
+
+    # Generate QR Code
+    otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=request.user.username, issuer_name='SchoolSystem')
+    img = qrcode.make(otp_uri)
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+
+    return Response({
+        'secret': secret,
+        'qr_code': f"data:image/png;base64,{img_str}"
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def confirm_2fa(request):
+    code = request.data.get('code')
+    secret = request.user.profile.totp_secret
+    if not secret: return Response({'error': 'No setup found'}, status=400)
+
+    totp = pyotp.TOTP(secret)
+    if totp.verify(code):
+        request.user.profile.totp_enabled = True
+        request.user.profile.save()
+        return Response({'message': '2FA Enabled Successfully'})
+    return Response({'error': 'Invalid Code'}, status=400)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def disable_2fa(request):
+    if request.user.profile.role != 'director': return Response({'error': 'Unauthorized'}, status=403)
+    request.user.profile.totp_enabled = False
+    request.user.profile.totp_secret = None
+    request.user.profile.save()
+    return Response({'message': '2FA Disabled'})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_2fa_login(request):
+    token = request.data.get('temp_token')
+    code = request.data.get('code')
+
+    try:
+        profile = EmployeeProfile.objects.get(current_session_token=f"PRE-2FA:{token}")
+        user = profile.user
+    except EmployeeProfile.DoesNotExist:
+        return Response({'error': 'Invalid or expired session'}, status=400)
+
+    totp = pyotp.TOTP(profile.totp_secret)
+    if totp.verify(code):
+        # Success - Finalize Login
+        final_token = secrets.token_hex(32)
+        profile.current_session_token = final_token
+        profile.failed_login_attempts = 0
+        profile.save()
+        login(request, user)
+        UserActivityLog.objects.create(user=user, action='login_2fa')
+
+        return Response({
+            'message': 'Login Successful',
+            'token': final_token,
+            'role': profile.role,
+            'username': user.username
+        })
+    else:
+        return Response({'error': 'رمز خاطئ'}, status=400)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -61,58 +141,52 @@ def login_view(request):
 
             # Device Lock Logic
             device_id_to_send = None
-            try:
-                if profile.device_id:
-                    if profile.device_id.startswith('PENDING:'):
-                        # Provisioning Mode
-                        real_id = profile.device_id.split(':')[1]
-                        profile.device_id = real_id
-                        device_id_to_send = real_id
-                        profile.save()
+
+            # Skip Device Lock for Director/Superuser
+            if profile.role == 'director' or user.is_superuser:
+                pass
+            else:
+                try:
+                    if profile.device_id:
+                        if profile.device_id.startswith('PENDING:'):
+                            # Provisioning Mode
+                            real_id = profile.device_id.split(':')[1]
+                            profile.device_id = real_id
+                            device_id_to_send = real_id
+                            profile.save()
+                        else:
+                            # Enforce Mode
+                            client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+
+                            if not client_id or client_id != profile.device_id:
+                                return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+                            else:
+                                device_id_to_send = profile.device_id
                     else:
-                        # Enforce Mode
-                        # Handle both META and headers for compatibility
+                        # First Time Login - Bind
                         client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
 
-                        # If client_id is missing, or doesn't match
-                        if not client_id or client_id != profile.device_id:
-                            # Strict Lock
-                            # Exception: Director/Superuser always allowed (Auto-Rebind)
-                            if profile.role == 'director' or user.is_superuser:
-                                if client_id:
-                                    profile.device_id = client_id
-                                    profile.save()
-                                    device_id_to_send = client_id
-                                else:
-                                    return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
-                            else:
-                                return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+                        if client_id:
+                            profile.device_id = client_id
+                            profile.save()
+                            device_id_to_send = client_id
                         else:
-                            device_id_to_send = profile.device_id
-                else:
-                    # No device_id set. (First Time Login)
-                    # Bind the current device ID to the account
-                    client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
+                            return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
 
-                    if client_id:
-                        profile.device_id = client_id
-                        profile.save()
-                        device_id_to_send = client_id
-                        # First device bound successfully
-                    else:
-                        # If no device ID provided by client, we can't bind.
-                        # Should we block? The requirements say "First device enters... binds".
-                        # If the client app (JS) hasn't generated one yet, we might have an issue.
-                        # But auth_manager.js generates one on load.
-                        # Let's allow login but warn, or generate one?
-                        # Better to Block if missing, as we can't lock without it.
-                        return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    print(f"Device Lock Error: {e}")
+                    return Response({'error': f'خطأ في التحقق من الجهاز: {str(e)}', 'code': 'SERVER_ERROR'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            except Exception as e:
-                print(f"Device Lock Error: {e}")
-                # Don't block login if device check fails internally (allow access but log)
-                # Or block? User requested robust system. Let's return error but as JSON.
-                return Response({'error': f'خطأ في التحقق من الجهاز: {str(e)}', 'code': 'SERVER_ERROR'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # 2FA Check
+            if profile.totp_enabled:
+                # Issue temporary token
+                temp_token = secrets.token_hex(16)
+                profile.current_session_token = f"PRE-2FA:{temp_token}"
+                profile.save()
+                return Response({
+                    'require_2fa': True,
+                    'temp_token': temp_token
+                })
 
             # Generate Session Token
             token = secrets.token_hex(32)
