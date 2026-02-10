@@ -27,6 +27,12 @@ class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        # Optimization: Use select_related/defer if needed
+        # Since we use pagination, loading 20 items is fine.
+        # But we ensure ordering to avoid inconsistent pagination warnings.
+        return Student.objects.all().order_by('id')
+
     def create(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_add'):
              return Response({'error': 'Unauthorized'}, status=403)
