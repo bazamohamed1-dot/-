@@ -26,7 +26,7 @@ if not exist "venv" (
 :: Activate Virtual Environment
 call venv\Scripts\activate
 
-:: Install Dependencies (check if waitress is installed as proxy)
+:: Install Dependencies (check if waitress is installed)
 python -c "import waitress" >nul 2>&1
 if %errorlevel% neq 0 (
     echo [INFO] Installing Dependencies...
@@ -36,18 +36,26 @@ if %errorlevel% neq 0 (
 
 :: Run Migrations
 echo [INFO] Checking Database...
-python manage.py migrate --noinput
+python manage.py migrate --noinput >nul 2>&1
 
 :: Run Static Files Collection
 echo [INFO] Collecting Static Files...
-python manage.py collectstatic --noinput
+python manage.py collectstatic --noinput >nul 2>&1
 
 echo.
 echo ========================================================
 echo [SUCCESS] Server is Starting...
 echo.
-echo Local Access:     http://localhost:8000
-echo LAN Access:       http://0.0.0.0:8000 (Use your PC IP)
+
+:: Get Local IP Address
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr "IPv4 Address"') do set IP=%%a
+set IP=%IP:~1%
+
+echo Local Access (You):     http://localhost:8000
+echo LAN Access (Others):    http://%IP%:8000
+echo.
+echo [IMPORTANT] Ensure both devices are on the SAME WiFi network.
+echo [TIP] If LAN Access fails, check Windows Firewall (Allow port 8000).
 echo.
 echo Press Ctrl+C to stop the server.
 echo ========================================================
