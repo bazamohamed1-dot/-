@@ -15,13 +15,21 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         file_path = options.get('file') or 'Eleve.xls'
+        # Force overwrite logic as requested: Wipe DB if new file imported
+        # We will assume if this command runs, we want to reset or update.
+        # User explicitly asked to delete all data.
         update_existing = options.get('update_existing', False)
 
         if not os.path.exists(file_path):
             self.stdout.write(self.style.ERROR(f'File {file_path} not found'))
             return
 
-        self.stdout.write(f'Processing file: {file_path} (Update Existing: {update_existing})')
+        # FULL RESET (Truncate)
+        if not update_existing:
+            self.stdout.write(self.style.WARNING('⚠ Deleting ALL existing students before import...'))
+            Student.objects.all().delete()
+
+        self.stdout.write(f'Processing file: {file_path}')
 
         # Robust Multi-Format Strategy: HTML > XLS > XLSX
 
@@ -101,27 +109,29 @@ class Command(BaseCommand):
         existing_map = {s.student_id_number: s for s in Student.objects.all()}
 
         found_any = False
+        error_count = 0
 
         for row in rows:
-            # Normalize row to list of strings
-            if mode == 'html':
-                cells = row.find_all(['td', 'th'])
-                cols = [c.get_text(strip=True) for c in cells]
-            else:
-                cols = [str(c).strip() if c is not None else '' for c in row]
-
-            # Filter valid rows (Student ID must be digit)
-            if not cols or len(cols) < 14: continue # Adjusted for flexibility
-
-            sid = cols[0]
-            if not sid.isdigit(): continue # Skip headers
-
-            if sid in processed_ids: continue
-            processed_ids.add(sid)
-            found_any = True
-
-            # Extract Data
+            sid = "Unknown"
             try:
+                # Normalize row to list of strings
+                if mode == 'html':
+                    cells = row.find_all(['td', 'th'])
+                    cols = [c.get_text(strip=True) for c in cells]
+                else:
+                    cols = [str(c).strip() if c is not None else '' for c in row]
+
+                # Filter valid rows (Student ID must be digit)
+                if not cols or len(cols) < 14: continue # Adjusted for flexibility
+
+                sid = cols[0]
+                if not sid.isdigit(): continue # Skip headers
+
+                if sid in processed_ids: continue
+                processed_ids.add(sid)
+                found_any = True
+
+                # Extract Data
                 # Column mapping based on standard export format
                 # 0: ID, 1: Last, 2: First, 3: Gender, 4: DOB, ..., 9: POB, 10: Level, 11: Class, 12: Sys, 13: EnrollNum, 14: EnrollDate
 
@@ -144,10 +154,11 @@ class Command(BaseCommand):
                     'attendance_system': cols[12],
                     'enrollment_number': cols[13],
                     'enrollment_date': enroll_date,
-                    'guardian_name': 'غير متوفر',
-                    'mother_name': 'غير متوفر',
-                    'address': 'غير متوفر',
-                    'guardian_phone': '0000000000'
+                    # Placeholder data, to be filled later via Parents interface or updates
+                    'guardian_name': '',
+                    'mother_name': '',
+                    'address': '',
+                    'guardian_phone': ''
                 }
 
                 if sid in existing_map:
@@ -161,7 +172,10 @@ class Command(BaseCommand):
                     to_create.append(Student(**student_data))
 
             except Exception as e:
-                print(f"Skipping row {sid}: {e}")
+                # Log error but CONTINUE
+                error_count += 1
+                if error_count < 10: # Only print first 10 errors to avoid spam
+                    print(f"Error processing row {sid}: {e}")
                 continue
 
         # Bulk Operations
@@ -176,14 +190,28 @@ class Command(BaseCommand):
             ])
 
         if found_any:
-            self.stdout.write(self.style.SUCCESS(f'Imported: {len(to_create)} New, {len(to_update)} Updated ({mode})'))
+            msg = f'Imported: {len(to_create)} New, {len(to_update)} Updated ({mode}). Errors: {error_count}'
+            self.stdout.write(self.style.SUCCESS(msg))
             return True
+
         return False
 
     def parse_date(self, date_str):
-        if not date_str: return datetime(1900, 1, 1).date()
+        if not date_str or str(date_str).lower() in ['none', 'nan', '']:
+             return datetime(1900, 1, 1).date()
+
+        # Handle Excel Serial Date (e.g. 44567)
+        if str(date_str).replace('.', '', 1).isdigit():
+             try:
+                 # Check if it's a serial date (approx > 10000)
+                 val = float(date_str)
+                 if val > 10000:
+                     return datetime.fromordinal(datetime(1900, 1, 1).toordinal() + int(val) - 2).date()
+             except: pass
+
         date_str = str(date_str).strip().split(' ')[0] # Remove time
-        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d'):
+        # Expanded formats including Dots
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d', '%d.%m.%Y', '%Y.%m.%d'):
             try:
                 return datetime.strptime(date_str, fmt).date()
             except ValueError:

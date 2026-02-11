@@ -11,17 +11,27 @@
         <thead>
             <tr>
                 <th>التلميذ</th>
+                <th>تاريخ الميلاد</th>
                 <th>اسم الولي</th>
+                <th>لقب واسم الأم</th>
                 <th>رقم الهاتف</th>
-                <th>تواصل (تجريبي)</th>
+                <th>عنوان السكن</th>
+                <th>البريد الإلكتروني</th>
+                <th>ملاحظات</th>
+                <th>تواصل</th>
             </tr>
         </thead>
         <tbody>
             {% for s in students %}
             <tr>
                 <td>{{ s.last_name }} {{ s.first_name }}</td>
+                <td class="western-nums">{{ s.date_of_birth|date:"d/m/Y" }}</td>
                 <td>{{ s.guardian_name|default:"-" }}</td>
+                <td>{{ s.mother_name|default:"-" }}</td>
                 <td class="western-nums" style="direction:ltr;">{{ s.guardian_phone|default:"-" }}</td>
+                <td>{{ s.address|default:"-" }}</td>
+                <td>-</td> <!-- Email not in model, placeholder -->
+                <td>-</td> <!-- Notes not in model, placeholder -->
                 <td>
                     {% if s.guardian_phone %}
                     <a href="https://wa.me/{{ s.guardian_phone }}" target="_blank" class="btn btn-success" style="padding:5px 10px; background:#25D366; border:none;" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
@@ -32,7 +42,7 @@
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" style="text-align:center;">لا توجد بيانات</td></tr>
+            <tr><td colspan="9" style="text-align:center;">لا توجد بيانات</td></tr>
             {% endfor %}
         </tbody>
     </table>

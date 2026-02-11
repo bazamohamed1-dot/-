@@ -266,7 +266,10 @@ def parents_home(request):
 
     # Just list students with parent info
     # Optimize: only fetch needed fields
-    students = Student.objects.only('id', 'first_name', 'last_name', 'guardian_name', 'guardian_phone').all()
+    students = Student.objects.only(
+        'id', 'first_name', 'last_name', 'date_of_birth',
+        'guardian_name', 'mother_name', 'guardian_phone', 'address'
+    ).all().order_by('last_name')
 
     context = {
         'students': students,
