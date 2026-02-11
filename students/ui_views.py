@@ -86,72 +86,50 @@ def settings_view(request):
 
 def import_eleve_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    # Check import permission
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('import_data'):
          return redirect('dashboard')
 
-    # Checkbox logic
     update_existing = request.POST.get('update_existing') == 'on'
 
     if request.method == 'POST' and request.FILES.get('eleve_file'):
         eleve_file = request.FILES['eleve_file']
         temp_path = None
 
-        # Use tempfile for safe file handling
         try:
-            # Determine suffix from original file
             _, ext = os.path.splitext(eleve_file.name)
-            if not ext:
-                ext = '.xls' # Default fallback
+            if not ext: ext = '.xls'
 
+            # Save file safely
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                 for chunk in eleve_file.chunks():
                     tmp.write(chunk)
                 temp_path = tmp.name
 
             out = StringIO()
-            # Call command with Retry Logic for OperationalError
+
             try:
-                from django.db import OperationalError
-                try:
-                    call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
-                except OperationalError:
-                    # Retry once if DB connection failed
-                    from django.db import connection
-                    connection.close()
-                    call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
+                # Execute the robust command
+                call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
 
-                messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
+                # Check output for keywords
+                result_text = out.getvalue()
+                if "Successfully imported" in result_text or "Imported:" in result_text:
+                    messages.success(request, f"تمت العملية: {result_text}")
+                else:
+                    # If it finished but with warnings
+                    if not result_text.strip(): result_text = "تمت العملية (لا توجد مخرجات)."
+                    messages.warning(request, f"ملاحظات العملية: {result_text}")
+
             except Exception as e:
-                import traceback
-                error_details = traceback.format_exc()
-                messages.error(request, f"فشل الاستيراد: {str(e)} \n التفاصيل: {error_details}")
-            finally:
-                if temp_path and os.path.exists(temp_path):
-                    try:
-                        os.remove(temp_path)
-                    except: pass
+                messages.error(request, f"خطأ أثناء التنفيذ: {str(e)}")
 
         except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            # Catch file handling errors
-            messages.error(request, f"خطأ في معالجة الملف: {str(e)} \n التفاصيل: {error_details}")
+            messages.error(request, f"خطأ في الملف: {str(e)}")
+        finally:
             if temp_path and os.path.exists(temp_path):
-                 try:
-                    os.remove(temp_path)
-                 except: pass
+                try: os.remove(temp_path)
+                except: pass
 
-        return redirect('settings')
-
-    # Fallback to default behavior if no file uploaded but POST triggered (legacy)
-    if request.method == 'POST':
-        out = StringIO()
-        try:
-            call_command('import_eleve', update_existing=update_existing, stdout=out)
-            messages.success(request, f"تم الاستيراد بنجاح: {out.getvalue()}")
-        except Exception as e:
-            messages.error(request, f"حدث خطأ أثناء الاستيراد: {str(e)}")
         return redirect('settings')
 
     return redirect('settings')
