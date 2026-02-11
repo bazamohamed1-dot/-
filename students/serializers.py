@@ -90,6 +90,14 @@ class StudentSerializer(serializers.ModelSerializer):
 
         return ret
 
+class StudentListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for listing students (No heavy photo data).
+    """
+    class Meta:
+        model = Student
+        exclude = ['photo_path']
+
 class CanteenAttendanceSerializer(serializers.ModelSerializer):
     student = StudentSerializer(read_only=True)
     
