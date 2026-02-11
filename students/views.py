@@ -11,15 +11,42 @@ from .serializers import StudentSerializer, StudentListSerializer, CanteenAttend
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import os
 from io import BytesIO
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 import logging
-from datetime import date
 
 logger = logging.getLogger(__name__)
+
+def parse_smart_date(date_val):
+    if not date_val: return date(1900, 1, 1)
+    date_str = str(date_val).strip()
+    if date_str.lower() in ['none', 'nan', '', 'invalid date']: return date(1900, 1, 1)
+
+    # Already YYYY-MM-DD (standard JSON)
+    if len(date_str) == 10 and date_str[4] == '-':
+            try: return date.fromisoformat(date_str)
+            except: pass
+
+    # Handle Excel Serial Date
+    if str(date_str).replace('.', '', 1).isdigit():
+            try:
+                val = float(date_str)
+                if val > 10000:
+                    return (datetime(1899, 12, 30) + timedelta(days=val)).date()
+            except: pass
+
+    # Clean time part if present
+    date_str = date_str.split('T')[0].split(' ')[0]
+
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d', '%d.%m.%Y', '%Y.%m.%d'):
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+    return date(1900, 1, 1)
 
 # --- Restore StudentViewSet ---
 class StudentViewSet(viewsets.ModelViewSet):
@@ -143,12 +170,10 @@ def import_students_json(request):
             sid = str(item.get('student_id_number')).strip()
             if not sid: continue
 
-            # Date parsing fallback
-            dob = item.get('date_of_birth')
-            if not dob or str(dob).lower() == 'invalid date': dob = '1900-01-01'
-
-            enroll_date = item.get('enrollment_date')
-            if not enroll_date or str(enroll_date).lower() == 'invalid date': enroll_date = date.today()
+            # Robust Date Parsing
+            dob = parse_smart_date(item.get('date_of_birth'))
+            enroll_date = parse_smart_date(item.get('enrollment_date'))
+            if enroll_date == date(1900, 1, 1): enroll_date = date.today()
 
             student_data = {
                 'student_id_number': sid,
