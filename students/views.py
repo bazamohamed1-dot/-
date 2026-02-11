@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Count, F
 from django.utils import timezone
 from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, PendingUpdate
-from .serializers import StudentSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
+from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
@@ -32,6 +32,12 @@ class StudentViewSet(viewsets.ModelViewSet):
         # Since we use pagination, loading 20 items is fine.
         # But we ensure ordering to avoid inconsistent pagination warnings.
         return Student.objects.all().order_by('id')
+
+    def get_serializer_class(self):
+        # Use lightweight serializer for list view to prevent memory crash
+        if self.action == 'list':
+            return StudentListSerializer
+        return StudentSerializer
 
     def create(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_add'):
