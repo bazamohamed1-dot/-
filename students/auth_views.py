@@ -374,6 +374,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         if not self.check_permission(request, 'manage_users'):
             return Response({'error': 'Unauthorized'}, status=403)
 
+        # Include ALL users (even superusers/directors) so we can see their activity
         users = User.objects.select_related('profile').all().distinct()
         data = []
         seen = set()
@@ -403,6 +404,9 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     if diff < 300: # 5 minutes
                         is_online = True
 
+                # Determine if user is Director/Superuser to disable actions in frontend
+                is_admin = u.is_superuser or prof.role == 'director'
+
                 data.append({
                     'id': u.id,
                     'username': u.username,
@@ -414,7 +418,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'device_status': device_status,
                     'last_login': u.last_login,
                     'last_activity': last_active,
-                    'is_online': is_online
+                    'is_online': is_online,
+                    'is_admin': is_admin  # Flag for frontend to disable delete/edit
                 })
             except:
                 pass

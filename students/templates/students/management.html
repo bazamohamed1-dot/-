@@ -492,34 +492,43 @@ async function deleteStudent() {
     }
 }
 
-function populateFilters() {
-    // Populate Levels
-    const levelSelect = document.getElementById('filterLevel');
-    const levels = [...new Set(studentsList.map(s => s.level).filter(l => l))].sort();
-    const selectedLevel = levelSelect.value;
+    async function populateFilters() {
+        try {
+            const response = await fetch('/api/students/filters/');
+            if (!response.ok) return;
+            const data = await response.json();
 
-    levelSelect.innerHTML = '<option value="">جميع المستويات</option>';
-    levels.forEach(l => {
-        const option = document.createElement('option');
-        option.value = l;
-        option.textContent = l;
-        levelSelect.appendChild(option);
-    });
-    levelSelect.value = selectedLevel;
+            // Populate Levels
+            const levelSelect = document.getElementById('filterLevel');
+            const selectedLevel = levelSelect.value;
+            levelSelect.innerHTML = '<option value="">جميع المستويات</option>';
+            data.levels.forEach(l => {
+                const option = document.createElement('option');
+                option.value = l;
+                option.textContent = l;
+                levelSelect.appendChild(option);
+            });
+            if (selectedLevel && data.levels.includes(selectedLevel)) levelSelect.value = selectedLevel;
 
-    // Populate Classes
-    const classSelect = document.getElementById('filterClass');
-    const classes = [...new Set(studentsList.map(s => s.class).filter(c => c))].sort();
-    const selectedClass = classSelect.value;
+            // Populate Classes
+            const classSelect = document.getElementById('filterClass');
+            const selectedClass = classSelect.value;
+            classSelect.innerHTML = '<option value="">جميع الأقسام</option>';
+            data.classes.forEach(c => {
+                // Strip academic year prefix if possible for cleaner display, or keep full
+                let displayClass = c;
+                // Optional: Logic to strip level prefix if desired by user,
+                // but for now showing full class name is safer.
+                const option = document.createElement('option');
+                option.value = c;
+                option.textContent = displayClass;
+                classSelect.appendChild(option);
+            });
+            if (selectedClass && data.classes.includes(selectedClass)) classSelect.value = selectedClass;
 
-    classSelect.innerHTML = '<option value="">جميع الأقسام</option>';
-    classes.forEach(c => {
-        const option = document.createElement('option');
-        option.value = c;
-        option.textContent = c;
-        classSelect.appendChild(option);
-    });
-    classSelect.value = selectedClass;
+        } catch (e) {
+            console.error("Failed to load filters", e);
+        }
 }
 
 function filterTable() {
