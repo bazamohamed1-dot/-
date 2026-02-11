@@ -11,10 +11,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
-import sys
 from pathlib import Path
-from dotenv import load_dotenv # استيراد المكتبة
-import dj_database_url # لسهولة ربط Neon
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -26,39 +24,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-local-key-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Default to False in production if not explicitly set to True
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = False # Set to False for production simulation, True for debugging if needed
 
-ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1', 'cem-bouchnafa-omar.onrender.com', '*']
+# Allow all hosts for Tunneling and Local LAN access
+ALLOWED_HOSTS = ['*']
 
 # Session Security
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True # Logout on browser close
 
-if not DEBUG:
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True
-else:
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-    SECURE_SSL_REDIRECT = False
+# Local settings: Disable SSL redirect for local LAN/HTTP
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'cloudinary_storage',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'cloudinary',
-        # التطبيقات الجديدة التي اضفناها:
+    # 'cloudinary_storage', # Removed for local
+    # 'cloudinary', # Removed for local
     'rest_framework',
     'students',
 ]
@@ -102,28 +95,13 @@ WSGI_APPLICATION = 'School_Management.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Database Configuration optimized for Neon (Postgres)
-# Using separate options dict to ensure SSL is forced correctly
-default_db_url = os.getenv('DATABASE_URL')
+# Local SQLite Database
 DATABASES = {
-    'default': dj_database_url.config(
-        default=default_db_url,
-        conn_max_age=0, # Force close connection to avoid SSL handshake issues
-        ssl_require=True
-    )
-}
-# Explicitly enforce SSL mode if not in URL
-if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
-    DATABASES['default']['OPTIONS'] = {
-        'sslmode': 'require',
-        'connect_timeout': 10,
-    }
-
-if 'test' in sys.argv:
-    DATABASES['default'] = {
+    'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
 
 
 # Password validation
@@ -162,26 +140,15 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Keep whitenoise for serving static files efficiently even locally
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
-}
-
-# إعداد Cloudinary كمخزن أساسي للملفات
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+# Local Media Storage
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Email Backend Configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-# Fallback to Console Backend for Dev if no credentials
-if not EMAIL_HOST_USER:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# For local offline use, we can use Console Backend or a local SMTP if available.
+# Since user mentioned "Gmail via Browser", server-side email might not be needed or configured.
+# We'll default to Console to avoid errors if no internet.
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
