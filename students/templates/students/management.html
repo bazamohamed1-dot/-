@@ -175,7 +175,7 @@
     <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
         <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
 
-        <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="filterTable()">
+        <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="onLevelChange()">
             <option value="">جميع المستويات</option>
             <!-- Populated via JS -->
         </select>
@@ -514,50 +514,87 @@ async function deleteStudent() {
     }
 }
 
+    // Store globally for filtering logic
+    let distinctLevels = [];
+    let distinctClasses = [];
+
     async function populateFilters() {
         try {
-            // Use absolute path relative to root
-            const response = await fetch('/canteen/api/students/filters/');
-            if (!response.ok) return;
-            const data = await response.json();
+            // Populate based on ACTUAL loaded students list to ensure consistency
+            // Extract unique levels and classes from memory
+            const levelsSet = new Set();
+            const classesSet = new Set();
 
-            // Populate Levels
+            studentsList.forEach(s => {
+                if(s.level) levelsSet.add(s.level);
+                if(s.class) classesSet.add(s.class);
+            });
+
+            distinctLevels = Array.from(levelsSet).sort();
+            distinctClasses = Array.from(classesSet).sort();
+
+            // Populate Levels Dropdown
             const levelSelect = document.getElementById('filterLevel');
             const selectedLevel = levelSelect.value;
             levelSelect.innerHTML = '<option value="">جميع المستويات</option>';
-            data.levels.forEach(l => {
+
+            distinctLevels.forEach(l => {
                 const option = document.createElement('option');
                 option.value = l;
                 option.textContent = l;
                 levelSelect.appendChild(option);
             });
-            if (selectedLevel && data.levels.includes(selectedLevel)) levelSelect.value = selectedLevel;
+            if (selectedLevel && distinctLevels.includes(selectedLevel)) levelSelect.value = selectedLevel;
 
-            // Populate Classes (Filter & Datalist)
-            const classSelect = document.getElementById('filterClass');
+            // Trigger class population based on current level (initially "All")
+            onLevelChange();
+
+            // Populate Form Datalist (All classes always available for entry)
             const classDatalist = document.getElementById('classOptions');
-
-            const selectedClass = classSelect.value;
-            classSelect.innerHTML = '<option value="">جميع الأقسام</option>';
             classDatalist.innerHTML = '';
-
-            data.classes.forEach(c => {
-                // Filter Dropdown
-                const option = document.createElement('option');
-                option.value = c;
-                option.textContent = c;
-                classSelect.appendChild(option);
-
-                // Form Datalist
+            distinctClasses.forEach(c => {
                 const optDL = document.createElement('option');
-                optDL.value = c; // Full class name
+                optDL.value = c;
                 classDatalist.appendChild(optDL);
             });
-            if (selectedClass && data.classes.includes(selectedClass)) classSelect.value = selectedClass;
 
         } catch (e) {
             console.error("Failed to load filters", e);
         }
+}
+
+function onLevelChange() {
+    const levelSelect = document.getElementById('filterLevel');
+    const classSelect = document.getElementById('filterClass');
+    const selectedLevel = levelSelect.value;
+    const selectedClass = classSelect.value;
+
+    // Filter available classes based on selected level
+    // Logic: A class "1AM 2" belongs to level "1AM".
+    // We check if the class name STARTS with or CONTAINS the level name.
+
+    let availableClasses = distinctClasses;
+    if (selectedLevel) {
+        availableClasses = distinctClasses.filter(c => c.includes(selectedLevel));
+    }
+
+    // Rebuild Class Dropdown
+    classSelect.innerHTML = '<option value="">جميع الأقسام</option>';
+    availableClasses.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c;
+        option.textContent = c; // Display full name
+        classSelect.appendChild(option);
+    });
+
+    // Restore selection if valid, else reset
+    if (selectedClass && availableClasses.includes(selectedClass)) {
+        classSelect.value = selectedClass;
+    } else {
+        classSelect.value = "";
+    }
+
+    filterTable();
 }
 
 function filterTable() {
