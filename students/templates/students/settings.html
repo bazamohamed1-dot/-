@@ -527,8 +527,8 @@ async function processRows(rows, updateExisting) {
         return;
     }
 
-    // Send in batches (Optimized for reliability)
-    const BATCH_SIZE = 50; // Reduced from 100 to prevent memory timeouts
+    // Send in batches (Ultra-Conservative for Stability)
+    const BATCH_SIZE = 20; // Drastically reduced to ensure 100% completion
     const total = students.length;
     let successCount = 0;
 
@@ -565,8 +565,8 @@ async function processRows(rows, updateExisting) {
             // Continue to next batch
         }
 
-        // Small delay to let server breathe
-        await sleep(100);
+        // Increased delay to let server breathe and commit transactions
+        await sleep(200);
     }
 
     document.getElementById('progressText').textContent = "100% - اكتمل!";
