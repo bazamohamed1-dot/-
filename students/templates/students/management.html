@@ -154,7 +154,7 @@
 
     <!-- Search and Filter -->
     <!-- Filters enabled always as requested -->
-    <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px;">
+    <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
         <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
 
         <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="filterTable()">
@@ -166,6 +166,10 @@
             <option value="">جميع الأقسام</option>
             <!-- Populated via JS -->
         </select>
+
+        <button onclick="populateFilters()" class="btn" style="padding: 10px; background: #e2e8f0; color: #64748b;" title="تحديث القوائم">
+            <i class="fas fa-sync-alt"></i>
+        </button>
     </div>
 
     <!-- Table -->
