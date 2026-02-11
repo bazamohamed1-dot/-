@@ -555,14 +555,22 @@ async function processRows(rows, updateExisting) {
                 successCount += res.created + res.updated;
             } else {
                 console.error("Batch failed", await response.text());
+                // Continue to next batch
             }
         } catch (e) {
             console.error("Network error on batch", i, e);
+            // Continue to next batch
         }
     }
 
     document.getElementById('progressText').textContent = "100% - اكتمل!";
-    alert(`تمت العملية! تمت معالجة ${successCount} تلميذ.`);
+    if (successCount === 0) {
+        alert("فشل الاستيراد بالكامل. يرجى التحقق من الملف.");
+    } else if (successCount < total) {
+        alert(`تمت العملية مع بعض الأخطاء. تمت معالجة ${successCount} من أصل ${total} تلميذ.`);
+    } else {
+        alert(`تمت العملية بنجاح! تمت معالجة ${successCount} تلميذ.`);
+    }
     resetImportUI();
 }
 
