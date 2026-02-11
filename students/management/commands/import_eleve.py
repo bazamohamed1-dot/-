@@ -21,277 +21,171 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'File {file_path} not found'))
             return
 
-        # Fetch existing students map: student_id_number -> pk
-        self.existing_map = {s.student_id_number: s.pk for s in Student.objects.all()}
-        self.to_create = []
-        self.to_update = []
-        self.processed_ids_in_file = set()
+        self.stdout.write(f'Processing file: {file_path} (Update Existing: {update_existing})')
 
         # Robust Multi-Format Strategy: HTML > XLS > XLSX
 
-        # 1. Try HTML (bs4) - Common for "Eleve.xls" exports
+        # 1. Try HTML (bs4) - Common for "Eleve.xls" exports from Ministry
         try:
-            success = self.import_html(file_path)
+            success = self.import_html(file_path, update_existing)
             if success:
-                self.process_batches(update_existing, mode="HTML (Spoofed XLS)")
                 return
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'HTML parser skipped: {str(e)}'))
 
-        # Reset lists
-        self.to_create = []
-        self.to_update = []
-        self.processed_ids_in_file = set()
-
         # 2. Try Excel .xls (xlrd)
         try:
-            success = self.import_excel_xls(file_path)
+            success = self.import_excel_xls(file_path, update_existing)
             if success:
-                self.process_batches(update_existing, mode="Excel (xls)")
                 return
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'XLS parser skipped: {str(e)}'))
 
-        # Reset lists
-        self.to_create = []
-        self.to_update = []
-        self.processed_ids_in_file = set()
-
         # 3. Try Excel .xlsx (openpyxl)
         try:
-            success = self.import_excel_xlsx(file_path)
+            success = self.import_excel_xlsx(file_path, update_existing)
             if success:
-                self.process_batches(update_existing, mode="Excel (xlsx)")
                 return
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'XLSX parser skipped: {str(e)}'))
 
-        raise Exception('فشل استيراد الملف بجميع الطرق المتاحة. تأكد من أن الملف سليم ويحتوي على بيانات.')
+        self.stdout.write(self.style.ERROR('فشل استيراد الملف بجميع الطرق المتاحة. تأكد من أن الملف سليم ويحتوي على بيانات.'))
 
-    def process_batches(self, update_existing, mode):
-        created_count = 0
-        updated_count = 0
-
-        if self.to_create:
-            Student.objects.bulk_create(self.to_create)
-            created_count = len(self.to_create)
-
-        if update_existing and self.to_update:
-            # Fields to update
-            fields = ['last_name', 'first_name', 'gender', 'date_of_birth', 'place_of_birth',
-                      'academic_year', 'class_name', 'attendance_system', 'enrollment_number',
-                      'enrollment_date']
-            Student.objects.bulk_update(self.to_update, fields)
-            updated_count = len(self.to_update)
-
-        self.stdout.write(self.style.SUCCESS(f'Successfully imported {created_count} new students and updated {updated_count} existing ({mode} Mode).'))
-
-
-    def import_html(self, file_path):
-        # Attempt to read file as text
+    def import_html(self, file_path, update_existing):
         content = ""
         try:
             with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
         except Exception:
-            # Maybe binary?
-            pass
+            return False
 
-        # Check signature
         if "<html" not in content.lower() and "<table" not in content.lower():
-             # Last ditch: try to parse with bs4 even if binary-ish (bs4 handles some mess)
-             # But if it's purely binary XLS, bs4 will just find nothing.
-             if not content:
-                 raise ValueError("File cannot be read as text")
-
-             # If no tags found, it's not HTML
-             if not BeautifulSoup(content, "html.parser").find("table"):
-                raise ValueError("Content does not look like HTML table")
+             return False
 
         soup = BeautifulSoup(content, 'html.parser')
         rows = soup.find_all('tr')
 
-        found_any = False
-        for row in rows:
-            # Handle both th and td, sometimes headers are mixed
-            cells = row.find_all(['td', 'th'])
-            cols = [c.get_text(strip=True) for c in cells]
+        return self.process_rows(rows, 'html', update_existing)
 
-            # Remove empty strings from end if any
-            while cols and not cols[-1]:
-                cols.pop()
-
-            if not cols or len(cols) < 14: # Relaxed count slightly
-                continue
-
-            # Check if first col is ID (numeric)
-            if not cols[0].isdigit():
-                continue
-
-            self.parse_and_prepare(cols)
-            found_any = True
-
-        return found_any
-
-    def import_excel_xlsx(self, file_path):
+    def import_excel_xlsx(self, file_path, update_existing):
         wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
         ws = wb.active
+        return self.process_rows(ws.iter_rows(values_only=True), 'xlsx', update_existing)
+
+    def import_excel_xls(self, file_path, update_existing):
+        wb = xlrd.open_workbook(file_path, formatting_info=False)
+        ws = wb.sheet_by_index(0)
+        rows = []
+        for row_idx in range(ws.nrows):
+            row = ws.row(row_idx)
+            cols = []
+            for c in row:
+                if c.ctype == xlrd.XL_CELL_DATE:
+                    try:
+                        val = xlrd.xldate.xldate_as_datetime(c.value, wb.datemode).strftime('%Y-%m-%d')
+                    except:
+                        val = str(c.value)
+                elif c.ctype == xlrd.XL_CELL_NUMBER:
+                     val = str(int(c.value)) if c.value == int(c.value) else str(c.value)
+                else:
+                    val = str(c.value).strip()
+                cols.append(val)
+            rows.append(cols)
+
+        return self.process_rows(rows, 'xls', update_existing)
+
+    def process_rows(self, rows, mode, update_existing):
+        to_create = []
+        to_update = []
+        processed_ids = set()
+        existing_map = {s.student_id_number: s for s in Student.objects.all()}
 
         found_any = False
-        for row in ws.iter_rows(values_only=True):
-            cols = [str(c).strip() if c is not None else '' for c in row]
-            if not cols or len(cols) < 15:
-                continue
-            if not cols[0].isdigit():
-                continue
 
-            self.parse_and_prepare(cols)
+        for row in rows:
+            # Normalize row to list of strings
+            if mode == 'html':
+                cells = row.find_all(['td', 'th'])
+                cols = [c.get_text(strip=True) for c in cells]
+            else:
+                cols = [str(c).strip() if c is not None else '' for c in row]
+
+            # Filter valid rows (Student ID must be digit)
+            if not cols or len(cols) < 14: continue # Adjusted for flexibility
+
+            sid = cols[0]
+            if not sid.isdigit(): continue # Skip headers
+
+            if sid in processed_ids: continue
+            processed_ids.add(sid)
             found_any = True
 
-        return found_any
-
-    def import_excel_xls(self, file_path):
-        try:
-            # Use 'ignore_workbook_corruption=True' if using xlrd >= 2.0.1 and dealing with partial XLS files,
-            # but standard call is usually sufficient.
-            # Note: xlrd removed .xlsx support in v2.0. This function is strictly for .xls.
-            wb = xlrd.open_workbook(file_path, formatting_info=False)
-            ws = wb.sheet_by_index(0)
-
-            found_any = False
-            for row_idx in range(ws.nrows):
-                row = ws.row(row_idx)
-                # Handle cell types robustly
-                cols = []
-                for c in row:
-                    val = c.value
-                    if c.ctype == xlrd.XL_CELL_DATE:
-                        try:
-                            val = xlrd.xldate.xldate_as_datetime(val, wb.datemode).strftime('%Y-%m-%d')
-                        except:
-                            val = str(val)
-                    elif c.ctype == xlrd.XL_CELL_NUMBER:
-                        if val == int(val):
-                            val = str(int(val)) # "123.0" -> "123"
-                        else:
-                            val = str(val)
-                    else:
-                        val = str(val).strip()
-                    cols.append(val)
-
-                if not cols or len(cols) < 15:
-                    continue
-
-                # ID Check
-                id_val = cols[0]
-                if not id_val.isdigit():
-                    continue
-
-                self.parse_and_prepare(cols)
-                found_any = True
-
-            return found_any
-        except Exception as e:
-            raise ValueError(f"XLS parsing error: {str(e)}")
-
-    def parse_and_prepare(self, cols):
-        student_id = cols[0]
-        if not student_id or not student_id.isdigit():
-            return
-
-        if student_id in self.processed_ids_in_file:
-            return
-        self.processed_ids_in_file.add(student_id)
-
-        # Memory Optimization: Check list size
-        if len(self.to_create) > 500:
-            Student.objects.bulk_create(self.to_create)
-            self.to_create = [] # Clear memory
-            import gc
-            gc.collect()
-
-        if len(self.to_update) > 500:
-            fields = ['last_name', 'first_name', 'gender', 'date_of_birth', 'place_of_birth',
-                      'academic_year', 'class_name', 'attendance_system', 'enrollment_number',
-                      'enrollment_date']
-            Student.objects.bulk_update(self.to_update, fields)
-            self.to_update = [] # Clear memory
-            import gc
-            gc.collect()
-
-        last_name = cols[1]
-        first_name = cols[2]
-        if not last_name or not first_name:
-            return
-
-        gender = cols[3]
-        dob_str = cols[4]
-        pob = cols[9]
-        level = cols[10]
-        class_num = cols[11]
-        full_class = f"{level} {class_num}".strip()
-        system = cols[12]
-        enroll_num = cols[13]
-        enroll_date_str = cols[14]
-
-        dob = self.parse_date(dob_str)
-        enroll_date = self.parse_date(enroll_date_str)
-
-        student_data = Student(
-            student_id_number=student_id,
-            last_name=last_name,
-            first_name=first_name,
-            gender=gender,
-            date_of_birth=dob,
-            place_of_birth=pob,
-            academic_year=level,
-            class_name=full_class,
-            attendance_system=system,
-            enrollment_number=enroll_num,
-            enrollment_date=enroll_date if enroll_date else datetime.now().date(),
-            guardian_name='غير متوفر',
-            mother_name='غير متوفر',
-            address='غير متوفر',
-            guardian_phone='0000000000'
-        )
-
-        if student_id in self.existing_map:
-            # Existing: prepare for update
-            student_data.pk = self.existing_map[student_id]
-            self.to_update.append(student_data)
-        else:
-            # New: prepare for create
-            self.to_create.append(student_data)
-
-    def parse_date(self, date_str):
-        if not date_str: return None
-
-        # Clean string
-        date_str = str(date_str).strip()
-
-        # Common French/Arabic formats
-        formats = [
-            '%Y-%m-%d',     # 2023-01-30
-            '%d/%m/%Y',     # 30/01/2023
-            '%d-%m-%Y',     # 30-01-2023
-            '%Y/%m/%d',     # 2023/01/30
-        ]
-
-        for fmt in formats:
+            # Extract Data
             try:
-                # Handle "2023-01-30 00:00:00"
-                clean_str = date_str.split(' ')[0]
-                return datetime.strptime(clean_str, fmt).date()
-            except ValueError:
+                # Column mapping based on standard export format
+                # 0: ID, 1: Last, 2: First, 3: Gender, 4: DOB, ..., 9: POB, 10: Level, 11: Class, 12: Sys, 13: EnrollNum, 14: EnrollDate
+
+                dob = self.parse_date(cols[4])
+                enroll_date = self.parse_date(cols[14]) if len(cols) > 14 else datetime.now().date()
+
+                level = cols[10]
+                class_code = cols[11]
+                full_class = f"{level} {class_code}".strip()
+
+                student_data = {
+                    'student_id_number': sid,
+                    'last_name': cols[1],
+                    'first_name': cols[2],
+                    'gender': cols[3],
+                    'date_of_birth': dob,
+                    'place_of_birth': cols[9],
+                    'academic_year': level,
+                    'class_name': full_class,
+                    'attendance_system': cols[12],
+                    'enrollment_number': cols[13],
+                    'enrollment_date': enroll_date,
+                    'guardian_name': 'غير متوفر',
+                    'mother_name': 'غير متوفر',
+                    'address': 'غير متوفر',
+                    'guardian_phone': '0000000000'
+                }
+
+                if sid in existing_map:
+                    if update_existing:
+                        student = existing_map[sid]
+                        for key, value in student_data.items():
+                            if key != 'student_id_number':
+                                setattr(student, key, value)
+                        to_update.append(student)
+                else:
+                    to_create.append(Student(**student_data))
+
+            except Exception as e:
+                print(f"Skipping row {sid}: {e}")
                 continue
 
-        # If all fail, return None (or a default like 1900-01-01 if strict)
-        # Returning None allows the database to accept it if nullable, or fail later.
-        # Given the model field `date_of_birth` is NOT nullable (usually), we might need a fallback.
-        # But `date_of_birth` in `models.py` doesn't have `null=True`.
-        # Wait, let's check model.
-        # Checking `models.py` in previous turns... `date_of_birth = models.DateField(...)`. Default is NOT null.
-        # So we MUST return a valid date or the save will fail.
+        # Bulk Operations
+        if to_create:
+            Student.objects.bulk_create(to_create)
 
-        # Fallback for invalid dates to prevent crash
+        if to_update:
+            Student.objects.bulk_update(to_update, [
+                'last_name', 'first_name', 'gender', 'date_of_birth', 'place_of_birth',
+                'academic_year', 'class_name', 'attendance_system', 'enrollment_number',
+                'enrollment_date'
+            ])
+
+        if found_any:
+            self.stdout.write(self.style.SUCCESS(f'Imported: {len(to_create)} New, {len(to_update)} Updated ({mode})'))
+            return True
+        return False
+
+    def parse_date(self, date_str):
+        if not date_str: return datetime(1900, 1, 1).date()
+        date_str = str(date_str).strip().split(' ')[0] # Remove time
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d'):
+            try:
+                return datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
         return datetime(1900, 1, 1).date()
