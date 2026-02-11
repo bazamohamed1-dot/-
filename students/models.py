@@ -167,3 +167,31 @@ class UserRole(models.Model):
 
     def __str__(self):
         return self.name
+
+class Employee(models.Model):
+    full_name = models.CharField(max_length=200, verbose_name="الاسم الكامل")
+    role = models.CharField(max_length=100, verbose_name="الوظيفة") # Teacher, Admin, Worker
+    phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم الهاتف")
+    date_of_birth = models.DateField(null=True, blank=True, verbose_name="تاريخ الميلاد")
+    notes = models.TextField(null=True, blank=True, verbose_name="ملاحظات")
+
+    class Meta:
+        verbose_name = "موظف"
+        verbose_name_plural = "الموارد البشرية"
+
+    def __str__(self):
+        return self.full_name
+
+class Survey(models.Model):
+    title = models.CharField(max_length=200, verbose_name="العنوان")
+    description = models.TextField(verbose_name="الوصف")
+    target_audience = models.CharField(max_length=100, verbose_name="الجمهور المستهدف") # Students, Parents, Staff
+    link = models.URLField(null=True, blank=True, verbose_name="رابط الاستبيان") # External (Google Forms) or internal
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
+
+    class Meta:
+        verbose_name = "استبيان"
+        verbose_name_plural = "الإرشاد والتوجيه"
+
+    def __str__(self):
+        return self.title

@@ -101,10 +101,28 @@
                 </div>
                 <div class="field-box"><label>المستوى *</label>
                     <select id="academicYear" class="form-input">
-                        <option value="">اختر...</option><option value="أولى">أولى</option><option value="ثانية">ثانية</option><option value="ثالثة">ثالثة</option><option value="رابعة">رابعة</option>
+                        <option value="">اختر...</option>
+                        <!-- Middle School (Standard) -->
+                        <option value="1AM">1AM (أولى متوسط)</option>
+                        <option value="2AM">2AM (ثانية متوسط)</option>
+                        <option value="3AM">3AM (ثالثة متوسط)</option>
+                        <option value="4AM">4AM (رابعة متوسط)</option>
+                        <!-- Legacy / Simple -->
+                        <option value="أولى">أولى</option>
+                        <option value="ثانية">ثانية</option>
+                        <option value="ثالثة">ثالثة</option>
+                        <option value="رابعة">رابعة</option>
+                        <!-- Other Levels if needed -->
+                        <option value="1AP">1AP</option><option value="2AP">2AP</option><option value="3AP">3AP</option><option value="4AP">4AP</option><option value="5AP">5AP</option>
+                        <option value="1AS">1AS</option><option value="2AS">2AS</option><option value="3AS">3AS</option>
                     </select>
                 </div>
-                <div class="field-box"><label>القسم (مثال: 1) *</label><input type="text" id="className" class="form-input"></div>
+                <div class="field-box"><label>القسم (مثال: 1) *</label>
+                    <input type="text" id="className" class="form-input" list="classOptions">
+                    <datalist id="classOptions">
+                        <!-- Populated via JS -->
+                    </datalist>
+                </div>
 
                 <div class="field-box"><label>نظام التمدرس *</label>
                     <select id="attendanceSystem" class="form-input">
@@ -514,19 +532,25 @@ async function deleteStudent() {
             });
             if (selectedLevel && data.levels.includes(selectedLevel)) levelSelect.value = selectedLevel;
 
-            // Populate Classes
+            // Populate Classes (Filter & Datalist)
             const classSelect = document.getElementById('filterClass');
+            const classDatalist = document.getElementById('classOptions');
+
             const selectedClass = classSelect.value;
             classSelect.innerHTML = '<option value="">جميع الأقسام</option>';
+            classDatalist.innerHTML = '';
+
             data.classes.forEach(c => {
-                // Strip academic year prefix if possible for cleaner display, or keep full
-                let displayClass = c;
-                // Optional: Logic to strip level prefix if desired by user,
-                // but for now showing full class name is safer.
+                // Filter Dropdown
                 const option = document.createElement('option');
                 option.value = c;
-                option.textContent = displayClass;
+                option.textContent = c;
                 classSelect.appendChild(option);
+
+                // Form Datalist
+                const optDL = document.createElement('option');
+                optDL.value = c; // Full class name
+                classDatalist.appendChild(optDL);
             });
             if (selectedClass && data.classes.includes(selectedClass)) classSelect.value = selectedClass;
 

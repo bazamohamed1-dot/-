@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}الإرشاد والتوجيه{% endblock %}
+{% block header_title %}الإرشاد والتوجيه{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+        <h3>استبيانات واستمارات</h3>
+        <button class="btn btn-success" onclick="document.getElementById('surveyModal').style.display='flex'"><i class="fas fa-plus"></i> إنشاء استبيان جديد</button>
+    </div>
+
+    <div class="grid-2">
+        {% for s in surveys %}
+        <div style="padding:15px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+            <div style="font-weight:bold; font-size:1.1rem; color:var(--primary); margin-bottom:5px;">{{ s.title }}</div>
+            <div style="color:#64748b; font-size:0.9rem; margin-bottom:10px;">{{ s.description }}</div>
+            <div style="margin-bottom:10px;">
+                <span style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-size:0.8rem;">{{ s.target_audience }}</span>
+                <span style="color:#94a3b8; font-size:0.8rem;">{{ s.created_at|date:"Y-m-d" }}</span>
+            </div>
+            {% if s.link %}
+            <a href="{{ s.link }}" target="_blank" class="btn btn-primary" style="padding:5px 10px; font-size:0.9rem;">فتح الاستبيان</a>
+            {% endif %}
+        </div>
+        {% empty %}
+        <div style="grid-column: span 2; text-align:center; padding:20px; color:#94a3b8;">لا توجد استبيانات حالياً</div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="surveyModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
+    <div class="card" style="width:500px; padding:20px;">
+        <h3 style="margin-bottom:20px;">إنشاء استبيان جديد</h3>
+        <form method="post">
+            {% csrf_token %}
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">العنوان</label>
+                <input type="text" name="title" class="form-input" required style="width:100%; padding:10px;">
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">الوصف</label>
+                <textarea name="description" class="form-input" required style="width:100%; padding:10px; height:80px;"></textarea>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">الجمهور المستهدف</label>
+                <select name="target_audience" class="form-input" style="width:100%; padding:10px;">
+                    <option value="الجميع">الجميع</option>
+                    <option value="التلاميذ">التلاميذ</option>
+                    <option value="الأولياء">الأولياء</option>
+                    <option value="الأساتذة">الأساتذة</option>
+                </select>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">رابط (اختياري)</label>
+                <input type="url" name="link" class="form-input" style="width:100%; padding:10px; direction:ltr; text-align:left;">
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;">حفظ</button>
+                <button type="button" class="btn btn-danger" onclick="document.getElementById('surveyModal').style.display='none'" style="flex:1;">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

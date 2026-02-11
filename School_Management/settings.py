@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-local-key-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False # Set to False for production simulation, True for debugging if needed
+DEBUG = True # Set to True for local development/debugging
 
 # Allow all hosts for Tunneling and Local LAN access
 ALLOWED_HOSTS = ['*']
@@ -50,8 +50,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # 'cloudinary_storage', # Removed for local
-    # 'cloudinary', # Removed for local
     'rest_framework',
     'students',
 ]
@@ -148,7 +146,4 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Email Backend Configuration
-# For local offline use, we can use Console Backend or a local SMTP if available.
-# Since user mentioned "Gmail via Browser", server-side email might not be needed or configured.
-# We'll default to Console to avoid errors if no internet.
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

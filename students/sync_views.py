@@ -4,9 +4,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import PendingUpdate, Student, CanteenAttendance, LibraryLoan, SystemMessage
 from .serializers import PendingUpdateSerializer, SystemMessageSerializer
-import cloudinary.uploader
+# Cloudinary removed
 from datetime import date
 import logging
+import base64
+import os
+import uuid
+from django.conf import settings
+from django.core.files.base import ContentFile
 
 logger = logging.getLogger(__name__)
 
@@ -62,16 +67,25 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
         data_payload = update.data.get('data', {})
 
         if update.model_name == 'Student':
-            # Handle Photo
+            # Handle Photo - Save Locally
             photo_data = data_payload.get('photo_path')
             if photo_data and str(photo_data).startswith('data:image'):
                 try:
-                    upload_result = cloudinary.uploader.upload(photo_data, folder="students_photos")
-                    data_payload['photo_path'] = upload_result.get('secure_url')
+                    format, imgstr = photo_data.split(';base64,')
+                    ext = format.split('/')[-1]
+                    filename = f"{uuid.uuid4()}.{ext}"
+                    filepath = os.path.join(settings.MEDIA_ROOT, 'students_photos', filename)
+
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+                    with open(filepath, 'wb') as f:
+                        f.write(base64.b64decode(imgstr))
+
+                    # Store relative path or URL
+                    data_payload['photo_path'] = f"/media/students_photos/{filename}"
                 except Exception as e:
-                    logger.error(f"Cloudinary Upload Error: {e}")
-                    # Continue without photo or fail? Fail safe:
-                    # raise e
+                    logger.error(f"Image Save Error: {e}")
+                    # Continue without photo
                     pass
 
             if update.action == 'create':

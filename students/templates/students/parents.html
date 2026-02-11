@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}أولياء التلاميذ{% endblock %}
+{% block header_title %}فضاء أولياء التلاميذ{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="margin-bottom:20px;">
+        <input type="text" id="parentSearch" class="form-input" placeholder="بحث باسم التلميذ أو الولي..." onkeyup="filterParents()" style="width:100%;">
+    </div>
+
+    <table id="parentsTable">
+        <thead>
+            <tr>
+                <th>التلميذ</th>
+                <th>اسم الولي</th>
+                <th>رقم الهاتف</th>
+                <th>تواصل (تجريبي)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td>{{ s.last_name }} {{ s.first_name }}</td>
+                <td>{{ s.guardian_name|default:"-" }}</td>
+                <td class="western-nums" style="direction:ltr;">{{ s.guardian_phone|default:"-" }}</td>
+                <td>
+                    {% if s.guardian_phone %}
+                    <a href="https://wa.me/{{ s.guardian_phone }}" target="_blank" class="btn btn-success" style="padding:5px 10px; background:#25D366; border:none;" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                    <a href="sms:{{ s.guardian_phone }}" class="btn btn-info" style="padding:5px 10px;" title="SMS"><i class="fas fa-sms"></i></a>
+                    {% else %}
+                    <span style="color:#94a3b8;">لا يوجد رقم</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center;">لا توجد بيانات</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function filterParents() {
+        const query = document.getElementById('parentSearch').value.toLowerCase();
+        const rows = document.querySelectorAll('#parentsTable tbody tr');
+        rows.forEach(row => {
+            const text = row.innerText.toLowerCase();
+            row.style.display = text.includes(query) ? '' : 'none';
+        });
+    }
+</script>
+{% endblock %}

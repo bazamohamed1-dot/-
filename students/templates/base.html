@@ -254,18 +254,28 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
-                    <i class="fas fa-cog"></i> الإعدادات وقاعدة البيانات
+                <a href="{% url 'hr_home' %}" class="nav-link {% if 'hr' in request.path %}active{% endif %}">
+                    <i class="fas fa-users-cog"></i> الموارد البشرية
                 </a>
             </li>
-            {% if request.user.profile.role == 'director' or request.user.is_superuser %}
             <li class="nav-item">
-                <a href="{% url 'pending_updates_view' %}" class="nav-link {% if 'pending_updates' in request.path %}active{% endif %}">
-                    <i class="fas fa-check-double"></i> مركز المراجعة
-                    <span id="reviewBadge" style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 50%; font-size: 0.7rem; margin-right: auto; display: none;">0</span>
+                <a href="{% url 'parents_home' %}" class="nav-link {% if 'parents' in request.path %}active{% endif %}">
+                    <i class="fas fa-user-friends"></i> أولياء التلاميذ
                 </a>
             </li>
-            {% endif %}
+            <li class="nav-item">
+                <a href="{% url 'guidance_home' %}" class="nav-link {% if 'guidance' in request.path %}active{% endif %}">
+                    <i class="fas fa-compass"></i> الإرشاد والتوجيه
+                </a>
+            </li>
+            <li class="nav-item" style="margin-top: auto;">
+                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
+                    <i class="fas fa-cog"></i> الإعدادات
+                    {% if request.user.profile.role == 'director' or request.user.is_superuser %}
+                    <span id="reviewBadge" style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 50%; font-size: 0.7rem; margin-right: auto; display: none;">0</span>
+                    {% endif %}
+                </a>
+            </li>
         </ul>
     </aside>
 
@@ -279,7 +289,6 @@
                 <div class="page-title">{% block header_title %}لوحة القيادة{% endblock %}</div>
             </div>
             <div class="user-info" style="display: flex; gap: 15px; align-items: center;">
-                <!-- Hard Reset Button Removed -->
                 <div id="connectionStatus" style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; padding: 5px 10px; border-radius: 20px; background: #dcfce7; color: #166534;">
                     <i class="fas fa-wifi"></i> متصل
                 </div>
@@ -319,22 +328,13 @@
     <a href="{% url 'canteen_home' %}" class="bottom-nav-item {% if request.resolver_match.url_name == 'canteen_home' %}active{% endif %}">
         <i class="fas fa-utensils"></i> المطعم
     </a>
-    <a href="{% url 'library_home' %}" class="bottom-nav-item {% if 'library' in request.path %}active{% endif %}">
-        <i class="fas fa-book"></i> المكتبة
-    </a>
     <a href="{% url 'settings' %}" class="bottom-nav-item {% if 'settings' in request.path %}active{% endif %}">
         <i class="fas fa-cog"></i> الإعدادات
     </a>
 </nav>
 
-<!-- Login Modal removed as requested -->
 <script src="{% static 'js/auth_manager.js' %}"></script>
 <script>
-    // Enhanced Session Check on Load (Logout on Browser Close)
-    // Removed duplicate logic to avoid race conditions with auth_manager.js
-    // auth_manager.js handles the verify on DOMContentLoaded.
-    // We only keep the cleanup here to ensure localStorage is empty, but run it safely.
-
     // Clean localStorage migration (Safe Run)
     try {
         if(localStorage.getItem('session_token')) {
@@ -449,11 +449,8 @@
     // PWA Install Prompt
     let deferredPrompt;
     window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent Chrome 67 and earlier from automatically showing the prompt
         e.preventDefault();
-        // Stash the event so it can be triggered later.
         deferredPrompt = e;
-        // Show our custom install button
         showInstallPromotion();
     });
 
@@ -484,7 +481,7 @@
         }
     }
 
-    // Update Review Badge
+    // Update Sync Updates Badge
     {% if request.user.profile.role == 'director' or request.user.is_superuser %}
     fetch('/canteen/api/pending_updates/count/')
         .then(r => r.json())

@@ -2,12 +2,13 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.management import call_command
-from .models import Student, CanteenAttendance, SchoolSettings, PendingUpdate
+from .models import Student, CanteenAttendance, SchoolSettings, PendingUpdate, Employee, SystemMessage, Survey
 from datetime import date
 from io import StringIO
 import os
 import tempfile
 from django.conf import settings
+import openpyxl
 
 def pending_updates_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
@@ -206,3 +207,94 @@ def print_student_cards(request):
         'academic_year': academic_year
     }
     return render(request, 'students/print_cards.html', context)
+
+# --- New Modules ---
+
+def hr_home(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    # Permission check can be added if we have 'access_hr'
+
+    if request.method == 'POST':
+        # Import Logic
+        if request.FILES.get('file'):
+            file = request.FILES['file']
+            try:
+                wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                ws = wb.active
+                count = 0
+                for row in ws.iter_rows(min_row=2, values_only=True): # Skip header
+                    if row and row[0]: # Assume Name is col 0
+                        Employee.objects.create(
+                            full_name=row[0],
+                            role=row[1] if len(row)>1 else "Unknown",
+                            phone=str(row[2]) if len(row)>2 and row[2] else "",
+                            notes=str(row[3]) if len(row)>3 and row[3] else ""
+                        )
+                        count += 1
+                messages.success(request, f"تم استيراد {count} موظف.")
+            except Exception as e:
+                messages.error(request, f"Error: {e}")
+            return redirect('hr_home')
+
+        # Add Logic
+        elif request.POST.get('action') == 'add':
+            Employee.objects.create(
+                full_name=request.POST.get('full_name'),
+                role=request.POST.get('role'),
+                phone=request.POST.get('phone'),
+                notes=request.POST.get('notes')
+            )
+            messages.success(request, "تمت الإضافة")
+            return redirect('hr_home')
+
+    employees = Employee.objects.all().order_by('full_name')
+    context = {
+        'employees': employees,
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/hr.html', context)
+
+def hr_delete(request, pk):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    get_object_or_404(Employee, pk=pk).delete()
+    messages.success(request, "تم الحذف")
+    return redirect('hr_home')
+
+def parents_home(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    # Just list students with parent info
+    # Optimize: only fetch needed fields
+    students = Student.objects.only('id', 'first_name', 'last_name', 'guardian_name', 'guardian_phone').all()
+
+    context = {
+        'students': students,
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/parents.html', context)
+
+def guidance_home(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    if request.method == 'POST':
+        try:
+            Survey.objects.create(
+                title=request.POST.get('title'),
+                description=request.POST.get('description'),
+                target_audience=request.POST.get('target_audience'),
+                link=request.POST.get('link')
+            )
+            messages.success(request, "تم إنشاء الاستبيان")
+        except Exception as e:
+            messages.error(request, "خطأ في الإنشاء")
+        return redirect('guidance_home')
+
+    surveys = Survey.objects.all().order_by('-created_at')
+    context = {
+        'surveys': surveys,
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+    }
+    return render(request, 'students/guidance.html', context)
