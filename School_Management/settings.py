@@ -32,7 +32,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # Default to False in production if not explicitly set to True
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1', 'cem-bouchnafa-omar.onrender.com', '*']
+ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1', 'cem-bouchnafa-omar.onrender.com', '.hf.space', '*']
 
 # Session Security
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True # Logout on browser close
