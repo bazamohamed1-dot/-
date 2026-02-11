@@ -326,11 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoles(); // Load roles
     check2FA();
     loadPendingUpdates();
-
-    // Copy permissions structure to Role Modal
-    const permsHTML = document.querySelector('#userModal .max-height-200').innerHTML; // We need to target the container inside userModal
-    // Let's rely on a cleaner selector. The user modal has specific structure.
-    // We will clone content on openRoleModal.
 });
 
 async function loadSettings() {
@@ -600,7 +595,11 @@ async function loadRoles() {
 
     try {
         const res = await fetch('/canteen/api/roles/');
-        customRoles = await res.json();
+        if (!res.ok) return; // Handle error or non-200
+        const data = await res.json();
+
+        // Ensure data is an array
+        customRoles = Array.isArray(data) ? data : (data.results || []);
 
         const tbody = document.getElementById('rolesTableBody');
         tbody.innerHTML = '';
@@ -1052,7 +1051,11 @@ async function loadPendingUpdates() {
     try {
         const res = await fetch('/canteen/api/pending_updates/');
         if (!res.ok) return;
-        const updates = await res.json();
+        const data = await res.json();
+
+        // Ensure data is array
+        const updates = Array.isArray(data) ? data : (data.results || []);
+
         const container = document.getElementById('pendingUpdatesList');
 
         if (updates.length === 0) {

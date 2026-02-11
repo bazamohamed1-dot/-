@@ -516,7 +516,8 @@ async function deleteStudent() {
 
     async function populateFilters() {
         try {
-            const response = await fetch('/api/students/filters/');
+            // Use absolute path relative to root
+            const response = await fetch('/canteen/api/students/filters/');
             if (!response.ok) return;
             const data = await response.json();
 
