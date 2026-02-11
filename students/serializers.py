@@ -1,34 +1,76 @@
 from rest_framework import serializers
 from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, PendingUpdate, SystemMessage, UserRole
-import cloudinary
-import cloudinary.uploader
 from django.conf import settings
 import uuid
+import base64
+import os
 
-def upload_image_to_cloudinary(image_data, student_id):
-    if not image_data or len(str(image_data)) < 500: # Assuming URL < 500 chars, Base64 >> 500
-        return image_data
+def save_base64_image(image_data, student_id):
+    """
+    Saves a base64 encoded image to the local media directory.
+    Returns the relative path to be stored in the DB.
+    """
+    if not image_data or not str(image_data).startswith('data:image'):
+        return image_data # Return as is if it's already a path or invalid
 
     try:
-        # Configure Cloudinary if needed
-        if not cloudinary.config().cloud_name:
-             cloudinary.config(
-                cloud_name=settings.CLOUDINARY_STORAGE['CLOUD_NAME'],
-                api_key=settings.CLOUDINARY_STORAGE['API_KEY'],
-                api_secret=settings.CLOUDINARY_STORAGE['API_SECRET']
-            )
+        # Format: "data:image/jpeg;base64,..."
+        header, encoded = str(image_data).split(',', 1)
+        extension = header.split('/')[1].split(';')[0] # e.g., jpeg
 
-        public_id = f"student_{student_id}_{uuid.uuid4().hex[:8]}"
-        response = cloudinary.uploader.upload(
-            image_data,
-            folder="students_photos",
-            public_id=public_id,
-            resource_type="image"
-        )
-        return response.get('secure_url', image_data)
+        filename = f"student_{student_id}_{uuid.uuid4().hex[:8]}.{extension}"
+        relative_path = os.path.join('students_photos', filename)
+        full_path = os.path.join(settings.MEDIA_ROOT, 'students_photos', filename)
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+        with open(full_path, "wb") as fh:
+            fh.write(base64.b64decode(encoded))
+
+        return relative_path
     except Exception as e:
-        print(f"Cloudinary Upload Error: {e}")
-        return image_data # Fallback
+        print(f"Image Save Error: {e}")
+        return None
+
+class StudentSerializer(serializers.ModelSerializer):
+    # Use method field to generate full URL for frontend
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Student
+        fields = '__all__'
+
+    def get_photo_url(self, obj):
+        if obj.photo_path:
+            return f"{settings.MEDIA_URL}{obj.photo_path}"
+        return None
+
+    def create(self, validated_data):
+        if 'photo_path' in validated_data:
+            student_id = validated_data.get('student_id_number', 'unknown')
+            # If it's base64, save it locally
+            validated_data['photo_path'] = save_base64_image(validated_data['photo_path'], student_id)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'photo_path' in validated_data:
+            new_photo = validated_data['photo_path']
+            # If changed and is base64
+            if new_photo != instance.photo_path and str(new_photo).startswith('data:image'):
+                saved_path = save_base64_image(new_photo, instance.student_id_number)
+                if saved_path:
+                    validated_data['photo_path'] = saved_path
+        return super().update(instance, validated_data)
+
+class StudentListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for listing students.
+    """
+    class Meta:
+        model = Student
+        # Exclude heavy fields if necessary, but keep basic info
+        fields = ['id', 'student_id_number', 'first_name', 'last_name', 'class_name', 'academic_year', 'gender', 'date_of_birth']
 
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -51,63 +93,14 @@ class ArchiveDocumentSerializer(serializers.ModelSerializer):
         model = ArchiveDocument
         fields = '__all__'
 
-class StudentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Student
-        fields = '__all__'
-
-    def create(self, validated_data):
-        if 'photo_path' in validated_data:
-            student_id = validated_data.get('student_id_number', 'unknown')
-            validated_data['photo_path'] = upload_image_to_cloudinary(validated_data['photo_path'], student_id)
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        if 'photo_path' in validated_data:
-            new_photo = validated_data['photo_path']
-            # Only upload if changed and is long (Base64)
-            if new_photo != instance.photo_path and len(str(new_photo)) > 500:
-                validated_data['photo_path'] = upload_image_to_cloudinary(new_photo, instance.student_id_number)
-        return super().update(instance, validated_data)
-
-    def to_representation(self, instance):
-        """
-        Dynamically optimize Cloudinary URLs for listing to save bandwidth and memory.
-        """
-        ret = super().to_representation(instance)
-        photo_path = ret.get('photo_path')
-
-        # Check if it's a valid Cloudinary URL
-        if photo_path and 'res.cloudinary.com' in photo_path and '/upload/' in photo_path:
-            try:
-                # Inject transformation: w_400,h_400,c_limit,q_auto,f_auto
-                # Example: .../upload/v1234/student.jpg -> .../upload/w_400,c_limit,q_auto,f_auto/v1234/student.jpg
-                parts = photo_path.split('/upload/')
-                if len(parts) == 2:
-                    ret['photo_path'] = f"{parts[0]}/upload/w_400,c_limit,q_auto,f_auto/{parts[1]}"
-            except Exception:
-                pass # Return original if splitting fails
-
-        return ret
-
-class StudentListSerializer(serializers.ModelSerializer):
-    """
-    Lightweight serializer for listing students (No heavy photo data).
-    """
-    class Meta:
-        model = Student
-        exclude = ['photo_path']
-
 class CanteenAttendanceSerializer(serializers.ModelSerializer):
     student = StudentSerializer(read_only=True)
-    
     class Meta:
         model = CanteenAttendance
         fields = '__all__'
 
 class LibraryLoanSerializer(serializers.ModelSerializer):
     student_details = StudentSerializer(source='student', read_only=True)
-
     class Meta:
         model = LibraryLoan
         fields = '__all__'
