@@ -64,4 +64,10 @@ urlpatterns = [
     # Library UI
     path('library/', ui_views.library_home, name='library_home'),
     path('archive/', ui_views.archive_view, name='archive_home'),
+
+    # New Interfaces
+    path('hr/', ui_views.hr_home, name='hr_home'),
+    path('hr/<int:pk>/delete/', ui_views.hr_delete, name='hr_delete'),
+    path('parents/', ui_views.parents_home, name='parents_home'),
+    path('guidance/', ui_views.guidance_home, name='guidance_home'),
 ]

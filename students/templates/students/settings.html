@@ -134,6 +134,21 @@
     </table>
 </div>
 
+<!-- Sync Updates Section -->
+<div class="card" id="syncUpdatesSection" style="display:none; margin-bottom: 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+        <h3><i class="fas fa-sync"></i> مزامنة التحديثات</h3>
+        <div style="display:flex; gap:10px;">
+             <button class="btn btn-success" onclick="approveAllUpdates()"><i class="fas fa-check-double"></i> قبول الكل</button>
+             <button class="btn btn-danger" onclick="rejectAllUpdates()"><i class="fas fa-times"></i> رفض الكل</button>
+        </div>
+    </div>
+    <div id="pendingUpdatesList" style="max-height: 400px; overflow-y: auto;">
+        <!-- Populated via JS -->
+        <p style="text-align:center; color:#94a3b8;">لا توجد تحديثات معلقة.</p>
+    </div>
+</div>
+
 <!-- User Management Section -->
 <div class="card" id="userManagementSection" style="display:none; margin-bottom: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
@@ -310,6 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadUsers();
     loadRoles(); // Load roles
     check2FA();
+    loadPendingUpdates();
 
     // Copy permissions structure to Role Modal
     const permsHTML = document.querySelector('#userModal .max-height-200').innerHTML; // We need to target the container inside userModal
@@ -1025,6 +1041,119 @@ async function disable2FA() {
             headers: {'X-CSRFToken': getCookie('csrftoken')}
         });
         if(res.ok) alert("تم التعطيل");
+    } catch(e) { alert("Error"); }
+}
+
+// Sync Updates Logic
+async function loadPendingUpdates() {
+    if (sessionStorage.getItem('user_role') !== 'director') return;
+    document.getElementById('syncUpdatesSection').style.display = 'block';
+
+    try {
+        const res = await fetch('/canteen/api/pending_updates/');
+        if (!res.ok) return;
+        const updates = await res.json();
+        const container = document.getElementById('pendingUpdatesList');
+
+        if (updates.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#94a3b8;">لا توجد تحديثات معلقة.</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        updates.forEach(u => {
+            let details = '';
+            if (u.model_name === 'Student') {
+                const d = u.data; // or u.data.data depending on structure
+                // API likely returns stored JSON.
+                // Serializer: data field.
+                const studentName = (d.last_name || '') + ' ' + (d.first_name || '');
+                details = `تلميذ: ${studentName} (${u.action})`;
+            } else if (u.model_name === 'CanteenAttendance') {
+                details = `تسجيل حضور مطعم (${u.action})`;
+            } else {
+                details = `${u.model_name} - ${u.action}`;
+            }
+
+            const item = document.createElement('div');
+            item.style.borderBottom = '1px solid #f1f5f9';
+            item.style.padding = '10px';
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.alignItems = 'center';
+
+            item.innerHTML = `
+                <div>
+                    <div style="font-weight:bold;">${details}</div>
+                    <div style="font-size:0.8rem; color:#64748b;">${new Date(u.timestamp).toLocaleString()} - المستخدم: ${u.user || 'Unknown'}</div>
+                </div>
+                <div>
+                    <button class="btn btn-success" onclick="approveUpdate(${u.id})" style="padding:5px 10px;"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-danger" onclick="rejectUpdate(${u.id})" style="padding:5px 10px;"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    } catch(e) { console.error(e); }
+}
+
+async function approveUpdate(id) {
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/${id}/approve/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            loadPendingUpdates();
+            // Update badge if exists
+            const badge = document.getElementById('reviewBadge');
+            if(badge) {
+                let count = parseInt(badge.innerText) || 0;
+                if(count > 0) badge.innerText = count - 1;
+                if(count - 1 <= 0) badge.style.display = 'none';
+            }
+        }
+    } catch(e) { alert("Error"); }
+}
+
+async function rejectUpdate(id) {
+    if(!confirm("رفض هذا التحديث؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/${id}/`, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            loadPendingUpdates();
+        }
+    } catch(e) { alert("Error"); }
+}
+
+async function approveAllUpdates() {
+    if(!confirm("الموافقة على جميع التحديثات المعلقة؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/approve_all/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            alert("تمت الموافقة على الجميع");
+            loadPendingUpdates();
+        }
+    } catch(e) { alert("Error"); }
+}
+
+async function rejectAllUpdates() {
+    if(!confirm("رفض جميع التحديثات المعلقة؟ لا يمكن التراجع عن هذا.")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/reject_all/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')}
+        });
+        if(res.ok) {
+            alert("تم الرفض");
+            loadPendingUpdates();
+        }
     } catch(e) { alert("Error"); }
 }
 </script>
