@@ -527,10 +527,13 @@ async function processRows(rows, updateExisting) {
         return;
     }
 
-    // Send in batches
-    const BATCH_SIZE = 100;
+    // Send in batches (Optimized for reliability)
+    const BATCH_SIZE = 50; // Reduced from 100 to prevent memory timeouts
     const total = students.length;
     let successCount = 0;
+
+    // Helper sleep function to prevent UI freeze and server overload
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     for (let i = 0; i < total; i += BATCH_SIZE) {
         const batch = students.slice(i, i + BATCH_SIZE);
@@ -561,6 +564,9 @@ async function processRows(rows, updateExisting) {
             console.error("Network error on batch", i, e);
             // Continue to next batch
         }
+
+        // Small delay to let server breathe
+        await sleep(100);
     }
 
     document.getElementById('progressText').textContent = "100% - اكتمل!";
