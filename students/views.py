@@ -761,15 +761,13 @@ def export_canteen_sheet(request):
 def student_filters(request):
     """
     Returns distinct Academic Years and Classes for dynamic dropdowns.
+    Uses robust query to ensure all variations are captured.
     """
-    levels = Student.objects.values_list('academic_year', flat=True).distinct().order_by('academic_year')
-    classes = Student.objects.values_list('class_name', flat=True).distinct().order_by('class_name')
-
-    # Clean up empty strings or None
-    levels = [l for l in levels if l]
-    classes = [c for c in classes if c]
+    # Exclude empty or null values
+    levels = Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct().order_by('academic_year')
+    classes = Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct().order_by('class_name')
 
     return Response({
-        'levels': levels,
-        'classes': classes
+        'levels': list(levels),
+        'classes': list(classes)
     })
