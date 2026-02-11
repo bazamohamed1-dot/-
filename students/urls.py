@@ -29,6 +29,7 @@ urlpatterns = [
     # Sync API
     path('api/sync/', sync_views.SyncViewSet.as_view({'post': 'create'}), name='sync_data'),
 
+    path('api/students/filters/', views.student_filters, name='student_filters'),
     path('api/', include(router.urls)),
 
     # UI Views

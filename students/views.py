@@ -755,3 +755,21 @@ def export_canteen_sheet(request):
     response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_Full_{date_str}.xlsx"'
     return response
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_filters(request):
+    """
+    Returns distinct Academic Years and Classes for dynamic dropdowns.
+    """
+    levels = Student.objects.values_list('academic_year', flat=True).distinct().order_by('academic_year')
+    classes = Student.objects.values_list('class_name', flat=True).distinct().order_by('class_name')
+
+    # Clean up empty strings or None
+    levels = [l for l in levels if l]
+    classes = [c for c in classes if c]
+
+    return Response({
+        'levels': levels,
+        'classes': classes
+    })
