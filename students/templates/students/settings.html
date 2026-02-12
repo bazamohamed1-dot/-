@@ -660,21 +660,35 @@ function onRoleChange() {
 
 // User Management Logic
 async function loadUsers() {
-    if (sessionStorage.getItem('user_role') !== 'director') return;
-    document.getElementById('userManagementSection').style.display = 'block';
-    document.getElementById('systemMsgSection').style.display = 'block';
+    // Ensure this runs for Director/Superuser
+    // If role check fails but user IS director, the API will still work, but section is hidden.
+    // Let's rely on the Django template check `{% if request.user.profile.role == 'director' ... %}`
+    // to render the HTML, so we just show it here.
+    const section = document.getElementById('userManagementSection');
+    if(section) section.style.display = 'block';
+    const msgSection = document.getElementById('systemMsgSection');
+    if(msgSection) msgSection.style.display = 'block';
+
+    const tbody = document.getElementById('usersTableBody');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">جاري التحميل...</td></tr>';
 
     try {
         // Fetch all users
         const response = await fetch('/canteen/api/users/');
-        if (!response.ok) return;
+        if (!response.ok) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:red;">فشل تحميل المستخدمين</td></tr>';
+            return;
+        }
 
         let users = await response.json();
         // If paginated, get results
         if (users.results && Array.isArray(users.results)) users = users.results;
 
-        const tbody = document.getElementById('usersTableBody');
         tbody.innerHTML = '';
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">لا يوجد مستخدمين مسجلين</td></tr>';
+            return;
+        }
 
         users.forEach(u => {
             const tr = document.createElement('tr');
