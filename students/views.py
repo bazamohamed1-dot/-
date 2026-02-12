@@ -153,6 +153,41 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['get'])
+    def export_all(self, request):
+        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('import_data'):
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename=Backup_Students.xlsx'
+
+        wb = openpyxl.Workbook(write_only=True)
+        ws = wb.create_sheet("Students")
+
+        # Headers
+        headers = [
+            "رقم التعريف الوطني", "اللقب", "الاسم", "تاريخ الازدياد", "مكان الميلاد",
+            "الجنس", "المستوى", "القسم", "نظام التمدرس", "رقم القيد",
+            "تاريخ التسجيل", "تاريخ الخروج", "اسم الولي", "اسم الأم",
+            "هاتف الولي", "العنوان", "مسار الصورة"
+        ]
+        ws.append(headers)
+
+        # Stream Data
+        students = Student.objects.all().order_by('academic_year', 'class_name', 'last_name')
+        for s in students.iterator():
+            ws.append([
+                s.student_id_number, s.last_name, s.first_name,
+                s.date_of_birth, s.place_of_birth, s.gender,
+                s.academic_year, s.class_name, s.attendance_system,
+                s.enrollment_number, s.enrollment_date, s.exit_date,
+                s.guardian_name, s.mother_name, s.guardian_phone,
+                s.address, s.photo_path
+            ])
+
+        wb.save(response)
+        return response
+
 # --- Lightweight JSON Import API ---
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
