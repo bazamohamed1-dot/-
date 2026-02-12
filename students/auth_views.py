@@ -390,6 +390,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             if u.id in seen: continue
             seen.add(u.id)
             try:
+                if not hasattr(u, 'profile'): continue
                 prof = u.profile
                 device_status = 'غير مفعل'
                 if prof.device_id:
@@ -400,18 +401,32 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                 last_active = activity_map.get(u.id)
                 is_online = False
                 if last_active:
-                    diff = (now - last_active).total_seconds()
-                    if diff < 300: # 5 minutes
-                        is_online = True
+                    try:
+                        # Ensure timezone awareness match
+                        current_now = now
+                        if timezone.is_naive(last_active): last_active = timezone.make_aware(last_active)
+                        if timezone.is_naive(current_now): current_now = timezone.make_aware(current_now)
+
+                        diff = (current_now - last_active).total_seconds()
+                        if diff < 300: # 5 minutes
+                            is_online = True
+                    except Exception as e:
+                        print(f"Timezone Error for user {u.username}: {e}")
 
                 # Determine if user is Director/Superuser to disable actions in frontend
                 is_admin = u.is_superuser or prof.role == 'director'
+
+                # Handle Role Display (fallback if choices removed)
+                role_display = prof.role
+                if hasattr(prof, 'get_role_display'):
+                     try: role_display = prof.get_role_display()
+                     except: pass
 
                 data.append({
                     'id': u.id,
                     'username': u.username,
                     'role': prof.role,
-                    'role_display': prof.get_role_display(),
+                    'role_display': role_display,
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
                     'permissions': prof.permissions,
@@ -421,7 +436,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'is_online': is_online,
                     'is_admin': is_admin  # Flag for frontend to disable delete/edit
                 })
-            except:
+            except Exception as e:
+                print(f"Error processing user {u.username}: {e}")
                 pass
         return Response(data)
 
