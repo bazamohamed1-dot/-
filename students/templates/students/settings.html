@@ -42,7 +42,10 @@
             <label style="display:block; margin-bottom:10px; font-weight:bold;">حدود الإعارة حسب المستوى (اختياري)</label>
             <div id="levelLimitsContainer" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <input type="text" id="newLimitLevel" placeholder="المستوى (مثال: 1AM)" class="form-input" style="flex:1;">
+                    <select id="newLimitLevel" class="form-input" style="flex:1;">
+                        <option value="">اختر المستوى...</option>
+                        <!-- Populated via JS -->
+                    </select>
                     <input type="number" id="newLimitValue" placeholder="الحد" class="form-input western-nums" style="width:80px;" min="1">
                     <button type="button" class="btn btn-success" onclick="addLevelLimit()"><i class="fas fa-plus"></i></button>
                 </div>
@@ -344,7 +347,24 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoles(); // Load roles
     check2FA();
     loadPendingUpdates();
+    loadLevelsForDropdown(); // Load Levels
 });
+
+async function loadLevelsForDropdown() {
+    try {
+        const response = await fetch('/canteen/api/students/filters/');
+        const data = await response.json();
+        const select = document.getElementById('newLimitLevel');
+        if (data.levels && Array.isArray(data.levels)) {
+            data.levels.forEach(lvl => {
+                const opt = document.createElement('option');
+                opt.value = lvl;
+                opt.textContent = lvl;
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) { console.error("Failed to load levels", e); }
+}
 
 let levelLimits = {};
 
