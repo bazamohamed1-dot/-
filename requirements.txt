@@ -26,3 +26,4 @@ xlrd==2.0.1
 qrcode==7.4.2
 pyotp==2.9.0
 waitress==3.0.0
+django-import-export>=3.0
