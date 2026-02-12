@@ -173,7 +173,7 @@
     <!-- Search and Filter -->
     <!-- Filters enabled always as requested -->
     <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onkeyup="filterTable()" style="margin-bottom: 0; flex: 2;">
+        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onchange="filterTable()" style="margin-bottom: 0; flex: 2;">
 
         <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="onLevelChange()">
             <option value="">جميع المستويات</option>
@@ -184,10 +184,6 @@
             <option value="">جميع الأقسام</option>
             <!-- Populated via JS -->
         </select>
-
-        <button onclick="populateFilters()" class="btn" style="padding: 10px; background: #e2e8f0; color: #64748b;" title="تحديث القوائم">
-            <i class="fas fa-sync-alt"></i>
-        </button>
     </div>
 
     <!-- Table -->
@@ -224,7 +220,8 @@ let isEditMode = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    fetchStudents();
+    populateFilters(); // Load filters first
+    fetchStudents(); // Load students
     lockFields(true);
 
     // Click outside to cancel edit
@@ -249,9 +246,18 @@ document.addEventListener('DOMContentLoaded', () => {
 async function fetchStudents() {
     try {
         let data = [];
-        let usedOffline = false;
 
-        const response = await fetch('/api/students/');
+        // Build Query String from Filters
+        const params = new URLSearchParams();
+        const level = document.getElementById('filterLevel').value;
+        const className = document.getElementById('filterClass').value;
+        const search = document.getElementById('searchInput').value;
+
+        if (level) params.append('academic_year', level);
+        if (className) params.append('class_name', className);
+        if (search) params.append('search', search);
+
+        const response = await fetch(`/api/students/?${params.toString()}`);
         if (!response.ok) throw new Error('Network response was not ok');
             const result = await response.json();
 
@@ -285,12 +291,14 @@ async function fetchStudents() {
             photo: s.photo_path
         }));
 
-        populateFilters();
+        // Do NOT re-populate filters here to avoid loop or clearing valid options
+        // populateFilters() is called once on load.
+
         filteredList = studentsList;
         renderTable();
     } catch (error) {
         console.error('Error fetching students:', error);
-        alert('حدث خطأ أثناء تحميل البيانات');
+        // alert('حدث خطأ أثناء تحميل البيانات');
     }
 }
 
@@ -564,10 +572,7 @@ function onLevelChange() {
     const selectedLevel = levelSelect.value;
     const selectedClass = classSelect.value;
 
-    // Filter available classes based on selected level
-    // Logic: A class "1AM 2" belongs to level "1AM".
-    // We check if the class name STARTS with or CONTAINS the level name.
-
+    // Filter available classes based on selected level (Client-side logic for dropdown UX)
     let availableClasses = distinctClasses;
     if (selectedLevel) {
         availableClasses = distinctClasses.filter(c => c.includes(selectedLevel));
@@ -578,35 +583,25 @@ function onLevelChange() {
     availableClasses.forEach(c => {
         const option = document.createElement('option');
         option.value = c;
-        option.textContent = c; // Display full name
+        option.textContent = c;
         classSelect.appendChild(option);
     });
 
-    // Restore selection if valid, else reset
+    // Reset class selection when level changes, unless valid
     if (selectedClass && availableClasses.includes(selectedClass)) {
         classSelect.value = selectedClass;
     } else {
         classSelect.value = "";
     }
 
-    filterTable();
+    // Trigger Server Fetch
+    fetchStudents();
 }
 
 function filterTable() {
-    const query = document.getElementById('searchInput').value.toLowerCase();
-    const levelFilter = document.getElementById('filterLevel').value;
-    const classFilter = document.getElementById('filterClass').value;
-
-    filteredList = studentsList.filter(s => {
-        const matchesSearch = s.ln.toLowerCase().includes(query) ||
-                              s.fn.toLowerCase().includes(query) ||
-                              s.id.includes(query);
-        const matchesLevel = levelFilter ? s.level === levelFilter : true;
-        const matchesClass = classFilter ? s.class === classFilter : true;
-
-        return matchesSearch && matchesLevel && matchesClass;
-    });
-    renderTable();
+    // This function now just triggers a server fetch
+    // Debouncing could be added for search input, but for dropdowns direct call is fine.
+    fetchStudents();
 }
 
 function renderTable() {
