@@ -63,6 +63,7 @@ class SchoolSettings(models.Model):
     director_name = models.CharField(max_length=200, verbose_name="اسم المدير")
     logo = models.ImageField(upload_to='school_logo/', null=True, blank=True, verbose_name="شعار المؤسسة")
     loan_limit = models.IntegerField(default=2, verbose_name="الحد الأقصى للإعارات")
+    loan_limits_by_level = models.JSONField(default=dict, blank=True, verbose_name="حدود الإعارة حسب المستوى")
     admin_email = models.EmailField(null=True, blank=True, verbose_name="البريد الإلكتروني لاستعادة كلمة المرور")
 
     # Canteen Settings

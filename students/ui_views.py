@@ -65,12 +65,19 @@ def dashboard(request):
         logout(request)
         return redirect('canteen_landing')
 
+    # Detailed Stats for Dashboard Table
+    from django.db.models import Count
+
+    # Group by Level + Gender + Attendance
+    detailed_stats = Student.objects.values('academic_year', 'gender', 'attendance_system').annotate(count=Count('id')).order_by('academic_year')
+
     context = {
         'total_students': Student.objects.count(),
         'half_board_count': Student.objects.filter(attendance_system='نصف داخلي').count(),
         'db_status': 'متصل',
         'present_today': CanteenAttendance.objects.filter(date=date.today()).count(),
         'absent_today': Student.objects.filter(attendance_system='نصف داخلي').count() - CanteenAttendance.objects.filter(date=date.today()).count(),
+        'detailed_stats': detailed_stats,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
@@ -283,7 +290,8 @@ def parents_home(request):
     # Optimize: only fetch needed fields
     students = Student.objects.only(
         'id', 'first_name', 'last_name', 'date_of_birth',
-        'guardian_name', 'mother_name', 'guardian_phone', 'address'
+        'guardian_name', 'mother_name', 'guardian_phone', 'address',
+        'class_name', 'student_id_number', 'gender'
     ).all().order_by('last_name')
 
     context = {
