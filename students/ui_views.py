@@ -133,7 +133,11 @@ def import_eleve_view(request):
                     new_count = result.totals.get('new', 0)
                     update_count = result.totals.get('update', 0)
                     skip_count = result.totals.get('skip', 0)
-                    messages.success(request, f"تم الاستيراد بنجاح: {new_count} جديد، {update_count} تحديث، {skip_count} تم تخطيه.")
+
+                    total_processed = new_count + update_count + skip_count
+                    msg_type = messages.success if total_processed > 0 else messages.warning
+
+                    msg_type(request, f"تمت المعالجة: {total_processed} سجل. (جديد: {new_count}، تحديث: {update_count}، تم تخطي: {skip_count}). تحقق من سجلات التتبع إذا كان العدد أقل من المتوقع.")
 
         except Exception as e:
             messages.error(request, f"خطأ في الملف أو المعالجة: {str(e)}")
