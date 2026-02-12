@@ -68,8 +68,27 @@ def dashboard(request):
     # Detailed Stats for Dashboard Table
     from django.db.models import Count
 
-    # Group by Level and Attendance System (Gender removed as per latest request)
-    detailed_stats = Student.objects.values('academic_year', 'attendance_system').annotate(count=Count('id')).order_by('academic_year', 'attendance_system')
+    # Group by Level and Attendance System
+    raw_stats = Student.objects.values('academic_year', 'attendance_system').annotate(count=Count('id')).order_by('academic_year')
+
+    # Pivot Data: { '1AM': {'half': 10, 'ext': 5, 'total': 15}, ... }
+    stats_map = {}
+    for item in raw_stats:
+        lvl = item['academic_year'] or 'غير محدد'
+        sys = item['attendance_system']
+        count = item['count']
+
+        if lvl not in stats_map:
+            stats_map[lvl] = {'level': lvl, 'half': 0, 'ext': 0, 'total': 0}
+
+        stats_map[lvl]['total'] += count
+        if sys == 'نصف داخلي':
+            stats_map[lvl]['half'] += count
+        else: # خارجي or others
+            stats_map[lvl]['ext'] += count
+
+    # Convert to sorted list
+    detailed_stats = sorted(stats_map.values(), key=lambda x: x['level'])
 
     context = {
         'total_students': Student.objects.count(),
