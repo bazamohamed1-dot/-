@@ -9,6 +9,9 @@ import os
 import tempfile
 from django.conf import settings
 import openpyxl
+from tablib import Dataset
+from .resources import StudentResource
+from .import_utils import parse_student_file
 
 def pending_updates_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
@@ -106,26 +109,34 @@ def import_eleve_view(request):
                     tmp.write(chunk)
                 temp_path = tmp.name
 
-            out = StringIO()
+            # 1. Parse File using Robust Logic
+            raw_data = parse_student_file(temp_path)
 
-            try:
-                # Execute the robust command
-                call_command('import_eleve', file=temp_path, update_existing=update_existing, stdout=out)
+            if not raw_data:
+                messages.error(request, "لم يتم العثور على بيانات صالحة في الملف.")
+            else:
+                # 2. Create Dataset for django-import-export
+                # Get headers from first row keys
+                headers = list(raw_data[0].keys())
+                dataset = Dataset(headers=headers)
 
-                # Check output for keywords
-                result_text = out.getvalue()
-                if "Successfully imported" in result_text or "Imported:" in result_text:
-                    messages.success(request, f"تمت العملية: {result_text}")
+                for row in raw_data:
+                    dataset.append([row[h] for h in headers])
+
+                # 3. Use Resource to Import
+                resource = StudentResource()
+                result = resource.import_data(dataset, dry_run=False, raise_errors=True)
+
+                if result.has_errors():
+                    messages.error(request, "حدثت أخطاء أثناء الاستيراد.")
                 else:
-                    # If it finished but with warnings
-                    if not result_text.strip(): result_text = "تمت العملية (لا توجد مخرجات)."
-                    messages.warning(request, f"ملاحظات العملية: {result_text}")
-
-            except Exception as e:
-                messages.error(request, f"خطأ أثناء التنفيذ: {str(e)}")
+                    new_count = result.totals.get('new', 0)
+                    update_count = result.totals.get('update', 0)
+                    skip_count = result.totals.get('skip', 0)
+                    messages.success(request, f"تم الاستيراد بنجاح: {new_count} جديد، {update_count} تحديث، {skip_count} تم تخطيه.")
 
         except Exception as e:
-            messages.error(request, f"خطأ في الملف: {str(e)}")
+            messages.error(request, f"خطأ في الملف أو المعالجة: {str(e)}")
         finally:
             if temp_path and os.path.exists(temp_path):
                 try: os.remove(temp_path)
