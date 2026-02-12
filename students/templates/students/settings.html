@@ -662,8 +662,7 @@ function onRoleChange() {
 async function loadUsers() {
     // Ensure this runs for Director/Superuser
     // If role check fails but user IS director, the API will still work, but section is hidden.
-    // Let's rely on the Django template check `{% if request.user.profile.role == 'director' ... %}`
-    // to render the HTML, so we just show it here.
+    // Let's rely on the Django template check to render the HTML, so we just show it here.
     const section = document.getElementById('userManagementSection');
     if(section) section.style.display = 'block';
     const msgSection = document.getElementById('systemMsgSection');
