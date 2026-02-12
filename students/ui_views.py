@@ -68,20 +68,8 @@ def dashboard(request):
     # Detailed Stats for Dashboard Table
     from django.db.models import Count
 
-    # Group by Level (Requested: "Teadad... hasb al-mustawa")
-    # We will group by Level, Gender, Attendance to provide full details but render it cleanly or just Level.
-    # The user asked for "Census of the institution by Level-Gender-Attendance status" in the first prompt,
-    # but in the latest feedback said "It showed details by Section, I told you by Level".
-    # The current code groups by `academic_year`.
-    # Maybe the user saw "Section" in the UI?
-    # Let's ensure we are grouping strictly by Level, Gender, Attendance as requested initially, OR just Level if that's the new request.
-    # The user's latest comment: "The census that appeared ... is detailed by Section, and I told you by Level".
-    # My previous code: `values('academic_year', ...)` -> this IS level.
-    # Perhaps the data imported has "Level" set to "1AM 1"?
-    # The import logic splits level/class. `academic_year` should be "1AM".
-    # I will stick to Level/Gender/Attendance grouping but ensure the UI table headers are clear.
-
-    detailed_stats = Student.objects.values('academic_year', 'gender', 'attendance_system').annotate(count=Count('id')).order_by('academic_year')
+    # Group by Level and Attendance System (Gender removed as per latest request)
+    detailed_stats = Student.objects.values('academic_year', 'attendance_system').annotate(count=Count('id')).order_by('academic_year', 'attendance_system')
 
     context = {
         'total_students': Student.objects.count(),

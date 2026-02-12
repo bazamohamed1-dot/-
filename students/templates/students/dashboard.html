@@ -29,32 +29,6 @@
     </div>
 </div>
 
-<div class="card mt-4">
-    <h3><i class="fas fa-table"></i> تعداد المؤسسة حسب المستوى</h3>
-    <table style="width:100%; border-collapse: collapse; margin-top: 15px;">
-        <thead>
-            <tr style="background:#f8fafc; text-align:right;">
-                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">المستوى</th>
-                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">الجنس</th>
-                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">صفة التمدرس</th>
-                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">العدد</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in detailed_stats %}
-            <tr style="border-bottom: 1px solid #f1f5f9;">
-                <td style="padding:10px;">{{ item.academic_year }}</td>
-                <td style="padding:10px;">{{ item.gender }}</td>
-                <td style="padding:10px;">{{ item.attendance_system }}</td>
-                <td style="padding:10px;" class="western-nums">{{ item.count }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="4" style="text-align:center; padding:15px;">لا توجد بيانات</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
 <div class="grid-2 mt-4">
     <div class="card">
         <!-- School Stats (Placeholder as requested) -->
@@ -83,6 +57,42 @@
                 <span style="font-weight: bold; color: var(--danger);">{{ absent_today }}</span>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="card mt-4" style="border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-radius: 12px; overflow: hidden;">
+    <div style="background-color: #f8fafc; padding: 15px 20px; border-bottom: 1px solid #e2e8f0;">
+        <h3 style="color: var(--primary); margin: 0; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-chart-bar"></i> التعداد العام حسب المستوى والتمدرس
+        </h3>
+    </div>
+    <div style="overflow-x: auto;">
+        <table style="width:100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background:#f1f5f9; text-align:right;">
+                    <th style="padding:15px; font-weight:700; color:#475569;">المستوى الدراسي</th>
+                    <th style="padding:15px; font-weight:700; color:#475569;">صفة التمدرس</th>
+                    <th style="padding:15px; font-weight:700; color:#475569;">العدد الإجمالي</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in detailed_stats %}
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;">
+                    <td style="padding:15px; font-weight:600; color:#334155;">{{ item.academic_year }}</td>
+                    <td style="padding:15px;">
+                        {% if item.attendance_system == 'نصف داخلي' %}
+                            <span style="background:#dbeafe; color:#1e40af; padding:4px 10px; border-radius:15px; font-size:0.9rem;">نصف داخلي</span>
+                        {% else %}
+                            <span style="background:#f3f4f6; color:#4b5563; padding:4px 10px; border-radius:15px; font-size:0.9rem;">خارجي</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding:15px; font-weight:bold; color:var(--primary);" class="western-nums">{{ item.count }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" style="text-align:center; padding:20px; color:#94a3b8;">لا توجد بيانات متاحة حالياً</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
