@@ -206,6 +206,19 @@
             </table>
         </form>
     </div>
+
+    <!-- Pagination Controls -->
+    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 15px;">
+        <button id="prevPageBtn" class="btn" onclick="changePage(-1)" disabled style="background: #e2e8f0; color: #64748b;">
+            <i class="fas fa-chevron-right"></i> السابق
+        </button>
+        <span id="pageIndicator" style="padding: 5px 15px; background: #f1f5f9; border-radius: 5px; display:flex; align-items:center;">
+            صفحة <span id="currentPageNum">1</span>
+        </span>
+        <button id="nextPageBtn" class="btn" onclick="changePage(1)" disabled style="background: #e2e8f0; color: #64748b;">
+            التالي <i class="fas fa-chevron-left"></i>
+        </button>
+    </div>
 </div>
 
 {% endblock %}
@@ -217,11 +230,13 @@ let studentsList = [];
 let filteredList = [];
 let selectedIndex = -1;
 let isEditMode = false;
+let currentPage = 1;
+let totalPages = 1;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     populateFilters(); // Load filters first
-    fetchStudents(); // Load students
+    fetchStudents(1); // Load students page 1
     lockFields(true);
 
     // Click outside to cancel edit
@@ -243,12 +258,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-async function fetchStudents() {
+async function fetchStudents(page = 1) {
     try {
+        currentPage = page;
         let data = [];
 
         // Build Query String from Filters
         const params = new URLSearchParams();
+        params.append('page', page);
+
         const level = document.getElementById('filterLevel').value;
         const className = document.getElementById('filterClass').value;
         const search = document.getElementById('searchInput').value;
@@ -264,10 +282,15 @@ async function fetchStudents() {
             // Handle Pagination (DRF returns { count: ..., results: [...] })
             if (result.results && Array.isArray(result.results)) {
                 data = result.results;
+                // Calculate Total Pages assuming page size is 20 (default in settings.py)
+                const pageSize = 20;
+                totalPages = Math.ceil(result.count / pageSize);
             } else if (Array.isArray(result)) {
                 data = result;
+                totalPages = 1;
             } else {
                 data = []; // Fallback
+                totalPages = 1;
             }
 
         studentsList = data.map(s => ({
@@ -291,15 +314,36 @@ async function fetchStudents() {
             photo: s.photo_path
         }));
 
-        // Do NOT re-populate filters here to avoid loop or clearing valid options
-        // populateFilters() is called once on load.
-
         filteredList = studentsList;
         renderTable();
+        updatePaginationUI();
     } catch (error) {
         console.error('Error fetching students:', error);
         // alert('حدث خطأ أثناء تحميل البيانات');
     }
+}
+
+function changePage(delta) {
+    const newPage = currentPage + delta;
+    if (newPage > 0 && newPage <= totalPages) {
+        fetchStudents(newPage);
+    }
+}
+
+function updatePaginationUI() {
+    document.getElementById('currentPageNum').textContent = `${currentPage} / ${totalPages > 0 ? totalPages : 1}`;
+
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+
+    prevBtn.disabled = currentPage <= 1;
+    nextBtn.disabled = currentPage >= totalPages;
+
+    // Style update
+    prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '1';
+    nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1';
+    prevBtn.style.cursor = prevBtn.disabled ? 'not-allowed' : 'pointer';
+    nextBtn.style.cursor = nextBtn.disabled ? 'not-allowed' : 'pointer';
 }
 
 function lockFields(lock) {
@@ -595,13 +639,14 @@ function onLevelChange() {
     }
 
     // Trigger Server Fetch
-    fetchStudents();
+    // Reset to page 1 on filter change
+    fetchStudents(1);
 }
 
 function filterTable() {
     // This function now just triggers a server fetch
-    // Debouncing could be added for search input, but for dropdowns direct call is fine.
-    fetchStudents();
+    // Reset to page 1 on filter change
+    fetchStudents(1);
 }
 
 function renderTable() {
@@ -660,32 +705,8 @@ function getCookie(name) {
 }
 
 function exportBackup() {
-    if (studentsList.length === 0) return alert("لا توجد بيانات للتصدير");
-
-    const backupData = studentsList.map(s => ({
-        "رقم التعريف الوطني": s.id,
-        "اللقب": s.ln,
-        "الاسم": s.fn,
-        "تاريخ الازدياد": s.dob,
-        "مكان الميلاد": s.pob,
-        "الجنس": s.gender,
-        "المستوى": s.level,
-        "القسم": s.class,
-        "نظام التمدرس": s.sys,
-        "رقم القيد": s.enrollNum,
-        "تاريخ التسجيل": s.enrollDate,
-        "تاريخ الخروج": s.exitDate,
-        "اسم الولي": s.guard,
-        "اسم الأم": s.mother,
-        "هاتف الولي": s.phone,
-        "العنوان": s.addr,
-        "مسار الصورة": s.photo // Added photo path
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(backupData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "التلاميذ");
-    XLSX.writeFile(wb, "Backup_Students.xlsx");
+    // Trigger Server-Side Export
+    window.location.href = '/api/students/export_all/';
 }
 
 function triggerImageSelect() { document.getElementById('imageSelector').click(); }
