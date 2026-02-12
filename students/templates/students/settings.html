@@ -527,18 +527,22 @@ async function processRows(rows, updateExisting) {
         return;
     }
 
-    // Send in batches (Ultra-Conservative for Stability)
-    const BATCH_SIZE = 20; // Drastically reduced to ensure 100% completion
+    // Send in batches (Extreme Stability Mode)
+    const BATCH_SIZE = 10; // 10 records per batch to avoid ANY memory/timeout risk
     const total = students.length;
     let successCount = 0;
 
-    // Helper sleep function to prevent UI freeze and server overload
+    // Helper sleep function
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     for (let i = 0; i < total; i += BATCH_SIZE) {
         const batch = students.slice(i, i + BATCH_SIZE);
         const progress = Math.round((i / total) * 100);
         document.getElementById('progressText').textContent = `جاري رفع ${i} من ${total} (${progress}%)`;
+
+        // AbortController for Timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
         try {
             const response = await fetch('/canteen/api/import_json/', {
@@ -550,23 +554,30 @@ async function processRows(rows, updateExisting) {
                 body: JSON.stringify({
                     students: batch,
                     update_existing: updateExisting
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const res = await response.json();
                 successCount += res.created + res.updated;
             } else {
-                console.error("Batch failed", await response.text());
-                // Continue to next batch
+                console.error(`Batch ${i} failed:`, await response.text());
+                // Continue logic
             }
         } catch (e) {
-            console.error("Network error on batch", i, e);
-            // Continue to next batch
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                console.error(`Batch ${i} timed out! Skipping.`);
+            } else {
+                console.error(`Batch ${i} network error:`, e);
+            }
+            // Continue logic
         }
 
-        // Increased delay to let server breathe and commit transactions
-        await sleep(200);
+        // Increased delay (300ms)
+        await sleep(300);
     }
 
     document.getElementById('progressText').textContent = "100% - اكتمل!";
