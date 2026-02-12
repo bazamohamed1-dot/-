@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.db.models import Count, F
+from django.db.models import Count, F, Q
 from django.utils import timezone
 from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, PendingUpdate
 from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
@@ -55,10 +55,26 @@ class StudentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Optimization: Use select_related/defer if needed
-        # Since we use pagination, loading 20 items is fine.
-        # But we ensure ordering to avoid inconsistent pagination warnings.
-        return Student.objects.all().order_by('id')
+        # Allow basic filtering by 'academic_year' (level) and 'class_name' (class)
+        # This supports server-side filtering for the management interface.
+        queryset = Student.objects.all().order_by('id')
+
+        level = self.request.query_params.get('academic_year') or self.request.query_params.get('level')
+        class_name = self.request.query_params.get('class_name') or self.request.query_params.get('class')
+        search = self.request.query_params.get('search') or self.request.query_params.get('q')
+
+        if level:
+            queryset = queryset.filter(academic_year=level)
+        if class_name:
+            queryset = queryset.filter(class_name__icontains=class_name) # Using icontains to be safe with partial matches or "Level Class" format
+        if search:
+            queryset = queryset.filter(
+                Q(last_name__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(student_id_number__icontains=search)
+            )
+
+        return queryset
 
     def get_serializer_class(self):
         # Use lightweight serializer for list view to prevent memory crash
