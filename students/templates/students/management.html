@@ -520,18 +520,13 @@ async function deleteStudent() {
 
     async function populateFilters() {
         try {
-            // Populate based on ACTUAL loaded students list to ensure consistency
-            // Extract unique levels and classes from memory
-            const levelsSet = new Set();
-            const classesSet = new Set();
+            // Fetch distinct filters from API (covers all DB, not just paginated list)
+            const response = await fetch('/canteen/api/students/filters/');
+            if (!response.ok) throw new Error("Failed to fetch filters");
+            const data = await response.json();
 
-            studentsList.forEach(s => {
-                if(s.level) levelsSet.add(s.level);
-                if(s.class) classesSet.add(s.class);
-            });
-
-            distinctLevels = Array.from(levelsSet).sort();
-            distinctClasses = Array.from(classesSet).sort();
+            distinctLevels = data.levels || [];
+            distinctClasses = data.classes || [];
 
             // Populate Levels Dropdown
             const levelSelect = document.getElementById('filterLevel');
