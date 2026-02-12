@@ -29,6 +29,32 @@
     </div>
 </div>
 
+<div class="card mt-4">
+    <h3><i class="fas fa-table"></i> تعداد المؤسسة حسب المستوى</h3>
+    <table style="width:100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+            <tr style="background:#f8fafc; text-align:right;">
+                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">المستوى</th>
+                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">الجنس</th>
+                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">صفة التمدرس</th>
+                <th style="padding:10px; border-bottom:2px solid #e2e8f0;">العدد</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in detailed_stats %}
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding:10px;">{{ item.academic_year }}</td>
+                <td style="padding:10px;">{{ item.gender }}</td>
+                <td style="padding:10px;">{{ item.attendance_system }}</td>
+                <td style="padding:10px;" class="western-nums">{{ item.count }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center; padding:15px;">لا توجد بيانات</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <div class="grid-2 mt-4">
     <div class="card">
         <!-- School Stats (Placeholder as requested) -->

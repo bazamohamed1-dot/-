@@ -125,12 +125,20 @@
         @media (max-width: 1024px) {
             /* Logic: Hide sidebar for everyone by default, but allow Director to toggle it */
 
-            /* For Non-Directors: Completely Hide Sidebar & Toggle */
+            /* For Non-Directors: Completely Hide Sidebar & Toggle & Bottom Nav */
             body:not(.role-director) .sidebar {
                 display: none !important;
             }
             body:not(.role-director) .toggle-sidebar {
                 display: none !important;
+            }
+            /* Hide Bottom Nav for Non-Director on Mobile/Tablet as requested */
+            body:not(.role-director) .bottom-nav {
+                display: none !important;
+            }
+            /* Reset Content Padding for Non-Director since no bottom nav */
+            body:not(.role-director) .content {
+                padding-bottom: 15px !important;
             }
 
             /* For Director: Hide by default, show if active */
@@ -152,6 +160,9 @@
                 border: none;
                 cursor: pointer;
             }
+            body.role-director .bottom-nav {
+                display: flex; /* Show bottom nav on mobile/tablet for Director */
+            }
 
             .main {
                 margin-right: 0 !important;
@@ -161,15 +172,12 @@
             }
             .content {
                 padding: 15px;
-                padding-bottom: 90px; /* Space for bottom nav */
+                padding-bottom: 90px; /* Default space for bottom nav */
             }
             table {
                 display: block;
                 overflow-x: auto;
                 white-space: nowrap;
-            }
-            .bottom-nav {
-                display: flex; /* Show bottom nav on mobile/tablet */
             }
             /* Hide user info on mobile header to save space */
             .user-info span {
