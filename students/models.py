@@ -65,6 +65,8 @@ class SchoolSettings(models.Model):
     loan_limit = models.IntegerField(default=2, verbose_name="الحد الأقصى للإعارات")
     loan_limits_by_level = models.JSONField(default=dict, blank=True, verbose_name="حدود الإعارة حسب المستوى")
     admin_email = models.EmailField(null=True, blank=True, verbose_name="البريد الإلكتروني لاستعادة كلمة المرور")
+    recovery_token = models.CharField(max_length=100, null=True, blank=True, verbose_name="رمز الاستعادة")
+    recovery_token_created_at = models.DateTimeField(null=True, blank=True, verbose_name="توقيت إنشاء رمز الاستعادة")
 
     # Canteen Settings
     canteen_open_time = models.TimeField(default="12:00", verbose_name="وقت فتح المطعم")
@@ -149,6 +151,7 @@ class PendingUpdate(models.Model):
         ordering = ['-timestamp']
 
 class SystemMessage(models.Model):
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name="المستلم") # Null = All users
     message = models.TextField(verbose_name="الرسالة")
     active = models.BooleanField(default=True, verbose_name="نشطة")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
