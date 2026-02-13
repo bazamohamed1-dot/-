@@ -16,9 +16,13 @@ import os
 from io import BytesIO
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render
 import logging
 
 logger = logging.getLogger(__name__)
+
+def service_worker(request):
+    return render(request, 'sw.js', content_type='application/javascript')
 
 def parse_smart_date(date_val):
     if not date_val: return date(1900, 1, 1)
