@@ -70,7 +70,14 @@ class StudentListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         # Exclude heavy fields if necessary, but keep basic info
-        fields = ['id', 'student_id_number', 'first_name', 'last_name', 'class_name', 'academic_year', 'gender', 'date_of_birth']
+        # Added: place_of_birth, attendance_system, enrollment_date, photo_path to support management UI
+        fields = [
+            'id', 'student_id_number', 'first_name', 'last_name',
+            'class_name', 'academic_year', 'gender', 'date_of_birth',
+            'place_of_birth', 'attendance_system', 'enrollment_date',
+            'enrollment_number', 'exit_date', 'guardian_name', 'mother_name',
+            'guardian_phone', 'address', 'photo_path'
+        ]
 
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
