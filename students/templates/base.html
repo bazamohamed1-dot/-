@@ -13,6 +13,25 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
+        /* Offline Sync Notification */
+        #syncNotification {
+            display: none; /* Initially hidden */
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0f172a;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-weight: bold;
+            align-items: center;
+            gap: 10px;
+            animation: slideDown 0.3s ease;
+        }
+        @keyframes slideDown { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, 0); } }
         :root {
             --primary: #1e40af; --accent: #3b82f6; --success: #10b981;
             --danger: #ef4444; --warning: #f59e0b; --bg: #f1f5f9;
@@ -229,6 +248,11 @@
     <i class="fas fa-wifi-slash"></i> لا يوجد اتصال بالإنترنت - وضع العمل دون اتصال
 </div>
 
+<div id="syncNotification">
+    <i class="fas fa-sync fa-spin"></i>
+    <span id="syncText">جاري مزامنة البيانات...</span>
+</div>
+
 <div class="wrapper">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -342,7 +366,17 @@
 </nav>
 
 <script src="{% static 'js/auth_manager.js' %}"></script>
+<script src="{% static 'js/offline_manager.js' %}"></script>
 <script>
+    // Service Worker Registration
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register("{% static 'js/sw.js' %}")
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Fail', err));
+        });
+    }
+
     // Clean localStorage migration (Safe Run)
     try {
         if(localStorage.getItem('session_token')) {

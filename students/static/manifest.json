@@ -1,18 +1,20 @@
 {
-  "name": "School Management System",
-  "short_name": "SchoolSys",
-  "start_url": "/canteen/dashboard/",
+  "name": "نظام تسيير متوسطة بوشنافة عمر",
+  "short_name": "بوشنافة",
+  "start_url": "/canteen/",
+  "scope": "/canteen/",
   "display": "standalone",
   "background_color": "#f1f5f9",
   "theme_color": "#1e40af",
+  "description": "تطبيق تسيير المؤسسة التربوية (Offline-First)",
   "icons": [
     {
-      "src": "/static/images/logo.png",
+      "src": "images/logo.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/static/images/logo.png",
+      "src": "images/logo.png",
       "sizes": "512x512",
       "type": "image/png"
     }
