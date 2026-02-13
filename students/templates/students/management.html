@@ -712,19 +712,53 @@ function exportBackup() {
 function triggerImageSelect() { document.getElementById('imageSelector').click(); }
 function triggerNativeCamera() { document.getElementById('nativeCameraInput').click(); }
 
-function handleImageSelection(input) {
+async function handleImageSelection(input) {
     if (input.files && input.files[0]) {
-        // Keep file in imageSelector for potential offline saving (Blob)
-        // If nativeCameraInput triggered this, we might want to copy file reference if possible,
-        // but inputs are read-only.
-        // Solution: `saveCurrent` checks BOTH inputs.
+        const file = input.files[0];
 
-        const reader = new FileReader();
-        reader.onload = e => {
-            document.getElementById('photoPath').value = e.target.result;
-            updatePhotoUI(e.target.result);
-        };
-        reader.readAsDataURL(input.files[0]);
+        // Indicate processing
+        const statusEl = document.getElementById('modeStatus');
+        const originalStatus = statusEl.innerHTML;
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري ضغط الصورة...';
+
+        try {
+            // Options for aggressive compression (Offline First optimization)
+            const options = {
+                maxSizeMB: 0.2,          // Max 200KB
+                maxWidthOrHeight: 800,   // Resize if huge
+                useWebWorker: true,
+                fileType: 'image/jpeg'
+            };
+
+            // Check if library is loaded
+            let compressedFile = file;
+            if (window.imageCompression) {
+                console.log(`Original size: ${file.size / 1024 / 1024} MB`);
+                compressedFile = await imageCompression(file, options);
+                console.log(`Compressed size: ${compressedFile.size / 1024 / 1024} MB`);
+            } else {
+                console.warn("Compression library not loaded, using original.");
+            }
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('photoPath').value = e.target.result;
+                updatePhotoUI(e.target.result);
+                statusEl.innerHTML = originalStatus;
+            };
+            reader.readAsDataURL(compressedFile);
+
+        } catch (error) {
+            console.error("Compression failed:", error);
+            // Fallback
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('photoPath').value = e.target.result;
+                updatePhotoUI(e.target.result);
+                statusEl.innerHTML = originalStatus;
+            };
+            reader.readAsDataURL(file);
+        }
     }
 }
 function removePhotoImage() {

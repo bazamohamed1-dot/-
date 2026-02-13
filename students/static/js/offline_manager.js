@@ -1,225 +1,166 @@
-const DB_NAME = 'school_offline_db';
-const STORE_NAME = 'offline_requests';
-let db;
+// offline_manager.js - Powered by Dexie.js for Robust Offline Storage
 
-// 1. Initialize IndexedDB
-const initDB = () => {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = (event) => {
-            db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-            }
-        };
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            resolve(db);
-        };
-        request.onerror = (event) => {
-            console.error("IndexedDB Error:", event);
-            reject(event);
-        };
-    });
-};
+// 1. Initialize Dexie Database
+const db = new Dexie('SchoolOfflineDB');
+db.version(1).stores({
+    requests: '++id, url, method, timestamp' // keys to index
+});
 
-// 2. Store Request
-const storeRequest = async (reqData) => {
-    if (!db) await initDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.add(reqData);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject();
-    });
-};
+// 2. Helper: Serialize Request Body
+async function serializeBody(body) {
+    if (body instanceof FormData) {
+        const entries = [];
+        for (const [key, value] of body.entries()) {
+            // Dexie can store Blobs/Files directly
+            entries.push({ key, value });
+        }
+        return { type: 'formData', entries };
+    }
+    // For JSON strings or other bodies, return as is
+    return body;
+}
 
-// 3. Get All Requests (with IDs)
-const getRequests = async () => {
-    if (!db) await initDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const results = [];
-        const request = store.openCursor();
-        request.onsuccess = (event) => {
-            const cursor = event.target.result;
-            if (cursor) {
-                // Combine key and value
-                results.push({ id: cursor.key, ...cursor.value });
-                cursor.continue();
-            } else {
-                resolve(results);
-            }
-        };
-        request.onerror = () => reject();
-    });
-};
+// 3. Helper: Deserialize Request Body
+function deserializeBody(storedBody) {
+    if (storedBody && typeof storedBody === 'object' && storedBody.type === 'formData') {
+        const fd = new FormData();
+        storedBody.entries.forEach(entry => {
+            fd.append(entry.key, entry.value);
+        });
+        return fd;
+    }
+    return storedBody;
+}
 
-// 4. Delete Request
-const deleteRequest = async (id) => {
-    if (!db) await initDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject();
-    });
-};
-
-// 5. Fetch Interceptor
+// 4. Fetch Interceptor
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
     let [resource, config] = args;
     let url = resource;
 
-    // Handle Request object as first argument
+    // Handle Request object
     if (resource instanceof Request) {
         url = resource.url;
         if (!config) {
-            // If no config provided, inherit from Request object
             config = {
                 method: resource.method,
                 headers: resource.headers,
-                body: resource.body, // Note: Body stream might be used already
+                body: resource.body,
                 mode: resource.mode,
                 credentials: resource.credentials
             };
         }
     }
 
-    // Default config if missing (GET request usually)
+    // Default config
     if (!config) config = { method: 'GET' };
 
-    // If Online, pass through
+    // Pass through GET requests (handled by Service Worker cache)
+    if (config.method === 'GET' || config.method === 'HEAD') {
+        return originalFetch(resource, config);
+    }
+
+    // If Online, try network first
     if (navigator.onLine) {
         try {
             return await originalFetch(resource, config);
         } catch (error) {
-            console.warn("Fetch failed, attempting offline storage:", error);
+            console.warn("Network failed, switching to offline storage...", error);
         }
     }
 
-    // If Offline or Network Failed
-    // Only intercept State-Changing requests (POST, PUT, DELETE)
-    if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method.toUpperCase())) {
+    // If Offline or Network Failed -> Store in IndexedDB
+    console.log(`[Offline] Intercepting ${config.method} to ${url}`);
 
-        // Prevent storing File Uploads (FormData)
-        if (config.body instanceof FormData) {
-            alert("لا يمكن رفع الملفات في وضع عدم الاتصال.");
-            return Promise.reject("Offline File Upload Not Supported");
-        }
+    // Serialize Headers
+    let headers = {};
+    if (config.headers instanceof Headers) {
+        config.headers.forEach((value, key) => headers[key] = value);
+    } else {
+        headers = config.headers || {};
+    }
 
-        console.log("Offline Intercept: Storing request", url);
+    try {
+        const serializedBody = await serializeBody(config.body);
 
-        // Serialize Headers
-        let headers = {};
-        if (config.headers instanceof Headers) {
-            config.headers.forEach((value, key) => headers[key] = value);
-        } else {
-            headers = config.headers || {};
-        }
-
-        // Store Request
-        const requestData = {
+        // Save to Dexie
+        await db.requests.add({
             url: url.toString(),
             method: config.method,
             headers: headers,
-            body: config.body,
+            body: serializedBody,
             timestamp: Date.now()
-        };
+        });
 
-        try {
-            await storeRequest(requestData);
-            showOfflineNotification();
+        showOfflineNotification("تم الحفظ محلياً. سيتم التأكيد النهائي من طرف المدير عند توفر الإنترنت.");
 
-            // Return Mock Success Response
-            return new Response(JSON.stringify({
-                message: "تم الحفظ محلياً (سيتم المزامنة عند الاتصال)",
-                offline: true,
-                success: true,
-                // Specific Mock Data for Canteen Scanner
-                student: {
-                    last_name: "تم الحفظ",
-                    first_name: "محلياً",
-                    student_id_number: "OFFLINE",
-                    class_name: "في الانتظار",
-                    academic_year: "-",
-                    attendance_system: "نصف داخلي"
-                }
-            }), {
-                status: 202,
-                statusText: "Accepted (Offline)",
-                headers: { 'Content-Type': 'application/json' }
-            });
-        } catch (e) {
-            console.error("Offline Storage Failed:", e);
-            return Promise.reject(e);
-        }
+        // Return Mock Success Response
+        return new Response(JSON.stringify({
+            success: true,
+            offline: true,
+            message: "تم الحفظ محلياً (في انتظار المزامنة)"
+        }), {
+            status: 202,
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+    } catch (e) {
+        console.error("Offline Storage Failed:", e);
+        alert("فشل الحفظ المحلي: " + e.message);
+        throw e;
     }
-
-    // For GET requests, let them fail (or be caught by SW)
-    return originalFetch(resource, config);
 };
 
-// 6. Sync Logic
+// 5. Sync Logic
 async function syncOfflineRequests() {
     const notification = document.getElementById('syncNotification');
     const syncText = document.getElementById('syncText');
 
     try {
-        const requests = await getRequests();
-        if (requests.length === 0) return;
+        const count = await db.requests.count();
+        if (count === 0) return;
 
-        // Show Notification
         if(notification) {
             notification.style.display = 'flex';
-            syncText.textContent = `جاري رفع ${requests.length} تحديثات...`;
+            syncText.textContent = `جاري رفع ${count} تحديثات...`;
         }
 
-        console.log(`[Sync] Found ${requests.length} offline requests.`);
+        const requests = await db.requests.toArray();
 
         for (const req of requests) {
             try {
-                // Replay Request
+                console.log(`[Sync] Replaying ${req.method} ${req.url}`);
+                const body = deserializeBody(req.body);
+
                 const response = await originalFetch(req.url, {
                     method: req.method,
                     headers: req.headers,
-                    body: req.body
+                    body: body
                 });
 
+                // If success or handled error (409 conflict, 400 bad request), remove from queue
+                // We don't want to block the queue forever for a bad request
                 if (response.ok || response.status === 409 || response.status === 400 || response.status === 500) {
-                    // We consider completed (even if error) to avoid infinite loop.
-                    // Ideally 500 should be retried, but for simplicity we clear it to unblock others.
-                    // Or we can leave it? No, clearing is safer to prevent blocking the queue forever.
-                    await deleteRequest(req.id);
-                    console.log(`[Sync] Request ${req.id} processed (Status: ${response.status}).`);
-                } else {
-                    console.error(`[Sync] Request ${req.id} failed with ${response.status}`);
+                     await db.requests.delete(req.id);
                 }
 
-                // Update UI Counter
-                const remaining = (await getRequests()).length;
-                if(syncText) syncText.textContent = `جاري رفع ${remaining} تحديثات...`;
-
-            } catch (err) {
-                console.error(`[Sync] Network Error for ${req.id}`, err);
-                break; // Stop syncing if network drops
+            } catch (networkError) {
+                console.error(`[Sync] Network error for req ${req.id}, keeping in queue.`);
+                // Stop syncing to preserve order/bandwidth
+                break;
             }
         }
 
-        // Finish
-        const finalCheck = await getRequests();
-        if (finalCheck.length === 0) {
+        const remaining = await db.requests.count();
+        if (remaining === 0) {
             if(syncText) syncText.textContent = "تمت المزامنة بنجاح!";
             setTimeout(() => {
                 if(notification) notification.style.display = 'none';
-                window.location.reload(); // Refresh to show synced data
-            }, 2000);
+                // Refresh to show latest server state
+                window.location.reload();
+            }, 1500);
         } else {
-            if(syncText) syncText.textContent = "توقفت المزامنة (خطأ في الاتصال)";
+            if(syncText) syncText.textContent = `تبقي ${remaining} تحديثات (خطأ في الاتصال)`;
             setTimeout(() => { if(notification) notification.style.display = 'none'; }, 3000);
         }
 
@@ -228,26 +169,21 @@ async function syncOfflineRequests() {
     }
 }
 
-// Listen for Online Event
-window.addEventListener('online', () => {
-    console.log("Network Online - Starting Sync...");
-    syncOfflineRequests();
-});
-
-// Initial Check
+// 6. Listeners
+window.addEventListener('online', syncOfflineRequests);
 window.addEventListener('load', () => {
     if (navigator.onLine) syncOfflineRequests();
 });
 
-// Helper for Toast
-function showOfflineNotification() {
+// UI Helper
+function showOfflineNotification(msg) {
     const banner = document.getElementById('offlineBanner');
     if(banner) {
         banner.style.display = 'block';
-        banner.textContent = "تم الحفظ محلياً (لا يوجد اتصال)";
+        banner.textContent = msg || "تم الحفظ محلياً";
         setTimeout(() => {
             if(navigator.onLine) banner.style.display = 'none';
             else banner.textContent = "لا يوجد اتصال بالإنترنت - وضع العمل دون اتصال";
-        }, 3000);
+        }, 4000);
     }
 }

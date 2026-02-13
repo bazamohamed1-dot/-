@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-sys-v4-stale-revalidate';
+const CACHE_NAME = 'school-sys-v5-dexie';
 const ASSETS_TO_CACHE = [
     '/canteen/',  // Landing
     '/canteen/dashboard/',
@@ -13,7 +13,9 @@ const ASSETS_TO_CACHE = [
     '/static/styles.css',
     '/static/images/logo.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
+    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap',
+    'https://unpkg.com/dexie@3.2.4/dist/dexie.min.js',
+    'https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js'
 ];
 
 // Install Event: Pre-cache core assets
