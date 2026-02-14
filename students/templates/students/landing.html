@@ -375,12 +375,27 @@
 
                     completeLogin(data);
                 } else {
-                    // Error
-                    errorMsg.textContent = data.error || 'حدث خطأ غير معروف';
-                    errorMsg.style.display = 'block';
-                    btn.disabled = false;
-                    btnText.style.display = 'block';
-                    spinner.style.display = 'none';
+                    // Handle Lockout
+                    if (data.code === 'LOCKED') {
+                        // Disable all inputs and button permanently
+                        document.querySelectorAll('input').forEach(i => i.disabled = true);
+                        btn.disabled = true; // Keep disabled
+                        btn.style.backgroundColor = '#94a3b8'; // Grey out
+                        btn.style.cursor = 'not-allowed';
+
+                        errorMsg.innerHTML = '<i class="fas fa-lock"></i> تم قفل الحساب. يرجى الاتصال بالمدير لتفعيله.';
+                        errorMsg.style.display = 'block';
+                        // Do NOT re-enable button
+                        spinner.style.display = 'none';
+                        btnText.style.display = 'block';
+                    } else {
+                        // Standard Error
+                        errorMsg.textContent = data.error || 'حدث خطأ غير معروف';
+                        errorMsg.style.display = 'block';
+                        btn.disabled = false;
+                        btnText.style.display = 'block';
+                        spinner.style.display = 'none';
+                    }
                 }
             } catch (err) {
                 errorMsg.textContent = 'خطأ في الاتصال بالخادم';
@@ -508,7 +523,8 @@
 
                 document.getElementById('forgotModal').style.display = 'none';
             } catch(e) {
-                alert("حدث خطأ في الاتصال");
+                // Network error is different, warn user
+                alert("حدث خطأ في الاتصال. تأكد من الإنترنت.");
             } finally {
                 btn.disabled = false;
                 spinner.style.display = 'none';

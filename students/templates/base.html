@@ -332,6 +332,9 @@
         </header>
 
         <div class="content">
+            <!-- System Messages Container -->
+            <div id="systemMessagesContainer"></div>
+
             {% if messages %}
             <div class="messages">
                 {% for message in messages %}
@@ -371,11 +374,12 @@
 <script src="{% static 'js/offline_manager.js' %}"></script>
 <script src="{% static 'js/camera_helper.js' %}"></script>
 <script>
-    // Service Worker Registration
+    // Service Worker Registration (Root Scope)
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register("{% static 'js/sw.js' %}")
-            .then(reg => console.log('SW Registered', reg))
+            // Register at root to control /canteen/ scope
+            navigator.serviceWorker.register("/sw.js")
+            .then(reg => console.log('SW Registered (Root)', reg))
             .catch(err => console.log('SW Fail', err));
         });
     }
@@ -552,6 +556,30 @@
         })
         .catch(e => console.log(e));
     {% endif %}
+
+    // Fetch System Messages (Active)
+    fetch('/canteen/api/system_messages/')
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('systemMessagesContainer');
+            if(data && Array.isArray(data) && data.length > 0) {
+                data.forEach(msg => {
+                    const div = document.createElement('div');
+                    div.style.padding = '15px';
+                    div.style.marginBottom = '20px';
+                    div.style.borderRadius = '8px';
+                    div.style.background = '#fff3cd';
+                    div.style.color = '#856404';
+                    div.style.border = '1px solid #ffeeba';
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.gap = '10px';
+                    div.innerHTML = `<i class="fas fa-bullhorn"></i> <span>${msg.message}</span>`;
+                    container.appendChild(div);
+                });
+            }
+        })
+        .catch(e => console.log("SysMsg Error", e));
 </script>
 </body>
 </html>
