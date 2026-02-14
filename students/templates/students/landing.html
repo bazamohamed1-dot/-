@@ -483,11 +483,16 @@
 
         async function sendResetRequest() {
             const username = document.getElementById('forgotUsername').value;
-            // Allow empty username if device ID is present (handled by backend)
-            // But visually, asking for username is good for confirmation.
-            // The prompt said "In case of forgetting username... send email... from device".
-            // So username should be optional if device is trusted.
 
+            // Just display the message for regular users as requested
+            // "If a user forgets account info... show message to contact Director"
+            if (username && username.toLowerCase() !== 'director' && username.toLowerCase() !== 'admin') {
+                alert("يرجى الاتصال بالمدير لاستعادة معلومات الدخول الخاصة بك.");
+                document.getElementById('forgotModal').style.display = 'none';
+                return;
+            }
+
+            // For Director/Admin, proceed with backend flow (Email/Token)
             const btn = document.getElementById('sendResetBtn');
             const spinner = document.getElementById('resetSpinner');
             btn.disabled = true;
@@ -507,9 +512,15 @@
                     body: JSON.stringify({ username })
                 });
 
-                // Regardless of response (success or failure to find user), show generic message
-                // This prevents username enumeration but also fulfills the prompt requirement
-                alert("يرجى الاتصال بالمدير لاستعادة حسابك.");
+                const data = await response.json();
+
+                // Enhanced Feedback
+                if (response.ok) {
+                    alert(data.message || "تم إرسال تعليمات الاستعادة.");
+                } else {
+                    alert(data.error || "خطأ في الاستعادة");
+                }
+
                 document.getElementById('forgotModal').style.display = 'none';
             } catch(e) {
                 // Network error is different, warn user

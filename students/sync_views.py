@@ -64,49 +64,62 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
         return PendingUpdate.objects.none()
 
     def _apply_update(self, update):
-        data_payload = update.data.get('data', {})
+        # Handle inconsistent data structure (nested 'data' key vs flat)
+        data_payload = update.data.get('data', update.data)
 
-        if update.model_name == 'Student':
+        if update.model_name.lower() == 'student':
             # Handle Photo - Save Locally
             photo_data = data_payload.get('photo_path')
-            if photo_data and str(photo_data).startswith('data:image'):
+            # Check for Base64 image
+            if photo_data and isinstance(photo_data, str) and photo_data.startswith('data:image'):
                 try:
                     format, imgstr = photo_data.split(';base64,')
                     ext = format.split('/')[-1]
+                    # Generate unique filename
                     filename = f"{uuid.uuid4()}.{ext}"
-                    filepath = os.path.join(settings.MEDIA_ROOT, 'students_photos', filename)
+                    # Ensure directory exists
+                    media_path = os.path.join(settings.MEDIA_ROOT, 'students_photos')
+                    os.makedirs(media_path, exist_ok=True)
 
-                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    filepath = os.path.join(media_path, filename)
 
                     with open(filepath, 'wb') as f:
                         f.write(base64.b64decode(imgstr))
 
-                    # Store relative path or URL
+                    # Store relative path for DB
                     data_payload['photo_path'] = f"/media/students_photos/{filename}"
                 except Exception as e:
                     logger.error(f"Image Save Error: {e}")
-                    # Continue without photo
-                    pass
+                    # Keep original or clear it? If failed, maybe clear to avoid broken image.
+                    # But keeping base64 might bloat DB if saved directly (which we avoid).
+                    # Let's clear it to be safe.
+                    data_payload['photo_path'] = ""
 
             if update.action == 'create':
+                # Filter only valid fields for Student model
                 valid_fields = [f.name for f in Student._meta.get_fields() if f.name != 'id']
                 clean_data = {k: v for k, v in data_payload.items() if k in valid_fields}
                 Student.objects.create(**clean_data)
 
             elif update.action == 'update':
-                # Extract ID from URL
-                # url format: /api/students/123/
-                try:
-                    obj_id = update.data.get('url', '').rstrip('/').split('/')[-1]
-                    if obj_id.isdigit():
+                # Extract ID from payload (preferred) or URL
+                obj_id = data_payload.get('id')
+                if not obj_id:
+                     # Fallback to URL parsing: /api/students/123/
+                     url_parts = str(update.data.get('url', '')).rstrip('/').split('/')
+                     if url_parts and url_parts[-1].isdigit():
+                         obj_id = url_parts[-1]
+
+                if obj_id:
+                    try:
                         obj = Student.objects.get(id=obj_id)
                         valid_fields = [f.name for f in Student._meta.get_fields() if f.name != 'id']
                         for k, v in data_payload.items():
                             if k in valid_fields:
                                 setattr(obj, k, v)
                         obj.save()
-                except Student.DoesNotExist:
-                    pass
+                    except Student.DoesNotExist:
+                        pass
 
             elif update.action == 'delete':
                 try:

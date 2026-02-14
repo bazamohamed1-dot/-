@@ -489,37 +489,30 @@ async function saveCurrent() {
         if (response.ok) {
             const result = await response.json();
 
-            if (response.status === 202) {
-                alert(result.message || "تم إرسال التحديث للموافقة");
-            } else {
-                alert("تم الحفظ بنجاح");
-            }
-
-            // Turn off edit mode immediately to prevent "Ignore changes?" prompt in fillForm
+            // Turn off edit mode immediately
             isEditMode = false;
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('editBtn').style.display = 'inline-flex';
+            lockFields(true); // Ensure fields are locked after save
 
-            // Only refresh list immediately if it was a direct save (Director)
-            if (response.status !== 202) {
-                await fetchStudents();
-            }
+            if (response.status === 202) {
+                // Pending Update (Offline or Non-Director)
+                alert("لقد تم الحفظ بانتظار موافقة المدير على التعديلات");
 
-            if (dbId && dbId !== "undefined" && dbId !== "") {
-                 // Update the current view
-                 if (response.status !== 202) {
-                     filterTable();
-                     const newIdx = filteredList.findIndex(s => s.dbId == dbId);
-                     if (newIdx !== -1) {
-                         const rows = document.querySelectorAll('#studentsTable tbody tr');
-                         if (rows[newIdx]) fillForm(newIdx, rows[newIdx]);
-                     } else {
-                         prepareNew();
-                     }
-                 } else {
-                     // If pending, maybe just reset form?
-                     prepareNew();
-                 }
+                // Clear form to avoid confusion
+                prepareNew();
             } else {
-                 prepareNew();
+                // Direct Save
+                alert("تم الحفظ بنجاح");
+                await fetchStudents();
+
+                if (dbId && dbId !== "undefined" && dbId !== "") {
+                     filterTable();
+                     // Try to re-select the row if possible, or just prepare new
+                     prepareNew();
+                } else {
+                     prepareNew();
+                }
             }
         } else {
             const err = await response.json();
@@ -712,19 +705,53 @@ function exportBackup() {
 function triggerImageSelect() { document.getElementById('imageSelector').click(); }
 function triggerNativeCamera() { document.getElementById('nativeCameraInput').click(); }
 
-function handleImageSelection(input) {
+async function handleImageSelection(input) {
     if (input.files && input.files[0]) {
-        // Keep file in imageSelector for potential offline saving (Blob)
-        // If nativeCameraInput triggered this, we might want to copy file reference if possible,
-        // but inputs are read-only.
-        // Solution: `saveCurrent` checks BOTH inputs.
+        const file = input.files[0];
 
-        const reader = new FileReader();
-        reader.onload = e => {
-            document.getElementById('photoPath').value = e.target.result;
-            updatePhotoUI(e.target.result);
-        };
-        reader.readAsDataURL(input.files[0]);
+        // Indicate processing
+        const statusEl = document.getElementById('modeStatus');
+        const originalStatus = statusEl.innerHTML;
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري ضغط الصورة...';
+
+        try {
+            // Options for aggressive compression (Offline First optimization)
+            const options = {
+                maxSizeMB: 0.2,          // Max 200KB
+                maxWidthOrHeight: 800,   // Resize if huge
+                useWebWorker: true,
+                fileType: 'image/jpeg'
+            };
+
+            // Check if library is loaded
+            let compressedFile = file;
+            if (window.imageCompression) {
+                console.log(`Original size: ${file.size / 1024 / 1024} MB`);
+                compressedFile = await imageCompression(file, options);
+                console.log(`Compressed size: ${compressedFile.size / 1024 / 1024} MB`);
+            } else {
+                console.warn("Compression library not loaded, using original.");
+            }
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('photoPath').value = e.target.result;
+                updatePhotoUI(e.target.result);
+                statusEl.innerHTML = originalStatus;
+            };
+            reader.readAsDataURL(compressedFile);
+
+        } catch (error) {
+            console.error("Compression failed:", error);
+            // Fallback
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('photoPath').value = e.target.result;
+                updatePhotoUI(e.target.result);
+                statusEl.innerHTML = originalStatus;
+            };
+            reader.readAsDataURL(file);
+        }
     }
 }
 function removePhotoImage() {

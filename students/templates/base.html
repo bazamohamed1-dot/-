@@ -3,7 +3,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>{% block title %}نظام تسيير متوسطة بوشنافة عمر{% endblock %}</title>
     <!-- Fonts & Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -368,8 +368,11 @@
     </a>
 </nav>
 
+<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
 <script src="{% static 'js/auth_manager.js' %}"></script>
 <script src="{% static 'js/offline_manager.js' %}"></script>
+<script src="{% static 'js/camera_helper.js' %}"></script>
 <script>
     // Service Worker Registration (Root Scope)
     if ('serviceWorker' in navigator) {
@@ -501,17 +504,28 @@
     });
 
     function showInstallPromotion() {
+        // Only show if not already installed (check standalone mode)
+        if (window.matchMedia('(display-mode: standalone)').matches) return;
+
         const installBtn = document.createElement('div');
         installBtn.id = 'pwa-install-btn';
         installBtn.innerHTML = `
-            <div style="position: fixed; bottom: 80px; left: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 9999; display: flex; align-items: center; gap: 15px; animation: slideUp 0.5s ease;">
-                <img src="{% static 'images/logo.png' %}" style="width: 50px; height: 50px; border-radius: 10px;">
+            <div style="position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 20px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 15px; width: 85%; max-width: 400px; animation: slideUp 0.5s ease; text-align: center;">
+                <img src="{% static 'images/logo.png' %}" style="width: 60px; height: 60px; border-radius: 12px; border: 2px solid white;">
                 <div>
-                    <div style="font-weight: bold; font-size: 1rem;">تثبيت التطبيق</div>
-                    <div style="font-size: 0.8rem; color: #64748b;">أضف البرنامج لشاشتك الرئيسية</div>
+                    <div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;">تثبيت التطبيق</div>
+                    <div style="font-size: 0.9rem; color: #cbd5e1; line-height: 1.4;">
+                        للحصول على أفضل تجربة وعدم الحاجة لإدخال الرابط كل مرة، يرجى تثبيت التطبيق الآن.
+                    </div>
                 </div>
-                <button onclick="installPWA()" style="background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">تثبيت</button>
-                <button onclick="document.getElementById('pwa-install-btn').remove()" style="background: transparent; color: #999; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <button onclick="installPWA()" style="background: var(--success); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1; font-size: 1rem;">
+                        <i class="fas fa-download"></i> تثبيت الآن
+                    </button>
+                    <button onclick="document.getElementById('pwa-install-btn').remove()" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 12px; border-radius: 8px; cursor: pointer; flex: 1;">
+                        لاحقاً
+                    </button>
+                </div>
             </div>
         `;
         document.body.appendChild(installBtn);

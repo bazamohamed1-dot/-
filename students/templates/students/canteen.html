@@ -539,6 +539,9 @@
     let isProcessingScan = false;
 
     function toggleScanMode() {
+        // Check for secure context first
+        if (!checkCameraSupport()) return;
+
         isCameraMode = !isCameraMode;
         const manualDiv = document.getElementById('manualScanContainer');
         const cameraDiv = document.getElementById('cameraScanContainer');
@@ -547,26 +550,58 @@
         if (isCameraMode) {
             manualDiv.style.display = 'none';
             cameraDiv.style.display = 'block';
-            btnText.textContent = "العودة للمسح اليدوي";
+            btnText.innerText = "العودة للمسح اليدوي";
             startCameraScanner();
         } else {
+            stopCameraScanner();
             manualDiv.style.display = 'block';
             cameraDiv.style.display = 'none';
-            btnText.textContent = "تبديل للمسح بالكاميرا";
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
-            }
+            btnText.innerText = "تبديل للمسح بالكاميرا";
             input.focus();
         }
     }
 
     function startCameraScanner() {
-        html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            { fps: 10, qrbox: {width: 250, height: 150}, aspectRatio: 1.0 },
-            /* verbose= */ false
-        );
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        if(html5QrcodeScanner) {
+             // Already running
+             return;
+        }
+
+        // Use Html5Qrcode directly for better control over errors
+        const qrCodeId = "reader";
+        html5QrcodeScanner = new Html5Qrcode(qrCodeId);
+
+        const config = { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
+
+        // Request back camera
+        html5QrcodeScanner.start(
+            { facingMode: "environment" },
+            config,
+            onScanSuccess,
+            onScanFailure
+        ).catch(err => {
+             console.error("Camera Start Error:", err);
+             // Detect insecure context error specifically if checkCameraSupport missed it
+             if (err.name === 'NotAllowedError' || err.toString().includes('Permission')) {
+                 alert("يرجى السماح باستخدام الكاميرا من إعدادات المتصفح.");
+             } else if (err.toString().includes('secure context')) {
+                 showSecurityWarning();
+             } else {
+                 alert("فشل تشغيل الكاميرا: " + err);
+             }
+             toggleScanMode(); // Revert UI
+        });
+    }
+
+    function stopCameraScanner() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => {
+                html5QrcodeScanner.clear();
+                html5QrcodeScanner = null;
+            }).catch(err => {
+                console.error("Failed to stop camera", err);
+            });
+        }
     }
 
     function onScanSuccess(decodedText, decodedResult) {

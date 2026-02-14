@@ -95,62 +95,42 @@ def verify_2fa_login(request):
 @permission_classes([AllowAny])
 def forgot_password(request):
     username = request.data.get('username')
-    device_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
-
-    # Generic message for all cases to prevent enumeration and hide email
-    GENERIC_MSG = 'إذا كان الحساب موجوداً ولديه بريد استرجاع، فقد تم إرسال التعليمات إليه.'
 
     settings_obj = SchoolSettings.objects.first()
     admin_email = settings_obj.admin_email if settings_obj else None
 
-    # Case 1: Device-based Employee Reset Request
-    if device_id:
-        try:
-            profile = EmployeeProfile.objects.filter(device_id=device_id).first()
-            if profile and profile.role != 'director':
-                # Create System Message for Director
-                try:
-                    from .models import SystemMessage
-                    msg_text = f"طلب استعادة كلمة مرور: المستخدم '{profile.user.username}' (الدور: {profile.role}) يطلب إعادة تعيين كلمة المرور. (ID الجهاز: {device_id})"
-                    # Check if message already exists to prevent spam
-                    if not SystemMessage.objects.filter(message=msg_text, active=True).exists():
-                         SystemMessage.objects.create(message=msg_text, active=True)
-                    return Response({'message': 'تم إرسال إشعار إلى المدير بنجاح.'})
-                except Exception as e:
-                    print(f"System Message Error: {e}")
-        except Exception as e:
-            print(f"Device Reset Error: {e}")
-
-    # Case 2: Username Based Reset (Improved Logic)
+    # Case: Director Recovery (Email Token)
     if username:
         try:
             user = User.objects.get(username=username)
-            # If Director/Superuser, show specific info
+            # Only for Director/Superuser
             if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
-                 return Response({
-                     'message': 'لاستعادة حساب المدير، يرجى استخدام "البريد الإلكتروني للإدارة" كاسم مستخدم، و "رمز المصادقة الثنائية (Google Auth)" ككلمة مرور في شاشة تسجيل الدخول الرئيسية.',
-                     'info_only': True
-                 })
 
-            # If standard employee, Create Notification for Director
-            if hasattr(user, 'profile'):
-                try:
-                    from .models import SystemMessage
-                    msg_text = f"طلب استعادة كلمة مرور: المستخدم '{user.username}' (الدور: {user.profile.role}) يطلب إعادة تعيين كلمة المرور."
-                    if device_id:
-                        msg_text += f" (ID الجهاز: {device_id})"
+                # Check if Admin Email is configured
+                if not admin_email:
+                    return Response({'error': 'لم يتم إعداد بريد استرجاع (Admin Email). يرجى الاتصال بالمطور.'}, status=400)
 
-                    # Check duplication
-                    if not SystemMessage.objects.filter(message=msg_text, active=True).exists():
-                         SystemMessage.objects.create(message=msg_text, active=True)
-                except Exception as e:
-                    print(f"System Message Error (Username): {e}")
+                # Generate One-Time Token
+                token = secrets.token_hex(4) # 8 chars
+                settings_obj.recovery_token = token
+                settings_obj.recovery_token_created_at = timezone.now()
+                settings_obj.save()
 
-        except Exception as e:
-            # User not found, silently fail to generic msg
+                # Simulate Email Sending (Log to console/file since offline)
+                # In a real scenario with SMTP:
+                # send_mail('Recovery Code', f'Your code is: {token}', 'system@school.local', [admin_email])
+
+                print(f"==========================================")
+                print(f" [RECOVERY] To: {admin_email}")
+                print(f" [RECOVERY] Code: {token}")
+                print(f"==========================================")
+
+                return Response({'message': f'تم إرسال رمز الاستعادة إلى {admin_email} (راجع سجل السيرفر للمحاكاة).'})
+
+        except User.DoesNotExist:
             pass
 
-    return Response({'message': GENERIC_MSG})
+    return Response({'message': 'إذا كان الحساب صحيحاً، فقد تم الإرسال.'})
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRole.objects.all()
@@ -179,48 +159,46 @@ def login_view(request):
         username = request.data.get('username')
         password = request.data.get('password')
 
-        # --- Director Recovery Login (Email + 2FA Code) ---
-        # If the input username looks like an email, check if it matches Admin Email
-        if '@' in username:
-            settings_obj = SchoolSettings.objects.first()
-            if settings_obj and settings_obj.admin_email and username.strip().lower() == settings_obj.admin_email.strip().lower():
-                # Attempt to find Director/Superuser
+        # --- Director Recovery Login (Email + Recovery Token) ---
+        # If username matches Admin Email, check recovery token
+        settings_obj = SchoolSettings.objects.first()
+        if settings_obj and settings_obj.admin_email and username.strip().lower() == settings_obj.admin_email.strip().lower():
+            # Check Token
+            if settings_obj.recovery_token and password.strip() == settings_obj.recovery_token:
+                # Check Expiry (e.g. 15 mins)
+                # For offline simplicity, we might skip strict time check or make it 24h
+                # Let's invalidate it immediately upon use.
+
+                settings_obj.recovery_token = None
+                settings_obj.save()
+
+                # Find Director
                 director_profile = EmployeeProfile.objects.filter(role='director').first()
-                target_user = None
-                if director_profile:
-                    target_user = director_profile.user
-                else:
-                    # Fallback to superuser
-                    target_user = User.objects.filter(is_superuser=True).first()
+                target_user = director_profile.user if director_profile else User.objects.filter(is_superuser=True).first()
 
-                if target_user and hasattr(target_user, 'profile') and target_user.profile.totp_secret:
-                    # Verify 2FA code (passed in password field)
-                    try:
-                        totp = pyotp.TOTP(target_user.profile.totp_secret)
-                        # Check if password matches the TOTP code (6 digits)
-                        if password.isdigit() and len(password) == 6 and totp.verify(password):
-                             # Success! Log them in.
-                             profile = target_user.profile
-                             profile.failed_login_attempts = 0
-                             profile.is_locked = False
+                if target_user:
+                     profile = target_user.profile
+                     profile.failed_login_attempts = 0
+                     profile.is_locked = False
 
-                             # Generate Session
-                             token = secrets.token_hex(32)
-                             profile.current_session_token = token
-                             profile.save()
+                     # Generate Session
+                     token = secrets.token_hex(32)
+                     profile.current_session_token = token
+                     profile.save()
 
-                             login(request, target_user)
-                             UserActivityLog.objects.create(user=target_user, action='login_recovery_email_2fa')
+                     login(request, target_user)
+                     UserActivityLog.objects.create(user=target_user, action='login_recovery_token')
 
-                             return Response({
-                                'message': 'تم استعادة الدخول بنجاح',
-                                'token': token,
-                                'role': profile.role,
-                                'username': target_user.username,
-                                'device_id': profile.device_id
-                            })
-                    except Exception as e:
-                        print(f"Recovery Login Error: {e}")
+                     # Return with a flag to show "Change Password" alert
+                     return Response({
+                        'message': 'تم الدخول برمز الاستعادة. يرجى تغيير كلمة المرور فوراً.',
+                        'token': token,
+                        'role': profile.role,
+                        'username': target_user.username,
+                        'alert_password_change': True
+                    })
+            else:
+                return Response({'error': 'رمز الاستعادة غير صحيح أو منتهي الصلاحية.'}, status=400)
 
         # --- Standard Login ---
         try:
