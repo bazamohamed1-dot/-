@@ -121,17 +121,33 @@ def forgot_password(request):
         except Exception as e:
             print(f"Device Reset Error: {e}")
 
-    # Case 2: Director/Superuser Reset (Username based) - Informational only
-    # The actual recovery is now done via the Login Screen (Email + 2FA Code)
+    # Case 2: Username Based Reset (Improved Logic)
     if username:
         try:
             user = User.objects.get(username=username)
+            # If Director/Superuser, show specific info
             if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
                  return Response({
                      'message': 'لاستعادة حساب المدير، يرجى استخدام "البريد الإلكتروني للإدارة" كاسم مستخدم، و "رمز المصادقة الثنائية (Google Auth)" ككلمة مرور في شاشة تسجيل الدخول الرئيسية.',
                      'info_only': True
                  })
-        except:
+
+            # If standard employee, Create Notification for Director
+            if hasattr(user, 'profile'):
+                try:
+                    from .models import SystemMessage
+                    msg_text = f"طلب استعادة كلمة مرور: المستخدم '{user.username}' (الدور: {user.profile.role}) يطلب إعادة تعيين كلمة المرور."
+                    if device_id:
+                        msg_text += f" (ID الجهاز: {device_id})"
+
+                    # Check duplication
+                    if not SystemMessage.objects.filter(message=msg_text, active=True).exists():
+                         SystemMessage.objects.create(message=msg_text, active=True)
+                except Exception as e:
+                    print(f"System Message Error (Username): {e}")
+
+        except Exception as e:
+            # User not found, silently fail to generic msg
             pass
 
     return Response({'message': GENERIC_MSG})

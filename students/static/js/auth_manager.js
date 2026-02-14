@@ -101,8 +101,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 location.reload();
             } else {
-                errorDiv.textContent = data.error || 'فشل تسجيل الدخول';
-                errorDiv.style.display = 'block';
+                // Handle Lockout
+                if (data.code === 'LOCKED') {
+                    // Disable all inputs and button
+                    const inputs = document.querySelectorAll('#loginForm input, #loginForm button');
+                    inputs.forEach(el => el.disabled = true);
+
+                    errorDiv.innerHTML = '<i class="fas fa-lock"></i> ' + (data.error || 'تم قفل الحساب. اتصل بالمدير.');
+                    errorDiv.style.display = 'block';
+                    errorDiv.style.backgroundColor = '#fee2e2';
+                    errorDiv.style.color = '#991b1b';
+                    errorDiv.style.fontWeight = 'bold';
+                } else {
+                    errorDiv.textContent = data.error || 'فشل تسجيل الدخول';
+                    errorDiv.style.display = 'block';
+                }
             }
         } catch (e) {
             errorDiv.textContent = 'خطأ في الاتصال';
