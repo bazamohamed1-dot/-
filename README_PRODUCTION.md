@@ -15,13 +15,15 @@ cp .env.example .env
 - **EMAIL_HOST_...**: إعدادات بريد Gmail لإرسال كلمات المرور.
 - **DATABASE_URL**: اتركه كما هو إذا كنت تستخدم Docker (سيتصل بـ PostgreSQL تلقائياً).
 
-### 2. إعداد نفق Cloudflare (Tunnel)
-لربط السيرفر المحلي بالإنترنت، قمنا بتوفير سكريبت آلي.
-1. تأكد من تثبيت `cloudflared` (الملف المرفق `cloudflared-windows-amd64.msi`).
-2. شغل الملف `setup_tunnel.bat`.
-3. سيطلب منك تسجيل الدخول عبر المتصفح.
-4. اختر الدومين `bazasystems.com`.
-5. سيقوم السكريبت بإنشاء النفق وتهيئة الملفات تلقائياً.
+### 2. تفعيل النفق (Tunnel)
+بما أنك قمت بإنشاء النفق مسبقاً (ID: `2d9d29d3-e0a0-444a-a3f7-529b660531a6`)، يكفي تنفيذ الخطوات التالية لربطه:
+1. شغل الملف `setup_tunnel.bat` كمسؤول (Run as Administrator).
+2. سيقوم السكريبت بنسخ ملفات الاعتماد (Credentials) وتوجيه الدومين `admin.bazasystems.com` تلقائياً.
+
+*ملاحظة:* إذا لم يعمل التوجيه التلقائي، يرجى إضافة سجل CNAME يدوياً في لوحة تحكم Cloudflare:
+- **Type**: CNAME
+- **Name**: `admin`
+- **Target**: `2d9d29d3-e0a0-444a-a3f7-529b660531a6.cfargotunnel.com`
 
 ### 3. تشغيل التطبيق (Docker)
 تأكد من تثبيت **Docker Desktop** وتشغيله، ثم نفذ الأمر التالي في مجلد المشروع:
@@ -33,7 +35,7 @@ docker-compose up -d --build
 - سيقوم بتشغيل النفق لربط الموقع بالإنترنت.
 
 ### 4. الدخول إلى النظام
-- الرابط: `https://admin.bazasystems.com` (أو الرابط الذي حددته).
+- الرابط: `https://admin.bazasystems.com`
 - المستخدم الافتراضي (إذا لم يكن لديك حساب): سيطلب منك إنشاء أول مستخدم (Superuser) عبر التيرمينال إذا لزم الأمر:
 ```bash
 docker-compose exec web python manage.py createsuperuser
