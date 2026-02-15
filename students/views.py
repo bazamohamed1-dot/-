@@ -861,3 +861,89 @@ def student_filters(request):
         'levels': list(levels),
         'classes': list(classes)
     })
+
+from .resources import StudentResource
+from .import_utils import parse_student_file
+import tablib
+import tempfile
+import os
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_update_file(request):
+    """
+    Handles file upload for bulk update/import of students.
+    Supports Ministry formats (HTML, XLS, XLSX) via parse_student_file.
+    """
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('import_data'):
+         return Response({'error': 'Unauthorized'}, status=403)
+
+    if 'file' not in request.FILES:
+        return Response({'error': 'No file uploaded'}, status=400)
+
+    file_obj = request.FILES['file']
+
+    # Save to temp file to allow processing by external libraries (xlrd, openpyxl, bs4)
+    suffix = os.path.splitext(file_obj.name)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        for chunk in file_obj.chunks():
+            tmp.write(chunk)
+        tmp_path = tmp.name
+
+    try:
+        # 1. Parse using custom logic (handles Ministry format & normalization)
+        data_list = parse_student_file(tmp_path)
+
+        if not data_list:
+             return Response({'error': 'Could not parse file or no data found. Ensure format is correct.'}, status=400)
+
+        # 2. Convert to Dataset for Import-Export
+        dataset = tablib.Dataset()
+
+        # Define headers matching StudentResource fields
+        headers = [
+            'student_id_number', 'last_name', 'first_name', 'gender',
+            'date_of_birth', 'place_of_birth', 'academic_year',
+            'class_name', 'attendance_system', 'enrollment_number',
+            'enrollment_date'
+        ]
+        dataset.headers = headers
+
+        for item in data_list:
+            # Map parse result to resource structure
+            row = [
+                item.get('student_id_number'),
+                item.get('last_name'),
+                item.get('first_name'),
+                item.get('gender'),
+                item.get('date_of_birth'),
+                item.get('place_of_birth'),
+                item.get('academic_year'),
+                item.get('class_name'),
+                item.get('attendance_system', 'نصف داخلي'),
+                item.get('enrollment_number'),
+                item.get('enrollment_date')
+            ]
+            dataset.append(row)
+
+        # 3. Execute Import (Update or Create)
+        resource = StudentResource()
+        result = resource.import_data(dataset, dry_run=False, raise_errors=True)
+
+        return Response({
+            'message': 'Import successful',
+            'stats': {
+                'total_processed': result.total_rows,
+                'new_records': result.totals.get('new', 0),
+                'updated_records': result.totals.get('update', 0),
+                'skipped': result.totals.get('skip', 0),
+                'errors': result.totals.get('error', 0)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Import Error: {e}")
+        return Response({'error': f"Import Failed: {str(e)}"}, status=500)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)

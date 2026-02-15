@@ -128,6 +128,7 @@ class EmployeeProfile(models.Model):
     # 2FA Fields
     totp_secret = models.CharField(max_length=100, null=True, blank=True, verbose_name="مفتاح المصادقة الثنائية")
     totp_enabled = models.BooleanField(default=False, verbose_name="تفعيل المصادقة الثنائية")
+    must_change_password = models.BooleanField(default=False, verbose_name="يجب تغيير كلمة المرور")
 
     def has_perm(self, perm):
         if self.role == 'director' or self.user.is_superuser:

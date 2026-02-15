@@ -12,7 +12,9 @@ const STATIC_ASSETS = [
     '/static/js/xlsx.full.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap',
-    'https://unpkg.com/html5-qrcode'
+    'https://unpkg.com/html5-qrcode',
+    'https://unpkg.com/dexie@3.2.4/dist/dexie.min.js',
+    'https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js'
 ];
 
 self.addEventListener('install', (event) => {
