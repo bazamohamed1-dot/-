@@ -1,20 +1,26 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from .models import EmployeeProfile, UserActivityLog, SchoolSettings, UserRole
 from .serializers import UserRoleSerializer
+from .auth_utils import send_password_reset_email, generate_random_password, send_new_account_email
 import secrets
 import pyotp
 import qrcode
 import base64
 from io import BytesIO
 
+# --- 2FA Views ---
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def setup_2fa(request):
@@ -86,51 +92,107 @@ def verify_2fa_login(request):
             'message': 'Login Successful',
             'token': final_token,
             'role': profile.role,
-            'username': user.username
+            'username': user.username,
+            'must_change_password': profile.must_change_password
         })
     else:
         return Response({'error': 'رمز خاطئ'}, status=400)
 
+# --- Forgot Password Views ---
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password(request):
+    # Backward compatibility + New Logic
     username = request.data.get('username')
+    email = request.data.get('email')
 
+    # If email provided, use new flow
+    if email:
+        user = User.objects.filter(email=email).first()
+        if user:
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            full_token = f"{uid}-{token}"
+            try:
+                send_password_reset_email(user, full_token)
+            except Exception as e:
+                pass
+        return Response({'message': 'تم إرسال رابط الاستعادة إذا كان البريد مسجلاً.'})
+
+    # Legacy Director Flow
     settings_obj = SchoolSettings.objects.first()
     admin_email = settings_obj.admin_email if settings_obj else None
 
-    # Case: Director Recovery (Email Token)
     if username:
         try:
             user = User.objects.get(username=username)
-            # Only for Director/Superuser
             if (hasattr(user, 'profile') and user.profile.role == 'director') or user.is_superuser:
-
-                # Check if Admin Email is configured
                 if not admin_email:
-                    return Response({'error': 'لم يتم إعداد بريد استرجاع (Admin Email). يرجى الاتصال بالمطور.'}, status=400)
+                    return Response({'error': 'لم يتم إعداد بريد استرجاع (Admin Email).'}, status=400)
 
-                # Generate One-Time Token
-                token = secrets.token_hex(4) # 8 chars
+                token = secrets.token_hex(4)
                 settings_obj.recovery_token = token
                 settings_obj.recovery_token_created_at = timezone.now()
                 settings_obj.save()
 
-                # Simulate Email Sending (Log to console/file since offline)
-                # In a real scenario with SMTP:
-                # send_mail('Recovery Code', f'Your code is: {token}', 'system@school.local', [admin_email])
+                # Send via Email (SMTP now works!)
+                send_mail(
+                    'Director Recovery Code',
+                    f'Your recovery code is: {token}',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [admin_email],
+                    fail_silently=True
+                )
 
-                print(f"==========================================")
-                print(f" [RECOVERY] To: {admin_email}")
-                print(f" [RECOVERY] Code: {token}")
-                print(f"==========================================")
-
-                return Response({'message': f'تم إرسال رمز الاستعادة إلى {admin_email} (راجع سجل السيرفر للمحاكاة).'})
-
+                return Response({'message': f'تم إرسال رمز الاستعادة إلى {admin_email}.'})
         except User.DoesNotExist:
             pass
 
     return Response({'message': 'إذا كان الحساب صحيحاً، فقد تم الإرسال.'})
+
+class RequestPasswordResetView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        return forgot_password(request) # Reuse logic
+
+class ConfirmPasswordResetView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        token_str = request.data.get('token')
+        password = request.data.get('password')
+
+        if not token_str or not password:
+            return Response({'error': 'Token and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if '-' not in token_str: return Response({'error': 'Invalid token'}, status=400)
+            uid_b64, token = token_str.split('-', 1)
+            uid = force_str(urlsafe_base64_decode(uid_b64))
+            user = User.objects.get(pk=uid)
+        except (ValueError, TypeError, OverflowError, User.DoesNotExist):
+            return Response({'error': 'Invalid link'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if default_token_generator.check_token(user, token):
+            user.set_password(password)
+            user.save()
+            return Response({'message': 'Password has been reset successfully.'})
+        else:
+            return Response({'error': 'Link is invalid or expired'}, status=status.HTTP_400_BAD_REQUEST)
+
+class ForceChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        password = request.data.get('new_password')
+        if not password:
+             return Response({'error': 'New password is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        user.set_password(password)
+        if hasattr(user, 'profile'):
+            user.profile.must_change_password = False
+            user.profile.save()
+        user.save()
+        return Response({'message': 'Password changed successfully.'})
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRole.objects.all()
@@ -159,20 +221,13 @@ def login_view(request):
         username = request.data.get('username')
         password = request.data.get('password')
 
-        # --- Director Recovery Login (Email + Recovery Token) ---
-        # If username matches Admin Email, check recovery token
+        # --- Director Recovery Login ---
         settings_obj = SchoolSettings.objects.first()
         if settings_obj and settings_obj.admin_email and username.strip().lower() == settings_obj.admin_email.strip().lower():
-            # Check Token
             if settings_obj.recovery_token and password.strip() == settings_obj.recovery_token:
-                # Check Expiry (e.g. 15 mins)
-                # For offline simplicity, we might skip strict time check or make it 24h
-                # Let's invalidate it immediately upon use.
-
                 settings_obj.recovery_token = None
                 settings_obj.save()
 
-                # Find Director
                 director_profile = EmployeeProfile.objects.filter(role='director').first()
                 target_user = director_profile.user if director_profile else User.objects.filter(is_superuser=True).first()
 
@@ -181,178 +236,111 @@ def login_view(request):
                      profile.failed_login_attempts = 0
                      profile.is_locked = False
 
-                     # Generate Session
                      token = secrets.token_hex(32)
                      profile.current_session_token = token
+                     profile.must_change_password = True # Force change
                      profile.save()
 
                      login(request, target_user)
                      UserActivityLog.objects.create(user=target_user, action='login_recovery_token')
 
-                     # Return with a flag to show "Change Password" alert
                      return Response({
-                        'message': 'تم الدخول برمز الاستعادة. يرجى تغيير كلمة المرور فوراً.',
+                        'message': 'Logged in via recovery.',
                         'token': token,
                         'role': profile.role,
                         'username': target_user.username,
-                        'alert_password_change': True
+                        'must_change_password': True
                     })
             else:
-                return Response({'error': 'رمز الاستعادة غير صحيح أو منتهي الصلاحية.'}, status=400)
+                return Response({'error': 'Invalid recovery code'}, status=400)
 
         # --- Standard Login ---
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            return Response({'error': 'اسم المستخدم أو كلمة المرور غير صحيحة'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not hasattr(user, 'profile'):
-            # Auto-create profile for superuser or legacy users if missing, defaulting to director for safety if superuser
             role = 'director' if user.is_superuser else 'secretariat'
             EmployeeProfile.objects.create(user=user, role=role)
 
         profile = user.profile
 
-        # Allow Director to attempt login even if locked (will unlock on success)
         if profile.is_locked and profile.role != 'director':
-            return Response({'error': 'الحساب مقفل. يرجى الاتصال بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': 'Account Locked', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
 
         user_auth = authenticate(username=username, password=password)
 
         if user_auth is not None:
-            # Success - Unlock if was locked (for Director)
             profile.failed_login_attempts = 0
-            if profile.is_locked and (profile.role == 'director' or user.is_superuser):
-                profile.is_locked = False
-            profile.save() # Save the reset attempts/lock status
+            if profile.is_locked: profile.is_locked = False
+            profile.save()
 
-            # Device Lock Logic
+            # Device Lock Check
             device_id_to_send = None
+            if profile.role != 'director' and not user.is_superuser:
+                client_id = request.headers.get('X-Device-ID')
+                if client_id:
+                     if not profile.device_id or profile.device_id.startswith('PENDING:'):
+                         profile.device_id = client_id
+                         profile.save()
+                         device_id_to_send = client_id
+                     elif profile.device_id != client_id:
+                         return Response({'error': 'Unauthorized Device', 'code': 'DEVICE_LOCKED'}, status=403)
+                     else:
+                         device_id_to_send = profile.device_id
 
-            # Skip Device Lock for Director/Superuser
-            if profile.role == 'director' or user.is_superuser:
-                # Explicitly clear any existing binding for Director to ensure complete removal of the property
-                if profile.device_id:
-                    profile.device_id = None
-                    profile.save()
-            else:
-                try:
-                    client_id = request.headers.get('X-Device-ID') or request.META.get('HTTP_X_DEVICE_ID')
-                    if not client_id:
-                         # Try to rely on the client sending a generated ID. If not, we can't bind properly.
-                         # But to be safe, we reject if no ID is sent.
-                         return Response({'error': 'لم يتم التعرف على هوية الجهاز. حاول تحديث الصفحة.', 'code': 'NO_DEVICE_ID'}, status=status.HTTP_400_BAD_REQUEST)
-
-                    if profile.device_id:
-                        if profile.device_id.startswith('PENDING:'):
-                            # Provisioning Mode: This is the "First Time" after reset/activation.
-                            # Bind this device PERMANENTLY.
-                            profile.device_id = client_id
-                            profile.save()
-                            device_id_to_send = client_id
-                        else:
-                            # Enforce Mode: Must match stored ID
-                            if client_id != profile.device_id:
-                                return Response({'error': 'هذا الجهاز غير مصرح به. يرجى الاتصال بالمدير.', 'code': 'DEVICE_LOCKED'}, status=status.HTTP_403_FORBIDDEN)
-                            else:
-                                device_id_to_send = profile.device_id
-                    else:
-                        # If no device_id set at all, maybe allow binding if we assume "First Login Ever" implies activation?
-                        # User requirement: "Once activated by director... enter only once and save fingerprint".
-                        # This implies default state is "Locked/No Access" or "Open"?
-                        # Usually "Activate Fingerprint" implies it was OFF.
-                        # If device_id is None, it means "Fingerprint Not Required/Not Active" OR "Not Set yet".
-                        # The prompt says: "When enabling local fingerprint... enter once... save... else call director".
-                        # This means if device_id is NONE, check if we should block or allow.
-                        # Assuming default is ALLOW (no lock) until Director activates it?
-                        # "Activate option" -> sets PENDING.
-                        # So if None, we assume "No Lock Enforced" or "Auto Bind"?
-                        # Previous logic was "First Time Login - Bind".
-                        # Let's keep it "Auto Bind" if None (for ease) OR strict "Must be activated".
-                        # The prompt says: "Modify... when enabling... save...".
-                        # Auto-bind on first login (Activation)
-                        if client_id:
-                            profile.device_id = client_id
-                            profile.save()
-                            device_id_to_send = client_id
-                        else:
-                            # Fallback if header missing (though we checked above)
-                            pass
-
-                except Exception as e:
-                    print(f"Device Lock Error: {e}")
-                    return Response({'error': f'خطأ في التحقق من الجهاز: {str(e)}', 'code': 'SERVER_ERROR'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            # 2FA Check
             if profile.totp_enabled:
-                # Issue temporary token
                 temp_token = secrets.token_hex(16)
                 profile.current_session_token = f"PRE-2FA:{temp_token}"
                 profile.save()
-                return Response({
-                    'require_2fa': True,
-                    'temp_token': temp_token
-                })
+                return Response({'require_2fa': True, 'temp_token': temp_token})
 
-            # Generate Session Token
             token = secrets.token_hex(32)
             profile.current_session_token = token
             profile.save()
 
             login(request, user)
-
-            # Log Activity
             UserActivityLog.objects.create(user=user, action='login')
 
             return Response({
-                'message': 'تم تسجيل الدخول بنجاح',
+                'message': 'Login Successful',
                 'token': token,
                 'role': profile.role,
                 'username': user.username,
-                'device_id': device_id_to_send
+                'device_id': device_id_to_send,
+                'must_change_password': profile.must_change_password
             })
         else:
-            # Fail
             profile.failed_login_attempts += 1
             if profile.failed_login_attempts >= 3:
                 profile.is_locked = True
                 profile.save()
-                return Response({'error': 'تم قفل الحساب بسبب تكرار المحاولات الخاطئة. اتصل بالمدير.', 'code': 'LOCKED'}, status=status.HTTP_403_FORBIDDEN)
-
+                return Response({'error': 'Account Locked', 'code': 'LOCKED'}, status=403)
             profile.save()
-            remaining = 3 - profile.failed_login_attempts
-            return Response({'error': f'معلومات غير صحيحة. بقي لديك {remaining} محاولات.', 'code': 'INVALID_CREDS'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Invalid Credentials', 'code': 'INVALID_CREDS'}, status=400)
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({'error': f'Internal Server Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': f'Server Error: {str(e)}'}, status=500)
 
 @api_view(['POST'])
 def verify_session(request):
     token = request.data.get('token')
     if not request.user.is_authenticated:
         return Response({'valid': False, 'reason': 'NOT_LOGGED_IN'}, status=401)
-
     try:
-        profile = request.user.profile
-        # If token matches DB, session is valid.
-        if profile.current_session_token == token:
-            return Response({'valid': True, 'role': profile.role})
-        else:
-            return Response({'valid': False, 'reason': 'SESSION_MISMATCH'}, status=401)
-    except:
-        return Response({'valid': False}, status=401)
+        if request.user.profile.current_session_token == token:
+            return Response({'valid': True, 'role': request.user.profile.role})
+    except: pass
+    return Response({'valid': False}, status=401)
 
 @api_view(['POST'])
 def logout_view(request):
     if request.user.is_authenticated:
         try:
-            p = request.user.profile
-            p.current_session_token = None
-            p.save()
-            UserActivityLog.objects.create(user=request.user, action='logout')
-        except:
-            pass
+            request.user.profile.current_session_token = None
+            request.user.profile.save()
+        except: pass
         logout(request)
     return Response({'message': 'Logged out'})
 
@@ -410,17 +398,10 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                 # Determine if user is Director/Superuser to disable actions in frontend
                 is_admin = u.is_superuser or prof.role == 'director'
 
-                # Handle Role Display (fallback if choices removed)
-                role_display = prof.role
-                if hasattr(prof, 'get_role_display'):
-                     try: role_display = prof.get_role_display()
-                     except: pass
-
                 data.append({
                     'id': u.id,
                     'username': u.username,
                     'role': prof.role,
-                    'role_display': role_display,
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
                     'permissions': prof.permissions,
@@ -428,10 +409,9 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'last_login': u.last_login,
                     'last_activity': last_active,
                     'is_online': is_online,
-                    'is_admin': is_admin  # Flag for frontend to disable delete/edit
+                    'is_admin': is_admin
                 })
             except Exception as e:
-                print(f"Error processing user {u.username}: {e}")
                 pass
         return Response(data)
 
@@ -440,83 +420,73 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Unauthorized'}, status=403)
 
         username = request.data.get('username')
-        password = request.data.get('password')
         role = request.data.get('role')
         permissions = request.data.get('permissions', [])
 
-        if role == 'director':
-            if EmployeeProfile.objects.filter(role='director').exists():
-                return Response({'error': 'لا يمكن إنشاء أكثر من حساب مدير واحد'}, status=400)
-
         if User.objects.filter(username=username).exists():
-            return Response({'error': 'اسم المستخدم موجود بالفعل'}, status=400)
+            return Response({'error': 'Username exists'}, status=400)
+
+        # Generate Secure Random Password
+        password = generate_random_password()
 
         user = User.objects.create_user(username=username, password=password)
-        EmployeeProfile.objects.create(user=user, role=role, permissions=permissions)
-        return Response({'message': 'User created'})
+        EmployeeProfile.objects.create(
+            user=user,
+            role=role,
+            permissions=permissions,
+            must_change_password=True
+        )
+
+        # Send Email
+        try:
+            sent = send_new_account_email(user, password)
+            msg = 'User created. Credentials sent via email.' if sent else 'User created. Failed to send email.'
+        except:
+            msg = 'User created, but email failed.'
+
+        return Response({'message': msg})
 
     def destroy(self, request, pk=None):
-        if not self.check_permission(request, 'manage_users'):
-             return Response({'error': 'Unauthorized'}, status=403)
-
+        if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
         user = self.get_object()
-        if user == request.user:
-             return Response({'error': 'لا يمكنك حذف حسابك الخاص'}, status=400)
-
-        if user.is_superuser or (hasattr(user, 'profile') and user.profile.role == 'director'):
-             return Response({'error': 'لا يمكن حذف المدير'}, status=400)
-
+        if user == request.user or user.is_superuser: return Response({'error': 'Cannot delete'}, status=400)
         user.delete()
         return Response({'message': 'User deleted'})
 
     @action(detail=True, methods=['post'])
     def update_creds(self, request, pk=None):
-        if not self.check_permission(request, 'manage_users'):
-             return Response({'error': 'Unauthorized'}, status=403)
-
+        if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
         user = self.get_object()
         new_pass = request.data.get('password')
-        new_username = request.data.get('username')
         permissions = request.data.get('permissions')
         role = request.data.get('role')
 
-        if new_username:
-            user.username = new_username
-        if new_pass:
-            user.set_password(new_pass)
+        if new_pass: user.set_password(new_pass)
         user.save()
 
-        if hasattr(user, 'profile'):
-            if permissions is not None:
-                user.profile.permissions = permissions
-            if role:
-                user.profile.role = role
-            user.profile.save()
-
-        return Response({'message': 'Profile updated'})
+        if permissions is not None:
+            user.profile.permissions = permissions
+        if role:
+            user.profile.role = role
+        user.profile.save()
+        return Response({'message': 'Updated'})
 
     @action(detail=True, methods=['post'])
     def unlock_account(self, request, pk=None):
-        if not self.check_permission(request, 'manage_users'):
-             return Response({'error': 'Unauthorized'}, status=403)
-
+        if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
         user = self.get_object()
-        profile = user.profile
-        profile.is_locked = False
-        profile.failed_login_attempts = 0
-        profile.save()
-        return Response({'message': 'Account unlocked'})
+        user.profile.is_locked = False
+        user.profile.failed_login_attempts = 0
+        user.profile.save()
+        return Response({'message': 'Unlocked'})
 
     @action(detail=True, methods=['post'])
     def reset_session(self, request, pk=None):
-        if not self.check_permission(request, 'manage_users'):
-             return Response({'error': 'Unauthorized'}, status=403)
-
+        if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
         user = self.get_object()
-        profile = user.profile
-        profile.current_session_token = None
-        profile.save()
-        return Response({'message': 'Session reset'})
+        user.profile.current_session_token = None
+        user.profile.save()
+        return Response({'message': 'Session Reset'})
 
     @action(detail=False, methods=['get'])
     def logs(self, request):
@@ -549,7 +519,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         new_id = str(uuid.uuid4())
         user.profile.device_id = f"PENDING:{new_id}"
         user.profile.save()
-        return Response({'message': 'تم تفعيل حماية الجهاز. سيتم ربط الجهاز عند تسجيل الدخول القادم.'})
+        return Response({'message': 'Device Activated'})
 
     @action(detail=True, methods=['post'])
     def reset_device(self, request, pk=None):
@@ -557,4 +527,4 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         user.profile.device_id = None
         user.profile.save()
-        return Response({'message': 'تم تعطيل حماية الجهاز.'})
+        return Response({'message': 'Device Reset'})
