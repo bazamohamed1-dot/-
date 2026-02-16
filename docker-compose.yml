@@ -29,7 +29,7 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: always
-    command: tunnel run
+    command: ["tunnel", "run"]
     volumes:
       - ./cloudflared:/home/nonroot/.cloudflared
     depends_on:
