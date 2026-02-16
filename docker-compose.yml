@@ -1,3 +1,4 @@
+name: baza-app
 version: '3.8'
 
 services:
