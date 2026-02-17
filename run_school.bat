@@ -18,6 +18,8 @@ if exist "venv\Scripts\activate.bat" (
 :: Migrate Database
 echo.
 echo [1/2] Checking Database...
+:: Force SQLite by explicitly setting the URL to override .env
+set DATABASE_URL=sqlite:///db.sqlite3
 python manage.py migrate
 
 :: Show IP

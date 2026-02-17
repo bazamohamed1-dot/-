@@ -40,6 +40,8 @@ if %errorlevel% neq 0 (
 :: 4. Run Migration and Server
 echo.
 echo [4/4] Setting up Database and Server...
+:: Force SQLite by explicitly setting the URL to override .env
+set DATABASE_URL=sqlite:///db.sqlite3
 python manage.py migrate
 python manage.py collectstatic --noinput
 
