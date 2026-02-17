@@ -27,9 +27,10 @@ if not exist "venv" (
 
 :: 3. Install Dependencies
 echo.
-echo [3/4] Installing Requirements...
+echo [3/4] Installing Requirements (Windows optimized)...
 call venv\Scripts\activate.bat
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+pip install -r requirements_local.txt
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to install requirements. Check internet connection.
     pause
