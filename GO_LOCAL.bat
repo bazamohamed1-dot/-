@@ -1,61 +1,60 @@
 @echo off
 setlocal
-chcp 65001 >nul
 
 echo ========================================================
-echo       الانتقال إلى الوضع المحلي (Local Mode Switch)
+echo       Switch to Local Mode (NO DOCKER)
 echo ========================================================
 echo.
-echo هذا السكربت سيقوم بإعداد بيئة العمل المحلية بدون Docker.
-echo This script will set up the local environment without Docker.
+echo This script will set up the local environment.
+echo Please ensure you have Python installed on Windows.
 echo.
 
-:: 1. Stop Docker (Optional but recommended)
-echo [1/4] محاولة إيقاف Docker لتوفير الذاكرة...
+:: 1. Stop Docker (Optional)
+echo [1/4] Stopping Docker to save memory...
 docker-compose down >nul 2>&1
 taskkill /IM "Docker Desktop.exe" /F >nul 2>&1
-echo تم إيقاف Docker (أو لم يكن يعمل).
+echo Docker stopped (if it was running).
 
 :: 2. Check/Create Virtual Environment
 echo.
-echo [2/4] فحص البيئة الافتراضية (Python Virtual Env)...
+echo [2/4] Checking Virtual Environment (venv)...
 if not exist "venv" (
-    echo جاري إنشاء بيئة افتراضية جديدة...
+    echo Creating new virtual environment...
     python -m venv venv
 ) else (
-    echo البيئة موجودة مسبقاً.
+    echo Virtual environment exists.
 )
 
 :: 3. Install Dependencies
 echo.
-echo [3/4] تثبيت المكتبات اللازمة (Install Requirements)...
-call venv\Scripts\activate
+echo [3/4] Installing Requirements...
+call venv\Scripts\activate.bat
 pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [ERROR] فشل تثبيت المكتبات. تأكد من وجود الإنترنت.
+    echo [ERROR] Failed to install requirements. Check internet connection.
     pause
     exit /b
 )
 
 :: 4. Run Migration and Server
 echo.
-echo [4/4] إعداد قاعدة البيانات وتشغيل السيرفر...
+echo [4/4] Setting up Database and Server...
 python manage.py migrate
 python manage.py collectstatic --noinput
 
 echo.
 echo ========================================================
-echo       تم الإعداد بنجاح! (Setup Complete)
+echo       SETUP COMPLETE!
 echo ========================================================
 echo.
-echo الآن سيتم تشغيل السيرفر.
-echo يمكنك الدخول من هاتفك عبر: http://IP-ADDRESS:8000
-echo (سنظهر لك عنوان IP الآن)
+echo You can access the site from this PC at: http://localhost:8000
 echo.
+echo To access from your PHONE, use the IPv4 address below:
 ipconfig | findstr "IPv4"
 echo.
 
-:: Start Server using Waitress (Production-ready for Windows)
+:: Start Server
+echo Starting Server...
 waitress-serve --port=8000 --threads=4 School_Management.wsgi:application
 
 pause

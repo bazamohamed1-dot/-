@@ -1,34 +1,33 @@
 @echo off
 setlocal
-chcp 65001 >nul
 
 echo.
 echo ========================================================
-echo       تشغيل نظام المدرسة (School Server)
+echo       START SCHOOL SERVER (LOCAL)
 echo ========================================================
 echo.
 
 :: Check Virtual Environment
 if exist "venv\Scripts\activate.bat" (
-    echo تفعيل البيئة الافتراضية...
-    call venv\Scripts\activate
+    echo Activating virtual environment...
+    call venv\Scripts\activate.bat
 ) else (
-    echo [تنبيه] لم يتم العثور على 'venv'. سنحاول استخدام Python المثبت في النظام.
+    echo [WARNING] 'venv' not found. Trying global Python...
 )
 
 :: Migrate Database
 echo.
-echo [1/2] تحديث قاعدة البيانات...
+echo [1/2] Checking Database...
 python manage.py migrate
 
 :: Show IP
 echo.
-echo [2/2] عنوان السيرفر (IP Address):
+echo [2/2] Your IP Address (for Mobile Access):
 ipconfig | findstr "IPv4"
 echo.
 echo ========================================================
-echo  الرابط للدخول من هذا الجهاز: http://localhost:8000
-echo  الرابط للدخول من الهاتف: استخدم عنوان IPv4 الظاهر أعلاه
+echo  Local Link: http://localhost:8000
+echo  Mobile Link: http://[YOUR-IP]:8000
 echo ========================================================
 echo.
 
