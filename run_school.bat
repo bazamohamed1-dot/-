@@ -1,20 +1,37 @@
 @echo off
 setlocal
-
-:: This script starts the local server using waitress for testing.
-:: Ensure you have installed requirements.txt first.
+chcp 65001 >nul
 
 echo.
-echo Starting School Management Server...
+echo ========================================================
+echo       تشغيل نظام المدرسة (School Server)
+echo ========================================================
 echo.
+
+:: Check Virtual Environment
+if exist "venv\Scripts\activate.bat" (
+    echo تفعيل البيئة الافتراضية...
+    call venv\Scripts\activate
+) else (
+    echo [تنبيه] لم يتم العثور على 'venv'. سنحاول استخدام Python المثبت في النظام.
+)
 
 :: Migrate Database
+echo.
+echo [1/2] تحديث قاعدة البيانات...
 python manage.py migrate
 
-:: Collect Static Files (optional in local dev but good practice)
-python manage.py collectstatic --noinput
+:: Show IP
+echo.
+echo [2/2] عنوان السيرفر (IP Address):
+ipconfig | findstr "IPv4"
+echo.
+echo ========================================================
+echo  الرابط للدخول من هذا الجهاز: http://localhost:8000
+echo  الرابط للدخول من الهاتف: استخدم عنوان IPv4 الظاهر أعلاه
+echo ========================================================
+echo.
 
-:: Start Waitress Server (Correct Syntax)
-echo Server is running at http://localhost:8000
-waitress-serve --port=8000 School_Management.wsgi:application
+:: Start Waitress Server
+waitress-serve --port=8000 --threads=4 School_Management.wsgi:application
 pause
