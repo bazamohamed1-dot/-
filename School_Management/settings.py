@@ -57,8 +57,18 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'import_export',
     'rest_framework',
+    'cloudinary_storage',
+    'cloudinary',
     'students',
 ]
+
+# Cloudinary Configuration
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME', 'demo'),
+    'API_KEY': os.getenv('CLOUDINARY_API_KEY', '123456789012345'),
+    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET', 'abcdefghijklmnopqrstuvwxyz'),
+}
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

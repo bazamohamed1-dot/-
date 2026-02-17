@@ -14,7 +14,7 @@ services:
   web:
     build: .
     restart: always
-    command: gunicorn --bind 0.0.0.0:8000 --workers 3 School_Management.wsgi:application
+    command: gunicorn --bind 0.0.0.0:8000 --workers 1 --threads 2 --timeout 120 School_Management.wsgi:application
     volumes:
       - .:/app
     ports:
