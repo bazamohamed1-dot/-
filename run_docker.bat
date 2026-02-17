@@ -15,7 +15,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/3] Building and Starting Services...
-docker-compose -p baza-project up -d --build
+docker-compose -p baza-app up -d --build
 
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to start services. Check Docker logs.
@@ -25,9 +25,12 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [2/3] Checking Service Status...
-docker-compose -p baza-project ps
+docker-compose -p baza-app ps
 
 echo.
 echo [3/3] Following Logs (Press Ctrl+C to stop viewing logs, Server will keep running)...
 echo.
-docker-compose -p baza-project logs -f
+docker-compose -p baza-app logs -f
+
+:: Pause at the end to keep window open if logs command exits
+pause
