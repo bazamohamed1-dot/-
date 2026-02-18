@@ -1,7 +1,0 @@
-tunnel: 2d9d29d3-e0a0-444a-a3f7-529b660531a6
-credentials-file: /home/nonroot/.cloudflared/2d9d29d3-e0a0-444a-a3f7-529b660531a6.json
-
-ingress:
-  - hostname: admin.bazasystems.com
-    service: http://web:8000
-  - service: http_status:404

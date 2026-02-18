@@ -1,44 +1,49 @@
 @echo off
 setlocal
 
-echo.
 echo ========================================================
-echo       START SCHOOL SERVER (QUICK RUN)
+echo       START SCHOOL MANAGEMENT SYSTEM
 echo ========================================================
 echo.
 
-:: Check Virtual Environment
-if exist "venv\Scripts\activate.bat" (
-    echo Activating virtual environment...
+:: 1. Check Virtual Environment
+if not exist "venv" (
+    echo [1/3] First Run Detected! Setting up environment...
+    echo       This may take a few minutes...
+    python -m venv venv
     call venv\Scripts\activate.bat
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    if %errorlevel% neq 0 (
+        echo [ERROR] Failed to install requirements. Check internet connection.
+        pause
+        exit /b
+    )
 ) else (
-    echo [WARNING] 'venv' not found. Creating it...
-    call GO_LOCAL.bat
-    exit /b
+    echo [1/3] Environment found. Activating...
+    call venv\Scripts\activate.bat
 )
 
-:: Migrate Database
-echo.
-echo [1/2] Checking Database...
-:: Force SQLite by explicitly setting the URL to override .env
+:: 2. Set Environment Variables
 set DATABASE_URL=sqlite:///db.sqlite3
-:: Enable DEBUG to disable SSL Redirect locally
 set DEBUG=True
-python manage.py migrate
 
-:: Show IP
+:: 3. Run Migrations & Checks
 echo.
-echo [2/2] Your IP Address (for Mobile Access):
-ipconfig | findstr "IPv4"
+echo [2/3] Checking Database...
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
+
+:: 4. Start Server
+echo.
+echo [3/3] Starting Server...
 echo.
 echo ========================================================
-echo  Local Link: http://localhost:8000
-echo  Mobile Link: http://[YOUR-IP]:8000
+echo  ACCESS LINK: http://localhost:8000
 echo ========================================================
 echo.
-echo  To run ONLINE (later), keep this window open and run 'run_tunnel.bat'
+echo  Keep this window open to keep the system running.
 echo.
 
-:: Start Waitress Server
 waitress-serve --port=8000 --threads=4 School_Management.wsgi:application
 pause
