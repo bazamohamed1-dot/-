@@ -139,15 +139,40 @@ function showLogin() {
 }
 
 async function logout() {
+    // 1. Clear Storage
     sessionStorage.clear();
+    localStorage.removeItem('session_token');
+    localStorage.removeItem('user_role');
+
+    // 2. Clear Caches (Service Worker)
+    if ('caches' in window) {
+        try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(key => caches.delete(key)));
+        } catch (e) { console.error("Cache clear failed", e); }
+    }
+
+    // 3. Unregister SW if exists
+    if ('serviceWorker' in navigator) {
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for(let registration of registrations) {
+                registration.unregister();
+            }
+        } catch(e) { console.error("SW unregister failed", e); }
+    }
+
+    // 4. Backend Logout
     const csrftoken = getCookie('csrftoken');
     try {
         await fetch('/canteen/auth/logout/', {
             method: 'POST',
             headers: {'X-CSRFToken': csrftoken}
         });
-    } catch (e) { console.error(e); }
-    location.href = '/canteen/';
+    } catch (e) { console.error("Backend logout failed", e); }
+
+    // 5. Hard Redirect
+    window.location.replace('/canteen/');
 }
 
 function checkRoleRedirect(role) {
