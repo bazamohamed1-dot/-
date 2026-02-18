@@ -376,7 +376,57 @@
                         registration.update();
                     }).catch(err => console.log('SW Fail', err));
                 }
+
+                // Auto-fill logic from URL Query Params (QR Code Login)
+                const urlParams = new URLSearchParams(window.location.search);
+                const username = urlParams.get('username');
+                const install = urlParams.get('install');
+
+                if (username) {
+                    document.getElementById('username').value = username;
+                    // Focus password
+                    document.getElementById('password').focus();
+                }
+
+                if (install === 'true') {
+                    // Trigger install prompt logic immediately if available
+                    // We need to wait a bit for 'beforeinstallprompt' to fire potentially
+                    setTimeout(() => {
+                        if (typeof showInstallPromotion === 'function') {
+                            showInstallPromotion(); // from base.html if loaded, but landing doesn't extend base.
+                            // Landing has its own minimal logic, so we need to trigger it manually here if possible
+                            // Or better: show a dedicated install button for this flow.
+                            showLandingInstallPrompt();
+                        }
+                    }, 1000);
+                }
             });
+        }
+
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // If URL has install=true, show it immediately
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('install') === 'true') {
+                showLandingInstallPrompt();
+            }
+        });
+
+        function showLandingInstallPrompt() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+               // Fallback or instructions if prompt not available (e.g. already installed or iOS)
+               console.log("Install prompt not available yet");
+            }
         }
 
         async function handleLogin(e) {
