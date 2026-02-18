@@ -39,11 +39,13 @@ echo.
 echo [3/3] Starting Server...
 echo.
 echo ========================================================
-echo  ACCESS LINK: http://localhost:8000
+echo  ACCESS LINK: http://localhost:8000/canteen/
 echo ========================================================
 echo.
 echo  Keep this window open to keep the system running.
 echo.
+echo  Opening browser automatically...
+start http://localhost:8000/canteen/
 
 waitress-serve --listen=*:8000 --threads=4 School_Management.wsgi:application
 pause
