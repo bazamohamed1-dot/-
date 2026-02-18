@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.decorators import api_view, permission_classes, action, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -337,6 +337,7 @@ def verify_session(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@authentication_classes([]) # Disable auth checks for this view
 @permission_classes([AllowAny])
 def logout_view(request):
     if request.user.is_authenticated:
