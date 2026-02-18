@@ -11,6 +11,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from .models import EmployeeProfile, UserActivityLog, SchoolSettings, UserRole
 from .serializers import UserRoleSerializer
 from .auth_utils import send_password_reset_email, generate_random_password, send_new_account_email
@@ -334,7 +335,9 @@ def verify_session(request):
     except: pass
     return Response({'valid': False}, status=401)
 
+@csrf_exempt
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def logout_view(request):
     if request.user.is_authenticated:
         try:
@@ -342,7 +345,14 @@ def logout_view(request):
             request.user.profile.save()
         except: pass
         logout(request)
-    return Response({'message': 'Logged out'})
+
+    response = Response({'message': 'Logged out'})
+    # Explicitly clear cookies to fix loop issues
+    response.delete_cookie('baza_school_session_v2')
+    response.delete_cookie('baza_school_csrf_v2')
+    response.delete_cookie('sessionid')
+    response.delete_cookie('csrftoken')
+    return response
 
 class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
