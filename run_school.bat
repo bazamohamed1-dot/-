@@ -3,7 +3,7 @@ setlocal
 
 echo.
 echo ========================================================
-echo       START SCHOOL SERVER (LOCAL)
+echo       START SCHOOL SERVER (QUICK RUN)
 echo ========================================================
 echo.
 
@@ -12,7 +12,9 @@ if exist "venv\Scripts\activate.bat" (
     echo Activating virtual environment...
     call venv\Scripts\activate.bat
 ) else (
-    echo [WARNING] 'venv' not found. Trying global Python...
+    echo [WARNING] 'venv' not found. Creating it...
+    call GO_LOCAL.bat
+    exit /b
 )
 
 :: Migrate Database
@@ -33,6 +35,8 @@ echo ========================================================
 echo  Local Link: http://localhost:8000
 echo  Mobile Link: http://[YOUR-IP]:8000
 echo ========================================================
+echo.
+echo  To run ONLINE (later), keep this window open and run 'run_tunnel.bat'
 echo.
 
 :: Start Waitress Server

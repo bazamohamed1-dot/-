@@ -2,22 +2,15 @@
 setlocal
 
 echo ========================================================
-echo       Switch to Local Mode (NO DOCKER)
+echo       INSTALL AND RUN (LOCAL WIFI MODE)
 echo ========================================================
 echo.
-echo This script will set up the local environment.
-echo Please ensure you have Python installed on Windows.
+echo This script will set up the project on your Windows PC.
+echo Please ensure you have Python installed.
 echo.
 
-:: 1. Stop Docker (Optional)
-echo [1/4] Stopping Docker to save memory...
-docker-compose down >nul 2>&1
-taskkill /IM "Docker Desktop.exe" /F >nul 2>&1
-echo Docker stopped (if it was running).
-
-:: 2. Check/Create Virtual Environment
-echo.
-echo [2/4] Checking Virtual Environment (venv)...
+:: 1. Check/Create Virtual Environment
+echo [1/3] Checking Virtual Environment (venv)...
 if not exist "venv" (
     echo Creating new virtual environment...
     python -m venv venv
@@ -25,9 +18,9 @@ if not exist "venv" (
     echo Virtual environment exists.
 )
 
-:: 3. Install Dependencies
+:: 2. Install Dependencies
 echo.
-echo [3/4] Installing Requirements (Windows optimized)...
+echo [2/3] Installing/Updating Requirements...
 call venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements_local.txt
@@ -37,14 +30,18 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-:: 4. Run Migration and Server
+:: 3. Run Migration and Server
 echo.
-echo [4/4] Setting up Database and Server...
+echo [3/3] Setting up Database and Server...
 :: Force SQLite by explicitly setting the URL to override .env
 set DATABASE_URL=sqlite:///db.sqlite3
 :: Enable DEBUG to disable SSL Redirect locally
 set DEBUG=True
+
+echo Running Migrations...
 python manage.py migrate
+
+echo Collecting Static Files...
 python manage.py collectstatic --noinput
 
 echo.
@@ -52,10 +49,12 @@ echo ========================================================
 echo       SETUP COMPLETE!
 echo ========================================================
 echo.
-echo You can access the site from this PC at: http://localhost:8000
+echo 1. From THIS PC:  http://localhost:8000
 echo.
-echo To access from your PHONE, use the IPv4 address below:
+echo 2. From MOBILE (WiFi):
+echo    Use the IPv4 address below with port 8000
 ipconfig | findstr "IPv4"
+echo    Example: http://192.168.1.5:8000
 echo.
 
 :: Start Server
