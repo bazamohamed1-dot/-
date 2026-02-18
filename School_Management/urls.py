@@ -16,8 +16,10 @@ urlpatterns = [
     path('dashboard/', ui_views.dashboard, name='dashboard'),
     path('auth/login/', auth_views.login_view, name='login'),
 
-    # Service Worker
-    path('sw.js', TemplateView.as_view(template_name="sw.js", content_type='application/javascript'), name='sw'),
+    # Service Worker (Renamed to service-worker.js to bypass stuck cache)
+    path('service-worker.js', TemplateView.as_view(template_name="sw.js", content_type='application/javascript'), name='sw_new'),
+    # Keep old sw.js URL returning nothing (or 404/empty) to help browsers unregister it naturally
+    path('sw.js', TemplateView.as_view(template_name="sw.js", content_type='application/javascript'), name='sw_old'),
 
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
