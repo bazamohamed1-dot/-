@@ -392,7 +392,7 @@ async function scanCard(barcode) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify({ barcode: barcode })
         });
@@ -503,7 +503,7 @@ async function loanBook() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify({
                 student_id: currentStudentId,
@@ -556,7 +556,7 @@ async function returnBook(loanId) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify({ loan_id: loanId })
         });
@@ -681,7 +681,7 @@ async function deleteReadersHistory() {
     try {
         const response = await fetch('/canteen/library/readers/', {
             method: 'DELETE',
-             headers: { 'X-CSRFToken': getCookie('csrftoken') } // Use the existing helper
+             headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') } // Use the existing helper
         });
         if(response.ok) {
             alert("تم حذف السجل بنجاح");

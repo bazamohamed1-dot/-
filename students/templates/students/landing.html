@@ -407,7 +407,7 @@
 
                 const headers = {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
                 };
                 if (deviceId) headers['X-Device-ID'] = deviceId;
 
@@ -471,7 +471,7 @@
             try {
                 const response = await fetch('/canteen/auth/2fa/login/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('baza_school_csrf_v2') },
                     body: JSON.stringify({ temp_token: temp2FAToken, code: code })
                 });
 
@@ -558,7 +558,7 @@
             try {
                 const headers = {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
                 };
                 const deviceId = localStorage.getItem('device_id');
                 if (deviceId) headers['X-Device-ID'] = deviceId;

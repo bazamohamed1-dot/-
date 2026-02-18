@@ -411,7 +411,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
     if(logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-             fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} })
+             fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')} })
              .then(() => {
                  sessionStorage.clear();
                  authChannel.postMessage('logout');
@@ -455,7 +455,7 @@
         idleTime += 1000;
         if (idleTime >= idleLimit) {
             // Logout
-            fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')} })
+            fetch('/canteen/auth/logout/', { method: 'POST', headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')} })
              .then(() => {
                  sessionStorage.clear();
                  authChannel.postMessage('logout');

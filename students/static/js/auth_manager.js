@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (window.location.pathname !== '/' && window.location.pathname !== '/canteen/') {
              fetch('/canteen/auth/logout/', {
                  method: 'POST',
-                 headers: {'X-CSRFToken': getCookie('csrftoken')}
+                 headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
              }).finally(() => {
                  window.location.href = '/canteen/';
              });
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const deviceId = localStorage.getItem('device_id');
             const headers = {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             };
             if(deviceId) headers['X-Device-ID'] = deviceId;
 
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             const deviceId = localStorage.getItem('device_id');
-            const headers = { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') };
+            const headers = { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('baza_school_csrf_v2') };
             if(deviceId) headers['X-Device-ID'] = deviceId;
 
             const response = await fetch('/canteen/auth/login/', {
@@ -163,7 +163,7 @@ async function logout() {
     }
 
     // 4. Backend Logout
-    const csrftoken = getCookie('csrftoken');
+    const csrftoken = getCookie('baza_school_csrf_v2');
     try {
         await fetch('/canteen/auth/logout/', {
             method: 'POST',

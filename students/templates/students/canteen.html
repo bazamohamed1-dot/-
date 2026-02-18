@@ -221,7 +221,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
                 },
                 body: JSON.stringify({ barcode })
             });
@@ -357,7 +357,7 @@
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
                 },
                 body: JSON.stringify({ id: attendanceId })
             });
@@ -379,7 +379,7 @@
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
                 },
                 body: JSON.stringify({ clear_all: true })
             });
@@ -399,7 +399,7 @@
         try {
             const res = await fetch('/canteen/export_canteen/', {
                 method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') }
             });
             if (res.ok) {
                 const contentType = res.headers.get('content-type');
@@ -511,7 +511,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
                 },
                 body: JSON.stringify({ student_id: id })
             });
