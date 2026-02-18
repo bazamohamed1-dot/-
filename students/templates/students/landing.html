@@ -346,34 +346,35 @@
             window.location.reload(true);
         }
 
-        // Register Service Worker (ONLY if not localhost)
+        // FORCE UNREGISTER ALL SERVICE WORKERS IMMEDIATELY
+        // This runs before anything else to nuclear option the cache
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    console.log('Unregistering SW:', registration);
+                    registration.unregister();
+                }
+            });
+
+            // Clear all caches
+            caches.keys().then(function(names) {
+                for (let name of names) {
+                    caches.delete(name);
+                }
+            });
+        }
+
+        // Only re-register if NOT localhost and explicitly needed (e.g. Production)
+        // For now, we disable it locally completely to solve the stuck issue.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-                if (isLocalhost) {
-                    // Unregister on localhost to prevent caching issues
-                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                        for(let registration of registrations) {
-                            registration.unregister();
-                        }
-                    });
-                } else {
-                    // Force Unregister OLD 'sw.js' if it exists
-                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                        for(let registration of registrations) {
-                            if (registration.scope.includes('sw.js')) {
-                                registration.unregister();
-                            }
-                        }
-                    });
-
-                    // Register NEW 'service-worker.js'
-                    navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+                if (!isLocalhost) {
+                    // Register with timestamp to bust cache
+                    navigator.serviceWorker.register('/service-worker.js?v=' + new Date().getTime()).then(function(registration) {
                         registration.update();
-                    }, function(err) {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
+                    }).catch(err => console.log('SW Fail', err));
                 }
             });
         }
