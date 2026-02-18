@@ -35,15 +35,15 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 # Domain Config
 APP_DOMAIN = os.getenv('APP_DOMAIN', 'http://localhost:8000')
-CSRF_TRUSTED_ORIGINS = [APP_DOMAIN, 'https://*.hf.space', 'https://*.bazasystems.com']
+CSRF_TRUSTED_ORIGINS = [APP_DOMAIN, 'https://*.hf.space', 'https://*.bazasystems.com', 'http://*.bazasystems.com', 'http://127.0.0.1:8000', 'http://localhost:8000']
 
 # Session Security
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True # Logout on browser close
 
 # Local settings: Disable SSL redirect for local LAN/HTTP unless in Prod
-SECURE_SSL_REDIRECT = not DEBUG
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
 # Force new session cookies to fix 'Incognito Only' issue
 SESSION_COOKIE_NAME = 'baza_school_session_v2'
