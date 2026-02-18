@@ -23,7 +23,7 @@ echo.
 echo [2/3] Installing/Updating Requirements...
 call venv\Scripts\activate.bat
 python -m pip install --upgrade pip
-pip install -r requirements_local.txt
+pip install -r requirements.txt
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to install requirements. Check internet connection.
     pause
