@@ -2,11 +2,23 @@
 import qrcode
 from io import BytesIO
 import base64
+import socket
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from .models import SchoolSettings
+
+def get_local_ip():
+    try:
+        # Connect to an external server (doesn't send data) to get the interface IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 @login_required
 def generate_user_qr(request):
@@ -21,9 +33,10 @@ def generate_user_qr(request):
     if not username:
         return JsonResponse({'error': 'Username required'}, status=400)
 
-    # Determine Host (Try to get from SchoolSettings or fallback to request host)
-    # Using request.get_host() is usually best for local LAN as it reflects what the user typed.
-    host = request.get_host()
+    # Prioritize detecting the real LAN IP
+    # request.get_host() might return 'localhost' if the director is on the server machine
+    local_ip = get_local_ip()
+    host = f"{local_ip}:8000"
 
     # Use HTTP by default for local LAN as configured in recent steps
     protocol = 'http'
