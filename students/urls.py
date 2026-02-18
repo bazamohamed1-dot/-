@@ -3,6 +3,7 @@ from . import views
 from . import ui_views
 from . import auth_views
 from . import sync_views
+from . import qr_views
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
@@ -31,6 +32,9 @@ urlpatterns = [
 
     # Sync API
     path('api/sync/', sync_views.SyncViewSet.as_view({'post': 'create'}), name='sync_data'),
+
+    # QR Generation
+    path('api/generate_qr/', qr_views.generate_user_qr, name='generate_user_qr'),
 
     path('api/students/filters/', views.student_filters, name='student_filters'),
     path('api/', include(router.urls)),

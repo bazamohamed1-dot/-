@@ -207,6 +207,16 @@
     </table>
 </div>
 
+<!-- QR Code Modal -->
+<div id="qrModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000; justify-content:center; align-items:center;">
+    <div class="card" style="width:300px; padding:20px; text-align:center;">
+        <h3 style="margin-bottom:15px;">مسح لتثبيت التطبيق</h3>
+        <p style="font-size:0.9rem; color:#64748b; margin-bottom:15px;">اطلب من الموظف مسح هذا الرمز للدخول وتثبيت التطبيق فوراً.</p>
+        <div id="qrImageContainer" style="margin-bottom:15px;"></div>
+        <button class="btn btn-secondary" onclick="document.getElementById('qrModal').style.display='none'">إغلاق</button>
+    </div>
+</div>
+
 <!-- Add/Edit User Modal -->
 <div id="userModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
     <div class="card" style="width:400px; padding:20px;">
@@ -737,6 +747,7 @@ async function loadUsers() {
                 <td class="western-nums">${u.failed_attempts}</td>
                 <td>
                     <button class="btn btn-info" onclick='editUser(${JSON.stringify(u).replace(/'/g, "&#39;")})' style="padding:5px 10px;" title="تعديل"><i class="fas fa-edit"></i></button>
+                    <button class="btn" style="padding:5px 10px; background:#0f172a; color:white;" onclick="showUserQR('${u.username}')" title="رمز الدخول (QR)"><i class="fas fa-qrcode"></i></button>
                     <button class="btn btn-secondary" onclick="prefillMessage(${u.id}, '${u.username}')" style="padding:5px 10px; background:#475569; color:white;" title="إرسال رسالة"><i class="fas fa-envelope"></i></button>
                     ${u.is_locked ? `<button class="btn btn-success" onclick="unlockUser(${u.id})" style="padding:5px 10px;" title="فك القفل"><i class="fas fa-lock-open"></i></button>` : ''}
                     <button class="btn btn-warning" onclick="resetSession(${u.id})" style="padding:5px 10px;" title="إعادة ضبط الجلسة"><i class="fas fa-sync-alt"></i></button>
@@ -1166,6 +1177,19 @@ async function rejectAllUpdates() {
             loadPendingUpdates();
         }
     } catch(e) { alert("Error"); }
+}
+
+async function showUserQR(username) {
+    try {
+        const res = await fetch(`/canteen/api/generate_qr/?username=${encodeURIComponent(username)}`);
+        if(!res.ok) throw new Error("Failed");
+        const data = await res.json();
+
+        document.getElementById('qrImageContainer').innerHTML = `<img src="${data.qr_code}" style="width:200px; height:200px;">`;
+        document.getElementById('qrModal').style.display = 'flex';
+    } catch(e) {
+        alert("فشل توليد الرمز");
+    }
 }
 </script>
 {% endblock %}
