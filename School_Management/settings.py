@@ -45,6 +45,10 @@ SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
+# Force new session cookies to fix 'Incognito Only' issue
+SESSION_COOKIE_NAME = 'baza_school_session_v2'
+CSRF_COOKIE_NAME = 'baza_school_csrf_v2'
+
 
 # Application definition
 

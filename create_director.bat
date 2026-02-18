@@ -1,23 +1,34 @@
 @echo off
-chcp 65001 >nul
-title Create Director Account
-color 0B
+setlocal
 
+echo.
 echo ========================================================
-echo       Create New Director Account
+echo       CREATE DIRECTOR ACCOUNT (LOCAL)
 echo ========================================================
 echo.
 
-:: Check for Venv
+:: Check Virtual Environment
 if not exist "venv" (
-    echo [ERROR] Virtual Environment not found. Run run_school.bat first.
+    echo [ERROR] Virtual Environment not found. Run GO_LOCAL.bat first.
     pause
     exit /b
 )
 
-call venv\Scripts\activate
+:: Activate Venv
+call venv\Scripts\activate.bat
 
-python manage.py create_director
+:: Set Local Environment
+set DATABASE_URL=sqlite:///db.sqlite3
+set DEBUG=True
 
+:: Run Command
+echo.
+echo Please enter the details for the new Director account:
+python manage.py createsuperuser
+
+echo.
+echo ========================================================
+echo       ACCOUNT CREATED SUCCESSFULLY!
+echo ========================================================
 echo.
 pause
