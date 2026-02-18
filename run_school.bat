@@ -45,5 +45,5 @@ echo.
 echo  Keep this window open to keep the system running.
 echo.
 
-waitress-serve --port=8000 --threads=4 School_Management.wsgi:application
+waitress-serve --listen=*:8000 --threads=4 School_Management.wsgi:application
 pause

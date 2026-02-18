@@ -120,11 +120,10 @@ async function syncOfflineRequests() {
         const count = await db.requests.count();
         if (count === 0) return;
 
-        // User requested to remove the notification as it's annoying/unknown
-        // We will sync silently in background
+        // Show sync notification
         if(notification) {
-            // notification.style.display = 'flex';
-            // syncText.textContent = `جاري رفع ${count} تحديثات...`;
+             notification.style.display = 'flex';
+             if (syncText) syncText.textContent = `جاري رفع ${count} تحديثات...`;
             console.log(`[Sync] Background syncing ${count} items...`);
         }
 
@@ -156,12 +155,15 @@ async function syncOfflineRequests() {
 
         const remaining = await db.requests.count();
         if (remaining === 0) {
-            // if(syncText) syncText.textContent = "تمت المزامنة بنجاح!";
+            if(syncText) syncText.textContent = "تمت المزامنة بنجاح!";
             console.log("[Sync] Complete");
-            // Disable auto-reload as it annoys user on navigation
+             if(notification) {
+                 setTimeout(() => { notification.style.display = 'none'; }, 2000);
+             }
+            // Reload page to reflect changes (optional, maybe distracting)
             // window.location.reload();
         } else {
-            // if(syncText) syncText.textContent = `تبقي ${remaining} تحديثات (خطأ في الاتصال)`;
+            if(syncText) syncText.textContent = `تبقي ${remaining} تحديثات (خطأ في الاتصال)`;
             console.log(`[Sync] Remaining: ${remaining}`);
         }
 

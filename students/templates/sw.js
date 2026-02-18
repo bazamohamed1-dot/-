@@ -10,11 +10,11 @@ const STATIC_ASSETS = [
     '/static/js/auth_manager.js',
     '/static/js/offline_manager.js',
     '/static/js/xlsx.full.min.js',
+    '/static/js/dexie.min.js',
+    '/static/js/browser-image-compression.js',
+    '/static/js/html5-qrcode.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap',
-    'https://unpkg.com/html5-qrcode',
-    'https://unpkg.com/dexie@3.2.4/dist/dexie.min.js',
-    'https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js'
+    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
 ];
 
 self.addEventListener('install', (event) => {
