@@ -20,6 +20,8 @@ echo.
 echo [1/2] Checking Database...
 :: Force SQLite by explicitly setting the URL to override .env
 set DATABASE_URL=sqlite:///db.sqlite3
+:: Enable DEBUG to disable SSL Redirect locally
+set DEBUG=True
 python manage.py migrate
 
 :: Show IP
