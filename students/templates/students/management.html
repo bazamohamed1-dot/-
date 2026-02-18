@@ -481,7 +481,7 @@ async function saveCurrent() {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify(studentData)
         });
@@ -541,7 +541,7 @@ async function deleteStudent() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify({ ids: ids })
         });

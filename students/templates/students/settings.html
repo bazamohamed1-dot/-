@@ -457,7 +457,7 @@ async function saveSchoolSettings(e) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify(data)
         });
@@ -491,7 +491,7 @@ async function saveCanteenSettings(e) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify(data)
         });
@@ -521,7 +521,7 @@ async function saveLibrarySettings(e) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify(data)
         });
@@ -606,7 +606,7 @@ async function saveRole(e) {
     try {
         const res = await fetch('/canteen/api/roles/', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('baza_school_csrf_v2')},
             body: JSON.stringify({ name: name, permissions: perms })
         });
         if(res.ok) {
@@ -624,7 +624,7 @@ async function deleteRole(id) {
     try {
         const res = await fetch(`/canteen/api/roles/${id}/`, {
             method: 'DELETE',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) loadRoles();
     } catch(e) { alert("Error"); }
@@ -755,7 +755,7 @@ async function activateDevice(id) {
     try {
         const response = await fetch(`/canteen/api/users/${id}/activate_device/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if (response.ok) {
             alert("تم التفعيل. سيتم الربط عند الدخول القادم.");
@@ -769,7 +769,7 @@ async function resetDevice(id) {
     try {
         const response = await fetch(`/canteen/api/users/${id}/reset_device/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if (response.ok) {
             alert("تم تعطيل الحماية.");
@@ -796,7 +796,7 @@ async function postSystemMessage(e) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify({ message: msg, recipient: recipient, active: true })
         });
@@ -864,7 +864,7 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify(body)
         });
@@ -888,7 +888,7 @@ async function deleteUser(id) {
         const response = await fetch(`/canteen/api/users/${id}/`, {
             method: 'DELETE',
             headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             }
         });
 
@@ -907,7 +907,7 @@ async function unlockUser(id) {
     try {
         const response = await fetch(`/canteen/api/users/${id}/unlock_account/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if (response.ok) {
             alert("تم فك القفل");
@@ -921,7 +921,7 @@ async function resetSession(id) {
     try {
         const response = await fetch(`/canteen/api/users/${id}/reset_session/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if (response.ok) {
             alert("تم إعادة ضبط الجلسة");
@@ -964,7 +964,7 @@ async function clearLogs() {
     try {
         const res = await fetch('/canteen/api/users/clear_logs/', {
             method: 'POST',
-             headers: {'X-CSRFToken': getCookie('csrftoken')}
+             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) {
             alert('تم محو السجلات');
@@ -995,7 +995,7 @@ async function setup2FA() {
     try {
         const res = await fetch('/canteen/auth/2fa/setup/', {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if (!res.ok) throw new Error('Failed');
         const data = await res.json();
@@ -1026,7 +1026,7 @@ async function confirm2FA() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
             body: JSON.stringify({ code: code })
         });
@@ -1045,7 +1045,7 @@ async function disable2FA() {
     try {
         const res = await fetch('/canteen/auth/2fa/disable/', {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) alert("تم التعطيل");
     } catch(e) { alert("Error"); }
@@ -1112,7 +1112,7 @@ async function approveUpdate(id) {
     try {
         const res = await fetch(`/canteen/api/pending_updates/${id}/approve/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) {
             loadPendingUpdates();
@@ -1132,7 +1132,7 @@ async function rejectUpdate(id) {
     try {
         const res = await fetch(`/canteen/api/pending_updates/${id}/`, {
             method: 'DELETE',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) {
             loadPendingUpdates();
@@ -1145,7 +1145,7 @@ async function approveAllUpdates() {
     try {
         const res = await fetch(`/canteen/api/pending_updates/approve_all/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) {
             alert("تمت الموافقة على الجميع");
@@ -1159,7 +1159,7 @@ async function rejectAllUpdates() {
     try {
         const res = await fetch(`/canteen/api/pending_updates/reject_all/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('csrftoken')}
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) {
             alert("تم الرفض");

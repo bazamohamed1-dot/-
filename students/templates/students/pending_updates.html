@@ -98,7 +98,7 @@
         try {
             const res = await fetch(`/api/pending_updates/${id}/approve/`, {
                 method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') }
             });
             if (res.ok) {
                 document.getElementById(`row-${id}`).remove();
@@ -114,7 +114,7 @@
         try {
             const res = await fetch(`/api/pending_updates/${id}/`, { // DELETE endpoint on ViewSet
                 method: 'DELETE',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') }
             });
             if (res.ok) {
                 document.getElementById(`row-${id}`).remove();
@@ -130,7 +130,7 @@
         try {
             const res = await fetch(`/api/pending_updates/approve_all/`, {
                 method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') }
             });
             if (res.ok) {
                 location.reload();
@@ -145,7 +145,7 @@
         try {
             const res = await fetch(`/api/pending_updates/reject_all/`, {
                 method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') }
             });
             if (res.ok) {
                 location.reload();
