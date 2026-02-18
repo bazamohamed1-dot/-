@@ -283,6 +283,11 @@
 
         <div class="footer">
             &copy; 2025 جميع الحقوق محفوظة
+            <div style="margin-top: 10px;">
+                <a href="#" onclick="forceRefresh()" style="color: #94a3b8; font-size: 0.8rem; text-decoration: underline;">
+                    <i class="fas fa-sync"></i> تحديث التطبيق (إصلاح مشاكل التصفح)
+                </a>
+            </div>
         </div>
     </div>
 
@@ -321,6 +326,37 @@
 
     <script>
         let temp2FAToken = null;
+
+        // Force Clear Service Worker Logic
+        function forceRefresh() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
+                });
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                    }
+                });
+            }
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.reload(true);
+        }
+
+        // Register Service Worker with forced update
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                    // Check for updates every time page loads
+                    registration.update();
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
 
         async function handleLogin(e) {
             e.preventDefault();
