@@ -3,308 +3,300 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>فضاء الموظفين - Baza Systems</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <title>نظام تسيير متوسطة بوشنافة عمر (سحابي)</title>
+    <!-- Fonts & Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #1e40af; --accent: #3b82f6; --success: #10b981;
+            --danger: #ef4444; --warning: #f59e0b; --bg: #f1f5f9;
+            --sidebar-width: 260px; --header-height: 70px;
+        }
+        body { margin: 0; font-family: 'Cairo', sans-serif; background: var(--bg); color: #334155; }
+
+        /* Layout */
+        .wrapper { display: flex; min-height: 100vh; transition: opacity 0.3s; opacity: 0; }
+        .wrapper.loaded { opacity: 1; }
+
+        /* Login Screen */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 9999; display: flex; justify-content: center; align-items: center;
+        }
+        .login-card { width: 350px; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
+
+        /* Sidebar (Same as Local) */
+        .sidebar {
+            width: var(--sidebar-width); background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            color: white; display: flex; flex-direction: column; position: fixed; right: 0; height: 100%; z-index: 1000;
+        }
+        .brand { padding: 20px; font-size: 1.2rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .nav-links { list-style: none; padding: 20px 10px; margin: 0; flex: 1; }
+        .nav-item { margin-bottom: 5px; display: none; } /* Hidden by default until perm check */
+        .nav-link {
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #94a3b8;
+            text-decoration: none; border-radius: 8px; transition: 0.3s; font-weight: 600; cursor: pointer;
+        }
+        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,0.1); color: white; }
+
+        /* Main */
+        .main { flex: 1; margin-right: var(--sidebar-width); }
+        .header {
+            height: var(--header-height); background: white; border-bottom: 1px solid #e2e8f0;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 30px;
+        }
+        .content { padding: 30px; }
+
+        /* Utilities */
+        .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 10px; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; border-bottom: 1px solid #eee; text-align: right; }
+        th { background: #f8fafc; }
+
+        /* Views */
+        .view-section { display: none; }
+        .view-section.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h2>فضاء الموظفين</h2>
 
-        <!-- Login Form -->
-        <div id="login-form" class="card">
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <div class="login-card">
+            <img src="https://img.icons8.com/color/96/school.png" style="margin-bottom: 20px;">
+            <h2 style="margin-bottom: 20px; color: #334155;">تسجيل الدخول</h2>
 
-            <button onclick="loginWithGoogle()" class="btn" style="background-color: #db4437; width: 100%; margin-bottom: 20px;">
-                <span style="font-weight: bold;">G</span> تسجيل الدخول عبر جوجل
+            <button onclick="loginGoogle()" class="btn" style="background: #db4437; color: white; width: 100%; margin-bottom: 20px;">
+                <i class="fab fa-google"></i> دخول بحساب جوجل
             </button>
 
-            <div style="text-align: center; margin: 10px 0; color: #aaa;">- أو -</div>
+            <div style="margin: 15px 0; color: #94a3b8;">- أو -</div>
 
-            <div class="form-group">
-                <label for="username">اسم المستخدم</label>
-                <input type="text" id="username" placeholder="مثال: ahmed">
-            </div>
-            <div class="form-group">
-                <label for="password">كلمة المرور</label>
-                <input type="password" id="password">
-            </div>
-            <button onclick="loginEmployee()" class="btn">دخول</button>
-            <div id="login-error" class="alert hidden">خطأ في الدخول</div>
+            <input type="text" id="uUser" placeholder="اسم المستخدم (للحساب المحلي)">
+            <input type="password" id="uPass" placeholder="كلمة المرور">
+            <button onclick="loginLocal()" class="btn btn-primary" style="width: 100%;">دخول</button>
+            <div id="login-msg" style="color: red; margin-top: 10px; font-size: 0.9em;"></div>
         </div>
+    </div>
 
-        <!-- Employee Dashboard -->
-        <div id="dashboard" class="hidden">
-            <div class="card" style="background-color: #e3f2fd;">
-                <h3>مرحباً <span id="employee-username"></span></h3>
-                <button onclick="logout()" class="btn btn-danger">خروج</button>
+    <!-- App Wrapper -->
+    <div class="wrapper" id="app-wrapper">
+        <aside class="sidebar">
+            <div class="brand"><i class="fas fa-school"></i> بوابة الموظفين</div>
+            <ul class="nav-links">
+                <li class="nav-item" id="nav-dashboard">
+                    <a onclick="showView('dashboard')" class="nav-link active"><i class="fas fa-home"></i> الرئيسية</a>
+                </li>
+                <li class="nav-item" id="nav-students">
+                    <a onclick="showView('students')" class="nav-link"><i class="fas fa-user-graduate"></i> التلاميذ</a>
+                </li>
+                <li class="nav-item" id="nav-canteen">
+                    <a onclick="showView('canteen')" class="nav-link"><i class="fas fa-utensils"></i> المطعم</a>
+                </li>
+                <li class="nav-item" id="nav-library">
+                    <a onclick="showView('library')" class="nav-link"><i class="fas fa-book"></i> المكتبة</a>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="main">
+            <header class="header">
+                <div style="font-weight: bold; font-size: 1.2rem;">بوابة الخدمات السحابية</div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <span id="user-display">المستخدم</span>
+                    <button onclick="logout()" class="btn btn-danger" style="padding: 5px 15px; font-size: 0.8rem;">خروج</button>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Dashboard View -->
+                <div id="view-dashboard" class="view-section active">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                        <div class="card" style="background: white; padding: 20px; border-radius: 10px; border-right: 4px solid var(--primary);">
+                            <h3>مرحباً بك</h3>
+                            <p>يمكنك استخدام القائمة الجانبية للوصول للخدمات المتاحة لك.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Students View -->
+                <div id="view-students" class="view-section">
+                    <h2 style="margin-bottom: 20px;">قائمة التلاميذ</h2>
+                    <input type="text" id="std-search" placeholder="بحث بالاسم أو الرقم..." onkeyup="renderStudents(this.value)">
+                    <div style="overflow-x: auto;">
+                        <table id="std-table">
+                            <thead><tr><th>الرقم</th><th>اللقب</th><th>الاسم</th><th>القسم</th><th>إجراءات</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Canteen View (Simple Check-in) -->
+                <div id="view-canteen" class="view-section">
+                    <h2>تسجيل الدخول للمطعم</h2>
+                    <p>قم بإدخال رقم التلميذ لتسجيل حضوره (يتم إرساله للموافقة).</p>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="canteen-id" placeholder="رقم التلميذ" style="max-width: 300px;">
+                        <button onclick="submitCanteen()" class="btn btn-success">تسجيل</button>
+                    </div>
+                </div>
+
             </div>
-
-            <!-- Student Search -->
-            <div class="card">
-                <h3>البحث عن تلميذ</h3>
-                <div class="form-group">
-                    <input type="text" id="search-query" placeholder="أدخل اسم التلميذ أو رقم التعريف">
-                    <button onclick="searchStudent()" class="btn" style="margin-top: 10px;">بحث</button>
-                </div>
-                <div id="search-results"></div>
-            </div>
-
-            <!-- Action Form (Hidden initially) -->
-            <div id="action-form" class="card hidden">
-                <h3 id="selected-student-name"></h3>
-                <input type="hidden" id="selected-student-id">
-
-                <div class="form-group">
-                    <label>نوع العملية</label>
-                    <select id="action-type">
-                        <option value="attendance">تسجيل غياب/تأخر</option>
-                        <option value="note">إرسال ملاحظة</option>
-                    </select>
-                </div>
-
-                <!-- Attendance Fields -->
-                <div id="attendance-fields">
-                    <div class="form-group">
-                        <label>الحالة</label>
-                        <select id="att-status">
-                            <option value="ABSENT">غياب</option>
-                            <option value="LATE">تأخر</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                         <label>السبب</label>
-                         <input type="text" id="att-reason" placeholder="سبب الغياب (اختياري)">
-                    </div>
-                </div>
-
-                <!-- Note Fields -->
-                <div id="note-fields" class="hidden">
-                    <div class="form-group">
-                        <label>العنوان</label>
-                        <input type="text" id="note-title" placeholder="عنوان الملاحظة">
-                    </div>
-                    <div class="form-group">
-                        <label>المحتوى</label>
-                        <textarea id="note-content" rows="3"></textarea>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>التاريخ</label>
-                    <input type="date" id="action-date">
-                </div>
-
-                <button onclick="submitAction()" class="btn success">إرسال للموافقة</button>
-                <div id="submission-msg" class="alert hidden"></div>
-            </div>
-        </div>
+        </main>
     </div>
 
     <script src="app.js"></script>
     <script>
-        // Set default date to today
-        document.getElementById('action-date').valueAsDate = new Date();
+        let currentUserProfile = null;
+        let allStudents = [];
 
-        // Auth State Listener
+        // Auth Listener
         auth.onAuthStateChanged(async user => {
             if (user) {
-                // If user logged in, check authorization
-                let isAuthorized = false;
-                let displayIdentifier = user.email;
+                // Fetch Profile
+                let username = user.email.split('@')[0];
 
-                // 1. Check if it's a "fake" email (username login) -> Always allowed (backend handles it)
-                if (user.email && user.email.endsWith('@bazasystems.com')) {
-                    isAuthorized = true;
-                    displayIdentifier = user.email.split('@')[0];
-                }
-                // 2. Check if it's a Google User -> Validate against 'allowed_users' collection
-                else {
-                    try {
-                        const sanitizedEmail = user.email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
-                        const doc = await db.collection('allowed_users').doc(sanitizedEmail).get();
-
-                        if (doc.exists) {
-                            isAuthorized = true;
-                            displayIdentifier = doc.data().username || user.displayName;
-                        } else {
-                            // Not allowed
-                            alert("هذا البريد الإلكتروني غير مصرح له بالدخول. يرجى مراجعة المدير لإضافة بريدك.");
-                            auth.signOut();
-                            return;
-                        }
-                    } catch (e) {
-                        console.error("Auth check error:", e);
-                        alert("حدث خطأ أثناء التحقق من الصلاحيات.");
+                // If Google, we need to map email to username via 'allowed_users'
+                if (!user.email.endsWith('@bazasystems.com')) {
+                    const sanitized = user.email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
+                    const mapDoc = await db.collection('allowed_users').doc(sanitized).get();
+                    if(mapDoc.exists) {
+                        username = mapDoc.data().username;
+                    } else {
+                        alert("غير مصرح لك");
                         auth.signOut();
                         return;
                     }
                 }
 
-                if (isAuthorized) {
-                    document.getElementById('login-form').classList.add('hidden');
-                    document.getElementById('dashboard').classList.remove('hidden');
-                    document.getElementById('employee-username').innerText = displayIdentifier;
+                // Get Permissions
+                const profileDoc = await db.collection('users_profiles').doc(username).get();
+                if(profileDoc.exists) {
+                    currentUserProfile = profileDoc.data();
+                    setupUI();
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('app-wrapper').classList.add('loaded');
+                    document.getElementById('user-display').innerText = username;
+                    loadData();
+                } else {
+                    alert("الملف الشخصي غير متزامن. يرجى طلب المزامنة من المدير.");
+                    auth.signOut();
                 }
             } else {
-                document.getElementById('login-form').classList.remove('hidden');
-                document.getElementById('dashboard').classList.add('hidden');
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('app-wrapper').classList.remove('loaded');
             }
         });
 
-        function loginWithGoogle() {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(error => {
-                const errDiv = document.getElementById('login-error');
-                errDiv.innerText = "فشل الدخول بجوجل: " + error.message;
-                errDiv.classList.remove('hidden');
+        function loginLocal() {
+            const u = document.getElementById('uUser').value;
+            const p = document.getElementById('uPass').value;
+            auth.signInWithEmailAndPassword(`${u}@bazasystems.com`, p).catch(e => {
+                document.getElementById('login-msg').innerText = "خطأ في الدخول";
             });
         }
 
-        function loginEmployee() {
-            const username = document.getElementById('username').value.trim();
-            const pass = document.getElementById('password').value;
-
-            if (!username || !pass) {
-                const errDiv = document.getElementById('login-error');
-                errDiv.innerText = "يرجى إدخال اسم المستخدم وكلمة المرور";
-                errDiv.classList.remove('hidden');
-                return;
-            }
-
-            // Append fake domain for Firebase Auth
-            const email = `${username}@bazasystems.com`;
-
-            auth.signInWithEmailAndPassword(email, pass)
-                .catch(error => {
-                    const errDiv = document.getElementById('login-error');
-                    console.error(error);
-                    errDiv.innerText = "بيانات الدخول غير صحيحة";
-                    errDiv.classList.remove('hidden');
-                });
+        function loginGoogle() {
+            auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
         }
 
-        function logout() {
-            auth.signOut();
+        function logout() { auth.signOut(); }
+
+        function setupUI() {
+            const p = currentUserProfile.permissions || [];
+            const r = currentUserProfile.role;
+
+            // Show all if Director
+            const isDir = r === 'director';
+
+            document.getElementById('nav-dashboard').style.display = 'block';
+
+            if(isDir || p.includes('access_management')) document.getElementById('nav-students').style.display = 'block';
+            if(isDir || p.includes('access_canteen')) document.getElementById('nav-canteen').style.display = 'block';
+            if(isDir || p.includes('access_library')) document.getElementById('nav-library').style.display = 'block';
         }
 
-        async function searchStudent() {
-            const query = document.getElementById('search-query').value;
-            const resultsDiv = document.getElementById('search-results');
-            resultsDiv.innerHTML = 'جاري البحث...';
+        function showView(name) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${name}`).classList.add('active');
 
-            try {
-                // Try searching by ID first
-                let snapshot = await db.collection('students')
-                    .where('student_id_number', '==', query)
-                    .limit(5)
-                    .get();
-
-                // If empty, try searching by first name (requires exact match usually)
-                if (snapshot.empty) {
-                     snapshot = await db.collection('students')
-                        .where('first_name', '==', query)
-                        .limit(5)
-                        .get();
-                }
-
-                resultsDiv.innerHTML = '';
-                if (snapshot.empty) {
-                    resultsDiv.innerText = "لم يتم العثور على تلميذ.";
-                } else {
-                    snapshot.forEach(doc => {
-                        const s = doc.data();
-                        const btn = document.createElement('button');
-                        btn.className = 'btn';
-                        btn.style.width = '100%';
-                        btn.style.marginTop = '5px';
-                        btn.style.textAlign = 'right';
-                        btn.innerText = `اختيار: ${s.first_name} ${s.last_name} (${s.class_name})`;
-                        btn.onclick = () => selectStudent(doc.id, s);
-                        resultsDiv.appendChild(btn);
-                    });
-                }
-            } catch (e) {
-                resultsDiv.innerText = "حدث خطأ: " + e.message;
-            }
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            // Highlight logic skipped for brevity
         }
 
-        function selectStudent(id, data) {
-            document.getElementById('action-form').classList.remove('hidden');
-            document.getElementById('selected-student-name').innerText = `تسجيل لـ: ${data.first_name} ${data.last_name}`;
-            document.getElementById('selected-student-id').value = id;
-            // Scroll to form
-            document.getElementById('action-form').scrollIntoView({behavior: "smooth"});
+        async function loadData() {
+            // Cache students locally in memory for search
+            const snap = await db.collection('students').get();
+            allStudents = [];
+            snap.forEach(d => allStudents.push({id: d.id, ...d.data()}));
+            renderStudents('');
         }
 
-        // Toggle Fields based on Action Type
-        document.getElementById('action-type').addEventListener('change', (e) => {
-            if (e.target.value === 'attendance') {
-                document.getElementById('attendance-fields').classList.remove('hidden');
-                document.getElementById('note-fields').classList.add('hidden');
-            } else {
-                document.getElementById('attendance-fields').classList.add('hidden');
-                document.getElementById('note-fields').classList.remove('hidden');
-            }
-        });
+        function renderStudents(q) {
+            const tbody = document.querySelector('#std-table tbody');
+            tbody.innerHTML = '';
+            const filtered = allStudents.filter(s =>
+                s.last_name.includes(q) || s.first_name.includes(q) || s.student_id_number.includes(q)
+            ).slice(0, 50);
 
-        async function submitAction() {
-            const studentId = document.getElementById('selected-student-id').value;
-            const actionType = document.getElementById('action-type').value; // 'attendance' or 'note'
-            const date = document.getElementById('action-date').value;
-            const user = auth.currentUser;
+            filtered.forEach(s => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${s.student_id_number}</td>
+                        <td>${s.last_name}</td>
+                        <td>${s.first_name}</td>
+                        <td>${s.class_name}</td>
+                        <td>
+                            <button onclick="reportAbsence('${s.id}')" class="btn btn-danger" style="padding: 5px 10px; font-size:0.8em;">غياب</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
 
-            if (!studentId || !date) {
-                alert("يرجى اختيار تلميذ وتاريخ.");
-                return;
-            }
-
-            const payload = {
-                student_ref: studentId, // Reference to Firestore ID
-                submitted_by: user.email, // Use email to track who submitted (Google or Local)
+        async function reportAbsence(id) {
+            if(!confirm("تسجيل غياب؟")) return;
+            await db.collection('pending_updates').add({
+                type: 'ATTENDANCE',
+                student_ref: id,
+                details: { status: 'ABSENT' },
+                submitted_by: currentUserProfile.username,
                 submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
                 status: 'pending',
-                date: date
-            };
+                date: new Date().toISOString().split('T')[0]
+            });
+            alert("تم الإرسال");
+        }
 
-            if (actionType === 'attendance') {
-                payload.type = 'ATTENDANCE';
-                payload.details = {
-                    status: document.getElementById('att-status').value,
-                    reason: document.getElementById('att-reason').value
-                };
-            } else {
-                payload.type = 'COMMUNICATION';
-                payload.details = {
-                    title: document.getElementById('note-title').value,
-                    content: document.getElementById('note-content').value,
-                    comm_type: 'NOTE'
-                };
-            }
+        async function submitCanteen() {
+            const id = document.getElementById('canteen-id').value;
+            if(!id) return;
+            // Find student ID ref
+            const s = allStudents.find(x => x.student_id_number == id);
+            if(!s) return alert("تلميذ غير موجود");
 
-            try {
-                await db.collection('pending_updates').add(payload);
-                const msg = document.getElementById('submission-msg');
-                msg.innerText = "تم الإرسال بنجاح! بانتظار موافقة المدير.";
-                msg.className = "alert success";
-                msg.classList.remove('hidden');
-
-                // Reset form
-                setTimeout(() => {
-                    document.getElementById('action-form').classList.add('hidden');
-                    msg.classList.add('hidden');
-                    document.getElementById('search-query').value = '';
-                    document.getElementById('search-results').innerHTML = '';
-                }, 3000);
-
-            } catch (e) {
-                console.error(e);
-                alert("فشل الإرسال: " + e.message);
-            }
+            await db.collection('pending_updates').add({
+                type: 'CanteenAttendance',
+                data: { student_id: id }, // Matches local format expectation
+                submitted_by: currentUserProfile.username,
+                timestamp: new Date().toISOString(), // Local expects timestamp string in pending logic sometimes
+                status: 'pending'
+            });
+            alert("تم تسجيل الحضور (بانتظار الموافقة)");
+            document.getElementById('canteen-id').value = '';
         }
     </script>
 </body>
