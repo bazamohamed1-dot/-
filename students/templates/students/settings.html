@@ -1212,5 +1212,40 @@ async function showUserQR(username) {
         alert("فشل توليد الرمز");
     }
 }
+
+async function triggerCloudSync() {
+    if(!confirm("هل تريد بدء المزامنة مع السحابة؟ قد يستغرق هذا بضع ثوان.")) return;
+    try {
+        // Find button to disable
+        const btn = event.target.closest('button');
+        if(btn) {
+             btn.disabled = true;
+             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري المزامنة...';
+        }
+
+        const res = await fetch('/canteen/api/pending_updates/trigger_sync/', {
+             method: 'POST',
+             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert(data.message || "تمت المزامنة");
+            loadPendingUpdates();
+        } else {
+            alert("حدث خطأ: " + (data.error || "غير معروف"));
+        }
+    } catch(e) {
+        alert("فشل المزامنة: " + e);
+    } finally {
+        // Re-enable button
+        const btn = document.querySelector('button[onclick="triggerCloudSync()"]');
+        if(btn) {
+             btn.disabled = false;
+             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> مزامنة سحابية';
+        }
+    }
+}
 </script>
 {% endblock %}

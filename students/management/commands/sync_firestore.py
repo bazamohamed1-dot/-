@@ -3,8 +3,8 @@ import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 import firebase_admin
-from firebase_admin import credentials, firestore
-from students.models import Student, AttendanceRecord, Communication, PendingUpdate
+from firebase_admin import credentials, firestore, auth as firebase_auth
+from students.models import Student, AttendanceRecord, Communication, PendingUpdate, EmployeeProfile
 from django.contrib.auth.models import User
 
 class Command(BaseCommand):
@@ -26,30 +26,60 @@ class Command(BaseCommand):
 
         # --- PUSH LOGIC (Local -> Cloud) ---
 
-        # 2. Sync Allowed Users (Emails for Google Sign-In)
-        users = User.objects.exclude(email='')
-        self.stdout.write(f"Pushing {users.count()} allowed emails...")
+        # 2. Sync Users & Permissions (Full Profile)
+        users = User.objects.select_related('profile').all()
+        self.stdout.write(f"Pushing {users.count()} users/profiles...")
 
         batch = db.batch()
         count = 0
+
         for u in users:
-            # Document ID = Email (sanitized) to make lookup easy/unique
-            doc_id = u.email.replace('@', '_at_').replace('.', '_dot_')
-            doc_ref = db.collection('allowed_users').document(doc_id)
+            # Sync to Firestore 'users_profiles'
+            # Doc ID = username (unique)
+            doc_ref = db.collection('users_profiles').document(u.username)
 
             role = 'unknown'
+            permissions = []
             if hasattr(u, 'profile'):
                 role = u.profile.role
+                permissions = u.profile.permissions
             elif u.is_superuser:
                 role = 'director'
+                permissions = ['ALL'] # Special flag
 
             user_data = {
-                'email': u.email,
                 'username': u.username,
+                'email': u.email,
                 'role': role,
+                'permissions': permissions,
                 'synced_at': firestore.SERVER_TIMESTAMP
             }
             batch.set(doc_ref, user_data, merge=True)
+
+            # Sync to 'allowed_users' for Google Auth check
+            if u.email:
+                doc_id_email = u.email.replace('@', '_at_').replace('.', '_dot_')
+                doc_ref_email = db.collection('allowed_users').document(doc_id_email)
+                batch.set(doc_ref_email, user_data, merge=True)
+
+            # Auto-Create/Update Firebase Auth User
+            try:
+                # Use shadow email for non-google users
+                shadow_email = f"{u.username}@bazasystems.com"
+                try:
+                    fb_user = firebase_auth.get_user_by_email(shadow_email)
+                    # Exists, update? (Password can't be retrieved, so skipping pass update here)
+                except firebase_auth.UserNotFoundError:
+                    self.stdout.write(f"Creating Firebase Auth for {u.username}...")
+                    firebase_auth.create_user(
+                        email=shadow_email,
+                        password="ChangeMe123!", # Default, user should reset or sync via UI
+                        display_name=u.username,
+                        uid=u.username # Use username as UID for easy mapping
+                    )
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"Auth Sync Warning for {u.username}: {e}"))
+
             count += 1
             if count >= 400:
                 batch.commit()
@@ -85,11 +115,9 @@ class Command(BaseCommand):
                 batch = db.batch()
                 total_synced += count
                 count = 0
-                self.stdout.write(f"  ... synced {total_synced} students")
 
         if count > 0:
             batch.commit()
-            total_synced += count
 
         self.stdout.write(self.style.SUCCESS(f"Finished syncing {total_synced} students."))
 
