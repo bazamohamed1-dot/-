@@ -195,11 +195,8 @@
                 <th style="padding:10px;">اسم المستخدم</th>
                 <th style="padding:10px;">البريد الإلكتروني</th>
                 <th style="padding:10px;">الدور</th>
-                <th style="padding:10px;">متصل</th>
-                <th style="padding:10px;">آخر نشاط</th>
-                <th style="padding:10px;">آخر دخول</th>
+                <th style="padding:10px;">دخول سحابي</th>
                 <th style="padding:10px;">حماية الجهاز</th>
-                <th style="padding:10px;">المحاولات</th>
                 <th style="padding:10px;">إجراءات</th>
             </tr>
         </thead>
@@ -238,20 +235,39 @@
                 <input type="password" id="uPassword" class="form-input western-nums" style="width:100%; padding:10px; direction:ltr; text-align:left;">
                 <small style="color:#666; display:none;" id="pwdHint">اتركه فارغاً إذا لم ترد التغيير</small>
             </div>
+
+            <div style="margin-bottom:15px; display:flex; gap:15px;">
+                <div style="flex:1;">
+                    <label style="display:block; margin-bottom:5px;">الدور</label>
+                    <select id="uRole" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()" required>
+                        <option value="">اختر...</option>
+                        <optgroup label="أدوار النظام">
+                            <option value="librarian" data-perms='["access_library","library_scan","library_loan","library_return","library_readers_list"]'>مكتبي</option>
+                            <option value="storekeeper" data-perms='["access_canteen","canteen_scan","canteen_manual","canteen_export"]'>مخزني (مطعم)</option>
+                            <option value="archivist" data-perms='["access_archive"]'>أرشيفي</option>
+                            <option value="secretariat" data-perms='["access_management","student_add","student_edit","student_print","import_data"]'>أمانة</option>
+                        </optgroup>
+                        <optgroup label="أدوار مخصصة" id="customRolesOptGroup">
+                            <!-- Populated via JS -->
+                        </optgroup>
+                    </select>
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block; margin-bottom:5px;">الواجهة المخصصة</label>
+                    <select id="uInterface" class="form-input" style="width:100%; padding:10px;">
+                        <option value="all">كامل الصلاحيات</option>
+                        <option value="canteen">المطعم المدرسي</option>
+                        <option value="library">المكتبة</option>
+                        <option value="students">تسيير التلاميذ</option>
+                    </select>
+                </div>
+            </div>
+
             <div style="margin-bottom:15px;">
-                <label style="display:block; margin-bottom:5px;">الدور</label>
-                <select id="uRole" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()" required>
-                    <option value="">اختر...</option>
-                    <optgroup label="أدوار النظام">
-                        <option value="librarian" data-perms='["access_library","library_scan","library_loan","library_return","library_readers_list"]'>مكتبي</option>
-                        <option value="storekeeper" data-perms='["access_canteen","canteen_scan","canteen_manual","canteen_export"]'>مخزني (مطعم)</option>
-                        <option value="archivist" data-perms='["access_archive"]'>أرشيفي</option>
-                        <option value="secretariat" data-perms='["access_management","student_add","student_edit","student_print","import_data"]'>أمانة</option>
-                    </optgroup>
-                    <optgroup label="أدوار مخصصة" id="customRolesOptGroup">
-                        <!-- Populated via JS -->
-                    </optgroup>
-                </select>
+                <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="uActiveCloud" style="width:20px; height:20px;">
+                    <span>تفعيل الدخول السحابي (Cloud Access)</span>
+                </label>
             </div>
 
             <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
@@ -684,8 +700,6 @@ function onRoleChange() {
 // User Management Logic
 async function loadUsers() {
     // Ensure this runs for Director/Superuser
-    // If role check fails but user IS director, the API will still work, but section is hidden.
-    // Let's rely on the Django template check to render the HTML, so we just show it here.
     const section = document.getElementById('userManagementSection');
     if(section) section.style.display = 'block';
     const msgSection = document.getElementById('systemMsgSection');
@@ -714,7 +728,6 @@ async function loadUsers() {
 
         // Populate Message Dropdown
         const msgSelect = document.getElementById('sysMsgRecipient');
-        // Keep first option
         msgSelect.innerHTML = '<option value="">جميع المستخدمين (رسالة عامة)</option>';
 
         users.forEach(u => {
@@ -740,6 +753,10 @@ async function loadUsers() {
                 ? '<i class="fas fa-circle" style="color:#10b981; font-size:0.8rem;"></i> متصل'
                 : '<i class="fas fa-circle" style="color:#cbd5e1; font-size:0.8rem;"></i> غير متصل';
 
+            const cloudStatus = u.is_active_cloud
+                ? '<span style="color:#10b981;"><i class="fas fa-cloud"></i> مفعل</span>'
+                : '<span style="color:#ef4444;"><i class="fas fa-cloud-slash"></i> معطل</span>';
+
             tr.innerHTML = `
                 <td class="western-nums" style="direction:ltr; text-align:left;">
                     ${u.username}
@@ -747,11 +764,8 @@ async function loadUsers() {
                 </td>
                 <td class="western-nums" style="direction:ltr; text-align:left;">${u.email || '-'}</td>
                 <td>${u.role_display}</td>
-                <td>${onlineDot}</td>
-                <td class="western-nums" style="direction:ltr;">${lastActive}</td>
-                <td class="western-nums" style="direction:ltr;">${lastLogin}</td>
+                <td>${cloudStatus}</td>
                 <td>${deviceBtn}</td>
-                <td class="western-nums">${u.failed_attempts}</td>
                 <td>
                     <button class="btn btn-info" onclick='editUser(${JSON.stringify(u).replace(/'/g, "&#39;")})' style="padding:5px 10px;" title="تعديل"><i class="fas fa-edit"></i></button>
                     <button class="btn" style="padding:5px 10px; background:#0f172a; color:white;" onclick="showUserQR('${u.username}')" title="رمز الدخول (QR)"><i class="fas fa-qrcode"></i></button>
@@ -834,6 +848,7 @@ function openAddUserModal() {
     document.getElementById('editUserId').value = '';
     document.getElementById('pwdHint').style.display = 'none';
     document.getElementById('uPassword').required = true;
+    document.getElementById('uActiveCloud').checked = true; // Default
     document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
 }
 
@@ -851,6 +866,10 @@ function editUser(user) {
     document.getElementById('uPassword').value = '';
     document.getElementById('uPassword').required = false;
     document.getElementById('pwdHint').style.display = 'block';
+
+    // New Fields
+    document.getElementById('uActiveCloud').checked = user.is_active_cloud;
+    document.getElementById('uInterface').value = user.assigned_interface || 'all';
 
     // Populate permissions
     document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
@@ -870,13 +889,21 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     const role = document.getElementById('uRole').value;
     const email = document.getElementById('uEmail').value;
 
+    const isActiveCloud = document.getElementById('uActiveCloud').checked;
+    const assignedInterface = document.getElementById('uInterface').value;
+
     // Collect permissions
     const permissions = [];
     document.querySelectorAll('.perm-check:checked').forEach(c => permissions.push(c.value));
 
     const url = id ? `/canteen/api/users/${id}/update_creds/` : '/canteen/api/users/';
 
-    const body = { username, role, permissions, email };
+    const body = {
+        username, role, permissions, email,
+        is_active_cloud: isActiveCloud,
+        assigned_interface: assignedInterface
+    };
+
     if (password) body.password = password;
 
     try {
@@ -1072,6 +1099,41 @@ async function disable2FA() {
 }
 
 // Sync Updates Logic
+async function triggerCloudSync() {
+    if(!confirm("هل تريد بدء المزامنة مع السحابة؟ قد يستغرق هذا بضع ثوان.")) return;
+    try {
+        // Find button to disable
+        const btn = event.target.closest('button');
+        if(btn) {
+             btn.disabled = true;
+             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري المزامنة...';
+        }
+
+        const res = await fetch('/canteen/api/pending_updates/trigger_sync/', {
+             method: 'POST',
+             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert(data.message || "تمت المزامنة");
+            loadPendingUpdates();
+        } else {
+            alert("حدث خطأ: " + (data.error || "غير معروف"));
+        }
+    } catch(e) {
+        alert("فشل المزامنة: " + e);
+    } finally {
+        // Re-enable button
+        const btn = document.querySelector('button[onclick="triggerCloudSync()"]');
+        if(btn) {
+             btn.disabled = false;
+             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> مزامنة سحابية';
+        }
+    }
+}
+
 async function loadPendingUpdates() {
     if (sessionStorage.getItem('user_role') !== 'director') return;
     document.getElementById('syncUpdatesSection').style.display = 'block';
@@ -1210,41 +1272,6 @@ async function showUserQR(username) {
         document.getElementById('qrModal').style.display = 'flex';
     } catch(e) {
         alert("فشل توليد الرمز");
-    }
-}
-
-async function triggerCloudSync() {
-    if(!confirm("هل تريد بدء المزامنة مع السحابة؟ قد يستغرق هذا بضع ثوان.")) return;
-    try {
-        // Find button to disable
-        const btn = event.target.closest('button');
-        if(btn) {
-             btn.disabled = true;
-             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري المزامنة...';
-        }
-
-        const res = await fetch('/canteen/api/pending_updates/trigger_sync/', {
-             method: 'POST',
-             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            alert(data.message || "تمت المزامنة");
-            loadPendingUpdates();
-        } else {
-            alert("حدث خطأ: " + (data.error || "غير معروف"));
-        }
-    } catch(e) {
-        alert("فشل المزامنة: " + e);
-    } finally {
-        // Re-enable button
-        const btn = document.querySelector('button[onclick="triggerCloudSync()"]');
-        if(btn) {
-             btn.disabled = false;
-             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> مزامنة سحابية';
-        }
     }
 }
 </script>

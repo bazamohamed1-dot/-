@@ -40,9 +40,14 @@ class Command(BaseCommand):
 
             role = 'unknown'
             permissions = []
+            is_active_cloud = True
+            assigned_interface = 'all'
+
             if hasattr(u, 'profile'):
                 role = u.profile.role
                 permissions = u.profile.permissions
+                is_active_cloud = u.profile.is_active_cloud
+                assigned_interface = u.profile.assigned_interface
             elif u.is_superuser:
                 role = 'director'
                 permissions = ['ALL'] # Special flag
@@ -52,6 +57,8 @@ class Command(BaseCommand):
                 'email': u.email,
                 'role': role,
                 'permissions': permissions,
+                'is_active_cloud': is_active_cloud,
+                'assigned_interface': assigned_interface,
                 'synced_at': firestore.SERVER_TIMESTAMP
             }
             batch.set(doc_ref, user_data, merge=True)
@@ -62,21 +69,26 @@ class Command(BaseCommand):
                 doc_ref_email = db.collection('allowed_users').document(doc_id_email)
                 batch.set(doc_ref_email, user_data, merge=True)
 
-            # Auto-Create/Update Firebase Auth User
+            # Auto-Create/Update/Disable Firebase Auth User
             try:
                 # Use shadow email for non-google users
                 shadow_email = f"{u.username}@bazasystems.com"
                 try:
                     fb_user = firebase_auth.get_user_by_email(shadow_email)
-                    # Exists, update? (Password can't be retrieved, so skipping pass update here)
+                    # Update status
+                    if fb_user.disabled != (not is_active_cloud):
+                        firebase_auth.update_user(fb_user.uid, disabled=(not is_active_cloud))
+                        self.stdout.write(f"Updated disabled status for {u.username} to {not is_active_cloud}")
                 except firebase_auth.UserNotFoundError:
-                    self.stdout.write(f"Creating Firebase Auth for {u.username}...")
-                    firebase_auth.create_user(
-                        email=shadow_email,
-                        password="ChangeMe123!", # Default, user should reset or sync via UI
-                        display_name=u.username,
-                        uid=u.username # Use username as UID for easy mapping
-                    )
+                    if is_active_cloud:
+                        self.stdout.write(f"Creating Firebase Auth for {u.username}...")
+                        firebase_auth.create_user(
+                            email=shadow_email,
+                            password="ChangeMe123!", # Default
+                            display_name=u.username,
+                            uid=u.username,
+                            disabled=False
+                        )
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"Auth Sync Warning for {u.username}: {e}"))
 
@@ -99,6 +111,10 @@ class Command(BaseCommand):
 
         for s in students:
             doc_ref = db.collection('students').document(str(s.id))
+
+            # Handle Photo Upload Handling (Placeholder for future hook)
+            # If backend had local photo logic, we'd upload here.
+
             student_data = {
                 'student_id_number': s.student_id_number,
                 'first_name': s.first_name,
@@ -108,6 +124,7 @@ class Command(BaseCommand):
                 'guardian_phone': s.guardian_phone or '',
                 'updated_at': firestore.SERVER_TIMESTAMP
             }
+            # Only merge so we don't overwrite photo_url if set by cloud upload
             batch.set(doc_ref, student_data, merge=True)
             count += 1
             if count >= 400:
@@ -115,9 +132,11 @@ class Command(BaseCommand):
                 batch = db.batch()
                 total_synced += count
                 count = 0
+                self.stdout.write(f"  ... synced {total_synced} students")
 
         if count > 0:
             batch.commit()
+            total_synced += count
 
         self.stdout.write(self.style.SUCCESS(f"Finished syncing {total_synced} students."))
 
@@ -135,7 +154,7 @@ class Command(BaseCommand):
             att_data = {
                 'student_id': str(r.student.id),
                 'date': r.date.strftime('%Y-%m-%d'),
-                'type': r.type, # 'ABSENT' or 'LATE'
+                'type': r.type,
                 'reason': r.reason or '',
                 'created_at': r.created_at
             }
@@ -165,7 +184,7 @@ class Command(BaseCommand):
                 'student_id': str(m.student.id),
                 'title': m.title,
                 'content': m.content,
-                'type': m.type, # 'NOTE', 'SUMMONS', 'INFO'
+                'type': m.type,
                 'date': m.date.strftime('%Y-%m-%d'),
                 'is_read': m.is_read
             }
@@ -193,11 +212,18 @@ class Command(BaseCommand):
             firestore_id = doc.id
 
             try:
+                # Handle Photo Uploads specially
+                if data.get('type') == 'PHOTO_UPLOAD':
+                    # We just store it as a PendingUpdate for now.
+                    # The Director can 'Approve' it which would mean downloading the image
+                    # and updating the local Student record.
+                    pass
+
                 PendingUpdate.objects.create(
                     user=None, # System created
                     model_name=data.get('type', 'UNKNOWN'),
                     action='create',
-                    data=data, # Store the whole JSON
+                    data=data, # Store the whole JSON including photo_url if present
                     status='pending',
                     timestamp=timezone.now()
                 )
