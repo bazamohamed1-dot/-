@@ -168,6 +168,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
         <h3><i class="fas fa-sync"></i> مزامنة التحديثات</h3>
         <div style="display:flex; gap:10px;">
+             <button class="btn btn-primary" onclick="triggerCloudSync()"><i class="fas fa-cloud-download-alt"></i> مزامنة سحابية</button>
              <button class="btn btn-success" onclick="approveAllUpdates()"><i class="fas fa-check-double"></i> قبول الكل</button>
              <button class="btn btn-danger" onclick="rejectAllUpdates()"><i class="fas fa-times"></i> رفض الكل</button>
         </div>
@@ -1063,6 +1064,43 @@ async function disable2FA() {
 }
 
 // Sync Updates Logic
+async function triggerCloudSync() {
+    if(!confirm("هل تريد بدء المزامنة مع السحابة؟ قد يستغرق هذا بضع ثوان.")) return;
+    try {
+        // Find button to disable
+        const btn = event.target.closest('button'); // ensure we get button if icon clicked
+        if(btn) {
+             btn.disabled = true;
+             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري المزامنة...';
+        }
+
+        const res = await fetch('/canteen/api/pending_updates/trigger_sync/', {
+             method: 'POST',
+             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert(data.message || "تمت المزامنة");
+            loadPendingUpdates();
+        } else {
+            alert("حدث خطأ: " + (data.error || "غير معروف"));
+        }
+    } catch(e) {
+        alert("فشل المزامنة: " + e);
+    } finally {
+        // Reload page to reset button state effectively or just reload list
+        // loadPendingUpdates() is called above on success.
+        // We can re-enable the button if we found it
+        const btn = document.querySelector('button[onclick="triggerCloudSync()"]');
+        if(btn) {
+             btn.disabled = false;
+             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> مزامنة سحابية';
+        }
+    }
+}
+
 async function loadPendingUpdates() {
     if (sessionStorage.getItem('user_role') !== 'director') return;
     document.getElementById('syncUpdatesSection').style.display = 'block';
@@ -1085,10 +1123,22 @@ async function loadPendingUpdates() {
         container.innerHTML = '';
         updates.forEach(u => {
             let details = '';
-            if (u.model_name === 'Student') {
-                const d = u.data; // or u.data.data depending on structure
-                // API likely returns stored JSON.
-                // Serializer: data field.
+
+            // Handle different update types
+            let d = u.data;
+            if (typeof d === 'string') {
+                try { d = JSON.parse(d); } catch(e){}
+            }
+
+            if (u.model_name === 'ATTENDANCE') {
+                const status = (d.details && d.details.status === 'ABSENT') ? 'غياب' : 'تأخر';
+                const submitter = d.submitted_by || 'غير معروف';
+                details = `تسجيل ${status} - تاريخ: ${d.date} - بواسطة: ${submitter}`;
+            } else if (u.model_name === 'COMMUNICATION') {
+                 const title = d.details ? d.details.title : 'ملاحظة';
+                 const submitter = d.submitted_by || 'غير معروف';
+                 details = `مراسلة: ${title} - بواسطة: ${submitter}`;
+            } else if (u.model_name === 'Student') {
                 const studentName = (d.last_name || '') + ' ' + (d.first_name || '');
                 details = `تلميذ: ${studentName} (${u.action})`;
             } else if (u.model_name === 'CanteenAttendance') {
@@ -1107,7 +1157,7 @@ async function loadPendingUpdates() {
             item.innerHTML = `
                 <div>
                     <div style="font-weight:bold;">${details}</div>
-                    <div style="font-size:0.8rem; color:#64748b;">${new Date(u.timestamp).toLocaleString()} - المستخدم: ${u.user || 'Unknown'}</div>
+                    <div style="font-size:0.8rem; color:#64748b;">${new Date(u.timestamp).toLocaleString()} - المستخدم: ${u.user || 'System/Cloud'}</div>
                 </div>
                 <div>
                     <button class="btn btn-success" onclick="approveUpdate(${u.id})" style="padding:5px 10px;"><i class="fas fa-check"></i></button>

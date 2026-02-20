@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فضاء الولي - Baza Systems</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>فضاء الولي</h2>
+
+        <!-- Login Form -->
+        <div id="login-form" class="card">
+            <div class="form-group">
+                <label for="student-id">رقم التعريف المدرسي</label>
+                <input type="text" id="student-id" placeholder="أدخل رقم التعريف">
+            </div>
+            <div class="form-group">
+                <label for="student-dob">تاريخ الميلاد</label>
+                <input type="date" id="student-dob">
+            </div>
+            <button onclick="loginParent()" class="btn">دخول</button>
+            <div id="login-error" class="alert hidden">بيانات الدخول غير صحيحة</div>
+        </div>
+
+        <!-- Student Dashboard -->
+        <div id="dashboard" class="hidden">
+            <div class="card" style="background-color: #e3f2fd;">
+                <h3 id="student-name">اسم التلميذ</h3>
+                <p>القسم: <span id="student-class"></span></p>
+                <button onclick="logout()" class="btn btn-danger" style="margin-top: 10px;">خروج</button>
+            </div>
+
+            <div class="card">
+                <h3>سجل الغياب والتأخر</h3>
+                <div id="attendance-list">
+                    <p>جاري التحميل...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>المراسلات والملاحظات</h3>
+                <div id="messages-list">
+                    <p>جاري التحميل...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        async function loginParent() {
+            const studentId = document.getElementById('student-id').value;
+            const dob = document.getElementById('student-dob').value;
+            const errorDiv = document.getElementById('login-error');
+
+            if (!studentId || !dob) {
+                errorDiv.innerText = "يرجى ملء جميع الحقول";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // Query Firestore for matching student
+                // Note: Make sure to create a composite index in Firestore for this query
+                const snapshot = await db.collection('students')
+                    .where('student_id_number', '==', studentId)
+                    .where('date_of_birth', '==', dob)
+                    .get();
+
+                if (snapshot.empty) {
+                    errorDiv.innerText = "بيانات الدخول غير صحيحة";
+                    errorDiv.classList.remove('hidden');
+                } else {
+                    const studentDoc = snapshot.docs[0];
+                    const studentData = studentDoc.data();
+                    showDashboard(studentDoc.id, studentData);
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                errorDiv.innerText = "حدث خطأ في الاتصال: " + error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        async function showDashboard(docId, data) {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+
+            document.getElementById('student-name').innerText = `${data.first_name} ${data.last_name}`;
+            document.getElementById('student-class').innerText = data.class_name;
+
+            // Load Attendance
+            const attendanceSnap = await db.collection('attendance')
+                .where('student_id', '==', docId)
+                .orderBy('date', 'desc')
+                .limit(20)
+                .get();
+
+            const attendanceList = document.getElementById('attendance-list');
+            attendanceList.innerHTML = '';
+            if (attendanceSnap.empty) {
+                attendanceList.innerHTML = '<p>لا توجد سجلات غياب.</p>';
+            } else {
+                attendanceSnap.forEach(doc => {
+                    const r = doc.data();
+                    const badgeClass = r.type === 'ABSENT' ? 'badge-absent' : 'badge-late';
+                    const typeLabel = r.type === 'ABSENT' ? 'غياب' : 'تأخر';
+                    attendanceList.innerHTML += `
+                        <div class="record-item">
+                            <span class="badge ${badgeClass}">${typeLabel}</span>
+                            <strong>${r.date}</strong>
+                            <p>${r.reason || ''}</p>
+                        </div>
+                    `;
+                });
+            }
+
+            // Load Messages
+            const messagesSnap = await db.collection('messages')
+                .where('student_id', '==', docId)
+                .orderBy('date', 'desc')
+                .limit(20)
+                .get();
+
+            const messagesList = document.getElementById('messages-list');
+            messagesList.innerHTML = '';
+            if (messagesSnap.empty) {
+                messagesList.innerHTML = '<p>لا توجد رسائل.</p>';
+            } else {
+                messagesSnap.forEach(doc => {
+                    const m = doc.data();
+                    messagesList.innerHTML += `
+                        <div class="record-item">
+                            <span class="badge badge-note">${m.type}</span>
+                            <strong>${m.date} - ${m.title}</strong>
+                            <p>${m.content}</p>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function logout() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>

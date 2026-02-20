@@ -29,3 +29,4 @@ whitenoise==6.6.0
 xlrd==2.0.1
 cloudinary==1.36.0
 django-cloudinary-storage==0.3.0
+firebase-admin==6.6.0

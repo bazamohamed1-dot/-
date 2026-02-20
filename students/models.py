@@ -200,3 +200,44 @@ class Survey(models.Model):
 
     def __str__(self):
         return self.title
+
+class AttendanceRecord(models.Model):
+    ATTENDANCE_TYPES = [
+        ('ABSENT', 'غياب'),
+        ('LATE', 'تأخر'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ", related_name='attendance_records')
+    date = models.DateField(default=date.today, verbose_name="التاريخ")
+    time = models.TimeField(null=True, blank=True, verbose_name="وقت الوصول") # For lateness
+    type = models.CharField(max_length=20, choices=ATTENDANCE_TYPES, verbose_name="النوع")
+    reason = models.TextField(null=True, blank=True, verbose_name="السبب")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ التسجيل")
+
+    class Meta:
+        verbose_name = "سجل الغياب والتأخر"
+        verbose_name_plural = "سجلات الغياب والتأخر"
+        ordering = ['-date', '-time']
+
+    def __str__(self):
+        return f"{self.student} - {self.get_type_display()} - {self.date}"
+
+class Communication(models.Model):
+    COMM_TYPES = [
+        ('NOTE', 'ملاحظة'),
+        ('SUMMONS', 'استدعاء'),
+        ('INFO', 'إعلان'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ", related_name='communications')
+    title = models.CharField(max_length=200, verbose_name="العنوان")
+    content = models.TextField(verbose_name="المحتوى")
+    date = models.DateField(default=date.today, verbose_name="التاريخ")
+    type = models.CharField(max_length=20, choices=COMM_TYPES, default='NOTE', verbose_name="النوع")
+    is_read = models.BooleanField(default=False, verbose_name="تمت القراءة")
+
+    class Meta:
+        verbose_name = "مراسلة"
+        verbose_name_plural = "المراسلات"
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.student} - {self.title}"

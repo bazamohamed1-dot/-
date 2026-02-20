@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فضاء الموظفين - Baza Systems</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>فضاء الموظفين</h2>
+
+        <!-- Login Form -->
+        <div id="login-form" class="card">
+            <div class="form-group">
+                <label for="email">البريد الإلكتروني</label>
+                <input type="email" id="email" placeholder="example@bazasystems.com">
+            </div>
+            <div class="form-group">
+                <label for="password">كلمة المرور</label>
+                <input type="password" id="password">
+            </div>
+            <button onclick="loginEmployee()" class="btn">دخول</button>
+            <div id="login-error" class="alert hidden">خطأ في الدخول</div>
+        </div>
+
+        <!-- Employee Dashboard -->
+        <div id="dashboard" class="hidden">
+            <div class="card" style="background-color: #e3f2fd;">
+                <h3>مرحباً <span id="employee-email"></span></h3>
+                <button onclick="logout()" class="btn btn-danger">خروج</button>
+            </div>
+
+            <!-- Student Search -->
+            <div class="card">
+                <h3>البحث عن تلميذ</h3>
+                <div class="form-group">
+                    <input type="text" id="search-query" placeholder="أدخل اسم التلميذ أو رقم التعريف">
+                    <button onclick="searchStudent()" class="btn" style="margin-top: 10px;">بحث</button>
+                </div>
+                <div id="search-results"></div>
+            </div>
+
+            <!-- Action Form (Hidden initially) -->
+            <div id="action-form" class="card hidden">
+                <h3 id="selected-student-name"></h3>
+                <input type="hidden" id="selected-student-id">
+
+                <div class="form-group">
+                    <label>نوع العملية</label>
+                    <select id="action-type">
+                        <option value="attendance">تسجيل غياب/تأخر</option>
+                        <option value="note">إرسال ملاحظة</option>
+                    </select>
+                </div>
+
+                <!-- Attendance Fields -->
+                <div id="attendance-fields">
+                    <div class="form-group">
+                        <label>الحالة</label>
+                        <select id="att-status">
+                            <option value="ABSENT">غياب</option>
+                            <option value="LATE">تأخر</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Note Fields -->
+                <div id="note-fields" class="hidden">
+                    <div class="form-group">
+                        <label>العنوان</label>
+                        <input type="text" id="note-title" placeholder="عنوان الملاحظة">
+                    </div>
+                    <div class="form-group">
+                        <label>المحتوى</label>
+                        <textarea id="note-content" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>التاريخ</label>
+                    <input type="date" id="action-date">
+                </div>
+
+                <button onclick="submitAction()" class="btn success">إرسال للموافقة</button>
+                <div id="submission-msg" class="alert hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Set default date to today
+        document.getElementById('action-date').valueAsDate = new Date();
+
+        // Auth State Listener
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('login-form').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('employee-email').innerText = user.email;
+            } else {
+                document.getElementById('login-form').classList.remove('hidden');
+                document.getElementById('dashboard').classList.add('hidden');
+            }
+        });
+
+        function loginEmployee() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+
+            auth.signInWithEmailAndPassword(email, pass)
+                .catch(error => {
+                    const errDiv = document.getElementById('login-error');
+                    errDiv.innerText = error.message;
+                    errDiv.classList.remove('hidden');
+                });
+        }
+
+        function logout() {
+            auth.signOut();
+        }
+
+        async function searchStudent() {
+            const query = document.getElementById('search-query').value;
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = 'جاري البحث...';
+
+            // Simple search by ID
+            // Ideally, Firestore isn't great for full-text search.
+            // We'll search by exact ID match OR create a composite index for name if needed.
+            // For now, let's assume searching by Student ID Number for precision.
+
+            try {
+                const snapshot = await db.collection('students')
+                    .where('student_id_number', '==', query)
+                    .get();
+
+                resultsDiv.innerHTML = '';
+                if (snapshot.empty) {
+                    resultsDiv.innerText = "لم يتم العثور على تلميذ بهذا الرقم.";
+                } else {
+                    snapshot.forEach(doc => {
+                        const s = doc.data();
+                        const btn = document.createElement('button');
+                        btn.className = 'btn';
+                        btn.innerText = `اختيار: ${s.first_name} ${s.last_name}`;
+                        btn.onclick = () => selectStudent(doc.id, s);
+                        resultsDiv.appendChild(btn);
+                    });
+                }
+            } catch (e) {
+                resultsDiv.innerText = "حدث خطأ: " + e.message;
+            }
+        }
+
+        function selectStudent(id, data) {
+            document.getElementById('action-form').classList.remove('hidden');
+            document.getElementById('selected-student-name').innerText = `تسجيل لـ: ${data.first_name} ${data.last_name}`;
+            document.getElementById('selected-student-id').value = id;
+            // Scroll to form
+            document.getElementById('action-form').scrollIntoView({behavior: "smooth"});
+        }
+
+        // Toggle Fields based on Action Type
+        document.getElementById('action-type').addEventListener('change', (e) => {
+            if (e.target.value === 'attendance') {
+                document.getElementById('attendance-fields').classList.remove('hidden');
+                document.getElementById('note-fields').classList.add('hidden');
+            } else {
+                document.getElementById('attendance-fields').classList.add('hidden');
+                document.getElementById('note-fields').classList.remove('hidden');
+            }
+        });
+
+        async function submitAction() {
+            const studentId = document.getElementById('selected-student-id').value;
+            const actionType = document.getElementById('action-type').value; // 'attendance' or 'note'
+            const date = document.getElementById('action-date').value;
+            const user = auth.currentUser;
+
+            if (!studentId || !date) {
+                alert("يرجى اختيار تلميذ وتاريخ.");
+                return;
+            }
+
+            const payload = {
+                student_ref: studentId, // Reference to Firestore ID
+                submitted_by: user.email,
+                submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+                status: 'pending',
+                date: date
+            };
+
+            if (actionType === 'attendance') {
+                payload.type = 'ATTENDANCE';
+                payload.details = {
+                    status: document.getElementById('att-status').value
+                };
+            } else {
+                payload.type = 'COMMUNICATION';
+                payload.details = {
+                    title: document.getElementById('note-title').value,
+                    content: document.getElementById('note-content').value,
+                    comm_type: 'NOTE'
+                };
+            }
+
+            try {
+                await db.collection('pending_updates').add(payload);
+                const msg = document.getElementById('submission-msg');
+                msg.innerText = "تم الإرسال بنجاح! بانتظار موافقة المدير.";
+                msg.className = "alert success";
+                msg.classList.remove('hidden');
+
+                // Reset form
+                setTimeout(() => {
+                    document.getElementById('action-form').classList.add('hidden');
+                    msg.classList.add('hidden');
+                }, 3000);
+
+            } catch (e) {
+                console.error(e);
+                alert("فشل الإرسال: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
