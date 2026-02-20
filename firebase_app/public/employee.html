@@ -19,8 +19,8 @@
         <!-- Login Form -->
         <div id="login-form" class="card">
             <div class="form-group">
-                <label for="email">البريد الإلكتروني</label>
-                <input type="email" id="email" placeholder="example@bazasystems.com">
+                <label for="username">اسم المستخدم</label>
+                <input type="text" id="username" placeholder="مثال: ahmed">
             </div>
             <div class="form-group">
                 <label for="password">كلمة المرور</label>
@@ -33,7 +33,7 @@
         <!-- Employee Dashboard -->
         <div id="dashboard" class="hidden">
             <div class="card" style="background-color: #e3f2fd;">
-                <h3>مرحباً <span id="employee-email"></span></h3>
+                <h3>مرحباً <span id="employee-username"></span></h3>
                 <button onclick="logout()" class="btn btn-danger">خروج</button>
             </div>
 
@@ -68,6 +68,10 @@
                             <option value="ABSENT">غياب</option>
                             <option value="LATE">تأخر</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                         <label>السبب</label>
+                         <input type="text" id="att-reason" placeholder="سبب الغياب (اختياري)">
                     </div>
                 </div>
 
@@ -104,7 +108,9 @@
             if (user) {
                 document.getElementById('login-form').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('employee-email').innerText = user.email;
+                // Extract username from email (remove @bazasystems.com)
+                const username = user.email.split('@')[0];
+                document.getElementById('employee-username').innerText = username;
             } else {
                 document.getElementById('login-form').classList.remove('hidden');
                 document.getElementById('dashboard').classList.add('hidden');
@@ -112,13 +118,24 @@
         });
 
         function loginEmployee() {
-            const email = document.getElementById('email').value;
+            const username = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value;
+
+            if (!username || !pass) {
+                const errDiv = document.getElementById('login-error');
+                errDiv.innerText = "يرجى إدخال اسم المستخدم وكلمة المرور";
+                errDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Append fake domain for Firebase Auth
+            const email = `${username}@bazasystems.com`;
 
             auth.signInWithEmailAndPassword(email, pass)
                 .catch(error => {
                     const errDiv = document.getElementById('login-error');
-                    errDiv.innerText = error.message;
+                    console.error(error);
+                    errDiv.innerText = "بيانات الدخول غير صحيحة";
                     errDiv.classList.remove('hidden');
                 });
         }
@@ -138,19 +155,32 @@
             // For now, let's assume searching by Student ID Number for precision.
 
             try {
-                const snapshot = await db.collection('students')
+                // Try searching by ID first
+                let snapshot = await db.collection('students')
                     .where('student_id_number', '==', query)
+                    .limit(5)
                     .get();
+
+                // If empty, try searching by first name (requires exact match usually)
+                if (snapshot.empty) {
+                     snapshot = await db.collection('students')
+                        .where('first_name', '==', query)
+                        .limit(5)
+                        .get();
+                }
 
                 resultsDiv.innerHTML = '';
                 if (snapshot.empty) {
-                    resultsDiv.innerText = "لم يتم العثور على تلميذ بهذا الرقم.";
+                    resultsDiv.innerText = "لم يتم العثور على تلميذ.";
                 } else {
                     snapshot.forEach(doc => {
                         const s = doc.data();
                         const btn = document.createElement('button');
                         btn.className = 'btn';
-                        btn.innerText = `اختيار: ${s.first_name} ${s.last_name}`;
+                        btn.style.width = '100%';
+                        btn.style.marginTop = '5px';
+                        btn.style.textAlign = 'right';
+                        btn.innerText = `اختيار: ${s.first_name} ${s.last_name} (${s.class_name})`;
                         btn.onclick = () => selectStudent(doc.id, s);
                         resultsDiv.appendChild(btn);
                     });
@@ -192,7 +222,7 @@
 
             const payload = {
                 student_ref: studentId, // Reference to Firestore ID
-                submitted_by: user.email,
+                submitted_by: user.email.split('@')[0], // Just username
                 submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
                 status: 'pending',
                 date: date
@@ -201,7 +231,8 @@
             if (actionType === 'attendance') {
                 payload.type = 'ATTENDANCE';
                 payload.details = {
-                    status: document.getElementById('att-status').value
+                    status: document.getElementById('att-status').value,
+                    reason: document.getElementById('att-reason').value
                 };
             } else {
                 payload.type = 'COMMUNICATION';
@@ -223,6 +254,8 @@
                 setTimeout(() => {
                     document.getElementById('action-form').classList.add('hidden');
                     msg.classList.add('hidden');
+                    document.getElementById('search-query').value = '';
+                    document.getElementById('search-results').innerHTML = '';
                 }, 3000);
 
             } catch (e) {
