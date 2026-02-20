@@ -12,6 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
     <style>
         :root {
@@ -57,6 +58,7 @@
         /* Utilities */
         .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
         .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
         input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
 
@@ -69,6 +71,8 @@
         .view-section { display: none; }
         .view-section.active { display: block; animation: fadeIn 0.3s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .nav-item.locked { opacity: 0.5; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -154,22 +158,31 @@
                     </div>
                 </div>
 
+                <!-- Library View (Stub) -->
+                <div id="view-library" class="view-section">
+                    <h2>المكتبة</h2>
+                    <p>خاصية المكتبة السحابية قيد التطوير.</p>
+                </div>
+
             </div>
         </main>
     </div>
+
+    <!-- Hidden File Input for Photo Upload -->
+    <input type="file" id="photoInput" style="display: none;" accept="image/*">
 
     <script src="app.js"></script>
     <script>
         let currentUserProfile = null;
         let allStudents = [];
+        let profileUnsubscribe = null;
 
         // Auth Listener
         auth.onAuthStateChanged(async user => {
             if (user) {
-                // Fetch Profile
                 let username = user.email.split('@')[0];
 
-                // If Google, we need to map email to username via 'allowed_users'
+                // Google Auth Mapping
                 if (!user.email.endsWith('@bazasystems.com')) {
                     const sanitized = user.email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
                     const mapDoc = await db.collection('allowed_users').doc(sanitized).get();
@@ -182,20 +195,41 @@
                     }
                 }
 
-                // Get Permissions
-                const profileDoc = await db.collection('users_profiles').doc(username).get();
-                if(profileDoc.exists) {
-                    currentUserProfile = profileDoc.data();
-                    setupUI();
-                    document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('app-wrapper').classList.add('loaded');
-                    document.getElementById('user-display').innerText = username;
-                    loadData();
-                } else {
-                    alert("الملف الشخصي غير متزامن. يرجى طلب المزامنة من المدير.");
-                    auth.signOut();
-                }
+                // Real-time Profile Listener (Kick-out & Dynamic Routing)
+                profileUnsubscribe = db.collection('users_profiles').doc(username)
+                    .onSnapshot(doc => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            // 1. Kick-out Check
+                            if (data.is_active_cloud === false) {
+                                alert("لقد تم إلغاء صلاحية دخولك من قبل المدير.");
+                                logout();
+                                return;
+                            }
+
+                            currentUserProfile = data;
+                            setupUI();
+
+                            // 2. Dynamic Routing Check
+                            if (data.assigned_interface && data.assigned_interface !== 'all') {
+                                showView(data.assigned_interface);
+                                // Hide Sidebar for strict focus? Or just restrict links.
+                                // Let's hide other links.
+                            }
+
+                            document.getElementById('login-screen').style.display = 'none';
+                            document.getElementById('app-wrapper').classList.add('loaded');
+                            document.getElementById('user-display').innerText = username;
+                            loadData();
+                        } else {
+                            // Profile deleted?
+                            alert("حسابك غير موجود في النظام السحابي.");
+                            logout();
+                        }
+                    });
+
             } else {
+                if(profileUnsubscribe) profileUnsubscribe();
                 document.getElementById('login-screen').style.display = 'flex';
                 document.getElementById('app-wrapper').classList.remove('loaded');
             }
@@ -213,32 +247,50 @@
             auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
         }
 
-        function logout() { auth.signOut(); }
+        function logout() {
+            if(profileUnsubscribe) profileUnsubscribe();
+            auth.signOut();
+        }
 
         function setupUI() {
             const p = currentUserProfile.permissions || [];
             const r = currentUserProfile.role;
+            const assigned = currentUserProfile.assigned_interface || 'all';
 
-            // Show all if Director
             const isDir = r === 'director';
 
-            document.getElementById('nav-dashboard').style.display = 'block';
+            // Reset Nav
+            document.querySelectorAll('.nav-item').forEach(el => el.style.display = 'none');
 
-            if(isDir || p.includes('access_management')) document.getElementById('nav-students').style.display = 'block';
-            if(isDir || p.includes('access_canteen')) document.getElementById('nav-canteen').style.display = 'block';
-            if(isDir || p.includes('access_library')) document.getElementById('nav-library').style.display = 'block';
+            // Dashboard always visible unless specific interface assigned
+            if (assigned === 'all') {
+                document.getElementById('nav-dashboard').style.display = 'block';
+                if(isDir || p.includes('access_management')) document.getElementById('nav-students').style.display = 'block';
+                if(isDir || p.includes('access_canteen')) document.getElementById('nav-canteen').style.display = 'block';
+                if(isDir || p.includes('access_library')) document.getElementById('nav-library').style.display = 'block';
+            } else {
+                // Show ONLY the assigned interface link
+                if(document.getElementById(`nav-${assigned}`)) {
+                    document.getElementById(`nav-${assigned}`).style.display = 'block';
+                }
+            }
         }
 
         function showView(name) {
+            // Security check based on assigned_interface
+            if (currentUserProfile && currentUserProfile.assigned_interface !== 'all' && currentUserProfile.assigned_interface !== name) {
+                return; // Prevent switching
+            }
+
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-            document.getElementById(`view-${name}`).classList.add('active');
+            const view = document.getElementById(`view-${name}`);
+            if(view) view.classList.add('active');
 
             document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-            // Highlight logic skipped for brevity
         }
 
         async function loadData() {
-            // Cache students locally in memory for search
+            if(allStudents.length > 0) return; // Already loaded
             const snap = await db.collection('students').get();
             allStudents = [];
             snap.forEach(d => allStudents.push({id: d.id, ...d.data()}));
@@ -259,13 +311,48 @@
                         <td>${s.last_name}</td>
                         <td>${s.first_name}</td>
                         <td>${s.class_name}</td>
-                        <td>
+                        <td style="display:flex; gap:5px; justify-content:flex-end;">
                             <button onclick="reportAbsence('${s.id}')" class="btn btn-danger" style="padding: 5px 10px; font-size:0.8em;">غياب</button>
+                            <button onclick="triggerPhotoUpload('${s.id}')" class="btn btn-primary" style="padding: 5px 10px; font-size:0.8em;"><i class="fas fa-camera"></i></button>
                         </td>
                     </tr>
                 `;
             });
         }
+
+        // Photo Upload Logic
+        let currentUploadStudentId = null;
+        function triggerPhotoUpload(id) {
+            currentUploadStudentId = id;
+            document.getElementById('photoInput').click();
+        }
+
+        document.getElementById('photoInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if(!file || !currentUploadStudentId) return;
+
+            const storageRef = firebase.storage().ref();
+            const fileRef = storageRef.child(`students_photos/${currentUploadStudentId}_${Date.now()}.jpg`);
+
+            try {
+                const snapshot = await fileRef.put(file);
+                const url = await snapshot.ref.getDownloadURL();
+
+                // Create Pending Update for Local Pull
+                await db.collection('pending_updates').add({
+                    type: 'PHOTO_UPLOAD',
+                    student_ref: currentUploadStudentId,
+                    photo_url: url,
+                    submitted_by: currentUserProfile.username,
+                    submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    status: 'pending'
+                });
+                alert("تم رفع الصورة بنجاح (بانتظار المزامنة)");
+            } catch(e) {
+                console.error(e);
+                alert("فشل الرفع");
+            }
+        });
 
         async function reportAbsence(id) {
             if(!confirm("تسجيل غياب؟")) return;
@@ -290,9 +377,9 @@
 
             await db.collection('pending_updates').add({
                 type: 'CanteenAttendance',
-                data: { student_id: id }, // Matches local format expectation
+                data: { student_id: id },
                 submitted_by: currentUserProfile.username,
-                timestamp: new Date().toISOString(), // Local expects timestamp string in pending logic sometimes
+                timestamp: new Date().toISOString(),
                 status: 'pending'
             });
             alert("تم تسجيل الحضور (بانتظار الموافقة)");

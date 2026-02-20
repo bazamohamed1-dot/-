@@ -25,7 +25,7 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 
 # --- Firebase Helper ---
-def sync_user_to_firebase(username, password=None, google_email=None):
+def sync_user_to_firebase(username, password=None, is_active=True):
     """Syncs a local user to Firebase Auth."""
     try:
         # Initialize if needed
@@ -44,18 +44,18 @@ def sync_user_to_firebase(username, password=None, google_email=None):
             user = firebase_auth.get_user_by_email(email)
             # Update password if provided
             if password:
-                firebase_auth.update_user(user.uid, password=password)
+                firebase_auth.update_user(user.uid, password=password, disabled=(not is_active))
+            else:
+                firebase_auth.update_user(user.uid, disabled=(not is_active))
         except firebase_auth.UserNotFoundError:
-            # Create user
-            firebase_auth.create_user(
-                email=email,
-                password=password or "TemporaryPass123!", # Should ideally be synced
-                display_name=username
-            )
-
-        # We don't necessarily sync Google Email to Firebase Auth as a user,
-        # but we use it in the 'allowed_users' collection in Firestore via the sync script.
-
+            if is_active:
+                # Create user
+                firebase_auth.create_user(
+                    email=email,
+                    password=password or "TemporaryPass123!", # Should ideally be synced
+                    display_name=username,
+                    disabled=False
+                )
     except Exception as e:
         print(f"Firebase Sync Error: {e}")
 
@@ -418,12 +418,11 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         if not self.check_permission(request, 'manage_users'):
             return Response({'error': 'Unauthorized'}, status=403)
 
-        # Include ALL users (even superusers/directors) so we can see their activity
+        # Include ALL users
         users = User.objects.select_related('profile').all().distinct()
         data = []
         seen = set()
 
-        # Get last activity for all users
         from django.db.models import Max
         last_activities = UserActivityLog.objects.values('user').annotate(last_active=Max('timestamp'))
         activity_map = {item['user']: item['last_active'] for item in last_activities}
@@ -441,12 +440,10 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     if prof.device_id.startswith('PENDING:'): device_status = 'بانتظار التفعيل'
                     else: device_status = 'مفعل'
 
-                # Calculate Online Status
                 last_active = activity_map.get(u.id)
                 is_online = False
                 if last_active:
                     try:
-                        # Ensure timezone awareness match
                         current_now = now
                         if timezone.is_naive(last_active): last_active = timezone.make_aware(last_active)
                         if timezone.is_naive(current_now): current_now = timezone.make_aware(current_now)
@@ -455,9 +452,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                         if diff < 300: # 5 minutes
                             is_online = True
                     except Exception as e:
-                        print(f"Timezone Error for user {u.username}: {e}")
+                        pass
 
-                # Determine if user is Director/Superuser to disable actions in frontend
                 is_admin = u.is_superuser or prof.role == 'director'
 
                 data.append({
@@ -468,6 +464,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
                     'permissions': prof.permissions,
+                    'is_active_cloud': prof.is_active_cloud,
+                    'assigned_interface': prof.assigned_interface,
                     'device_status': device_status,
                     'last_login': u.last_login,
                     'last_activity': last_active,
@@ -487,13 +485,14 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         email = request.data.get('email', '')
         permissions = request.data.get('permissions', [])
 
-        # Manually provided password
+        is_active_cloud = request.data.get('is_active_cloud', True)
+        assigned_interface = request.data.get('assigned_interface', 'all')
+
         password = request.data.get('password')
 
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username exists'}, status=400)
 
-        # Generate Secure Random Password if not provided
         if not password:
              password = generate_random_password()
 
@@ -502,13 +501,13 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             user=user,
             role=role,
             permissions=permissions,
+            is_active_cloud=is_active_cloud,
+            assigned_interface=assigned_interface,
             must_change_password=True
         )
 
-        # Sync to Firebase
-        sync_user_to_firebase(username, password)
+        sync_user_to_firebase(username, password, is_active=is_active_cloud)
 
-        # Send Email
         try:
             sent = send_new_account_email(user, password)
             msg = 'User created. Credentials sent via email.' if sent else 'User created. Failed to send email.'
@@ -525,7 +524,6 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         username = user.username
         user.delete()
 
-        # Sync Delete to Firebase
         delete_user_from_firebase(username)
 
         return Response({'message': 'User deleted'})
@@ -539,20 +537,28 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         role = request.data.get('role')
         email = request.data.get('email')
 
+        is_active_cloud = request.data.get('is_active_cloud')
+        assigned_interface = request.data.get('assigned_interface')
+
         if new_pass:
             user.set_password(new_pass)
-            # Sync new password to Firebase
-            sync_user_to_firebase(user.username, new_pass)
+            sync_user_to_firebase(user.username, new_pass, is_active=is_active_cloud if is_active_cloud is not None else user.profile.is_active_cloud)
 
         if email is not None:
              user.email = email
 
         user.save()
 
-        if permissions is not None:
-            user.profile.permissions = permissions
-        if role:
-            user.profile.role = role
+        if permissions is not None: user.profile.permissions = permissions
+        if role: user.profile.role = role
+        if is_active_cloud is not None:
+            user.profile.is_active_cloud = is_active_cloud
+            # Sync status change only if password wasn't synced above
+            if not new_pass:
+                sync_user_to_firebase(user.username, password=None, is_active=is_active_cloud)
+
+        if assigned_interface: user.profile.assigned_interface = assigned_interface
+
         user.profile.save()
         return Response({'message': 'Updated'})
 
