@@ -1,18 +1,18 @@
-const CACHE_NAME = 'school-pwa-v1';
+const CACHE_NAME = 'school-pwa-v2'; // Incremented version
 const STATIC_ASSETS = [
     '/canteen/',
     '/canteen/dashboard/',
     '/canteen/ui/',
     '/canteen/management/',
     '/canteen/settings/',
-    '/static/manifest.json',
-    '/static/images/logo.png',
-    '/static/js/auth_manager.js',
-    '/static/js/offline_manager.js',
-    '/static/js/xlsx.full.min.js',
-    '/static/js/dexie.min.js',
-    '/static/js/browser-image-compression.js',
-    '/static/js/html5-qrcode.min.js',
+    '/static_v2/manifest.json', // Updated path
+    '/static_v2/images/logo.png', // Updated path
+    '/static_v2/js/auth_manager.js',
+    '/static_v2/js/offline_manager.js',
+    '/static_v2/js/xlsx.full.min.js',
+    '/static_v2/js/dexie.min.js',
+    '/static_v2/js/browser-image-compression.js',
+    '/static_v2/js/html5-qrcode.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
 ];
@@ -21,7 +21,12 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             console.log('[Service Worker] Pre-caching offline pages');
-            return cache.addAll(STATIC_ASSETS);
+            // Use addAll with error handling to avoid one failure breaking everything
+            return Promise.all(
+                STATIC_ASSETS.map(url => {
+                    return cache.add(url).catch(err => console.warn('Failed to cache:', url, err));
+                })
+            );
         })
     );
     self.skipWaiting();
@@ -95,7 +100,7 @@ self.addEventListener('fetch', (event) => {
                     });
                 }
                 return networkResponse;
-            });
+            }).catch(e => cachedResponse); // If offline and cached, return cached
             return cachedResponse || fetchPromise;
         })
     );

@@ -378,7 +378,8 @@
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             // Register at root to control /canteen/ scope
-            navigator.serviceWorker.register("/sw.js")
+                // Use absolute path or ensure sw.js is served correctly
+                navigator.serviceWorker.register("/service-worker.js")
             .then(reg => console.log('SW Registered (Root)', reg))
             .catch(err => console.log('SW Fail', err));
         });
