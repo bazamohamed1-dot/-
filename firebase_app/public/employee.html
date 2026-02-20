@@ -244,7 +244,23 @@
         }
 
         function loginGoogle() {
-            auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log("Google Sign-In Success", result.user);
+                })
+                .catch((error) => {
+                    console.error("Google Sign-In Error", error);
+                    let msg = "حدث خطأ أثناء الدخول بجوجل.";
+                    if (error.code === 'auth/unauthorized-domain') {
+                        msg += "\nالسبب: الدومين غير مصرح به في Firebase Console.";
+                    } else if (error.code === 'auth/popup-closed-by-user') {
+                        msg += "\nتم إغلاق النافذة قبل اكتمال الدخول.";
+                    } else {
+                        msg += `\n(${error.message})`;
+                    }
+                    alert(msg);
+                });
         }
 
         function logout() {

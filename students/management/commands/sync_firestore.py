@@ -10,6 +10,13 @@ from django.contrib.auth.models import User
 class Command(BaseCommand):
     help = 'Sync data with Firebase Firestore'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--reset-passwords',
+            action='store_true',
+            help='Reset all Firebase user passwords to a default value',
+        )
+
     def handle(self, *args, **options):
         # 1. Initialize Firebase Admin SDK
         if not firebase_admin._apps:
@@ -23,6 +30,10 @@ class Command(BaseCommand):
 
         db = firestore.client()
         self.stdout.write(self.style.SUCCESS("Connected to Firebase Firestore"))
+
+        reset_pass = options['reset_passwords']
+        if reset_pass:
+            self.stdout.write(self.style.WARNING("WARNING: Resetting all passwords to 'Baza123456'"))
 
         # --- PUSH LOGIC (Local -> Cloud) ---
 
@@ -75,16 +86,24 @@ class Command(BaseCommand):
                 shadow_email = f"{u.username}@bazasystems.com"
                 try:
                     fb_user = firebase_auth.get_user_by_email(shadow_email)
-                    # Update status
+
+                    updates = {}
                     if fb_user.disabled != (not is_active_cloud):
-                        firebase_auth.update_user(fb_user.uid, disabled=(not is_active_cloud))
-                        self.stdout.write(f"Updated disabled status for {u.username} to {not is_active_cloud}")
+                        updates['disabled'] = not is_active_cloud
+
+                    if reset_pass:
+                        updates['password'] = 'Baza123456'
+
+                    if updates:
+                        firebase_auth.update_user(fb_user.uid, **updates)
+                        self.stdout.write(f"Updated {u.username}: {updates}")
+
                 except firebase_auth.UserNotFoundError:
                     if is_active_cloud:
                         self.stdout.write(f"Creating Firebase Auth for {u.username}...")
                         firebase_auth.create_user(
                             email=shadow_email,
-                            password="ChangeMe123!", # Default
+                            password='Baza123456' if reset_pass else "ChangeMe123!",
                             display_name=u.username,
                             uid=u.username,
                             disabled=False
