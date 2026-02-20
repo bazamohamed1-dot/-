@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import PendingUpdate, Student, CanteenAttendance, LibraryLoan, SystemMessage
+from .models import PendingUpdate, Student, CanteenAttendance, LibraryLoan, SystemMessage, AttendanceRecord, Communication
 from .serializers import PendingUpdateSerializer, SystemMessageSerializer
 # Cloudinary removed
 from datetime import date
@@ -12,6 +12,7 @@ import os
 import uuid
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.core.management import call_command
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +64,57 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
             return PendingUpdate.objects.all()
         return PendingUpdate.objects.none()
 
+    @action(detail=False, methods=['post'])
+    def trigger_sync(self, request):
+        try:
+            # Run the management command
+            call_command('sync_firestore')
+            return Response({'message': 'تمت المزامنة مع السحابة بنجاح.'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
     def _apply_update(self, update):
         # Handle inconsistent data structure (nested 'data' key vs flat)
         data_payload = update.data.get('data', update.data)
 
-        if update.model_name.lower() == 'student':
+        # 1. Handle Cloud Sync Models (ATTENDANCE, COMMUNICATION)
+        if update.model_name == 'ATTENDANCE':
+            student_id = data_payload.get('student_ref')
+            details = data_payload.get('details', {})
+            date_str = data_payload.get('date')
+
+            try:
+                student = Student.objects.get(id=student_id)
+                # Check duplicate?
+                if not AttendanceRecord.objects.filter(student=student, date=date_str, type=details.get('status')).exists():
+                    AttendanceRecord.objects.create(
+                        student=student,
+                        date=date_str,
+                        type=details.get('status', 'ABSENT'),
+                        reason=details.get('reason', '')
+                    )
+            except Student.DoesNotExist:
+                pass
+
+        elif update.model_name == 'COMMUNICATION':
+            student_id = data_payload.get('student_ref')
+            details = data_payload.get('details', {})
+            date_str = data_payload.get('date')
+
+            try:
+                student = Student.objects.get(id=student_id)
+                Communication.objects.create(
+                    student=student,
+                    date=date_str,
+                    title=details.get('title', 'ملاحظة'),
+                    content=details.get('content', ''),
+                    type=details.get('comm_type', 'NOTE')
+                )
+            except Student.DoesNotExist:
+                pass
+
+        # 2. Handle Existing Offline Sync Models
+        elif update.model_name.lower() == 'student':
             # Handle Photo - Save Locally
             photo_data = data_payload.get('photo_path')
             # Check for Base64 image
@@ -90,9 +137,6 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
                     data_payload['photo_path'] = f"/media/students_photos/{filename}"
                 except Exception as e:
                     logger.error(f"Image Save Error: {e}")
-                    # Keep original or clear it? If failed, maybe clear to avoid broken image.
-                    # But keeping base64 might bloat DB if saved directly (which we avoid).
-                    # Let's clear it to be safe.
                     data_payload['photo_path'] = ""
 
             if update.action == 'create':
