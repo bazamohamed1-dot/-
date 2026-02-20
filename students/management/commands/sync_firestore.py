@@ -5,13 +5,13 @@ from django.utils import timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 from students.models import Student, AttendanceRecord, Communication, PendingUpdate
+from django.contrib.auth.models import User
 
 class Command(BaseCommand):
     help = 'Sync data with Firebase Firestore'
 
     def handle(self, *args, **options):
         # 1. Initialize Firebase Admin SDK
-        # Check if already initialized to avoid error
         if not firebase_admin._apps:
             json_path = os.path.join(os.getcwd(), 'baza-school-app-firebase-adminsdk-fbsvc-c29bbfc9a8.json')
             if not os.path.exists(json_path):
@@ -26,12 +26,43 @@ class Command(BaseCommand):
 
         # --- PUSH LOGIC (Local -> Cloud) ---
 
-        # 2. Sync Students (Active only, or all)
-        # We assume `active` is implicit or handled by status. I'll just sync all for now.
+        # 2. Sync Allowed Users (Emails for Google Sign-In)
+        users = User.objects.exclude(email='')
+        self.stdout.write(f"Pushing {users.count()} allowed emails...")
+
+        batch = db.batch()
+        count = 0
+        for u in users:
+            # Document ID = Email (sanitized) to make lookup easy/unique
+            doc_id = u.email.replace('@', '_at_').replace('.', '_dot_')
+            doc_ref = db.collection('allowed_users').document(doc_id)
+
+            role = 'unknown'
+            if hasattr(u, 'profile'):
+                role = u.profile.role
+            elif u.is_superuser:
+                role = 'director'
+
+            user_data = {
+                'email': u.email,
+                'username': u.username,
+                'role': role,
+                'synced_at': firestore.SERVER_TIMESTAMP
+            }
+            batch.set(doc_ref, user_data, merge=True)
+            count += 1
+            if count >= 400:
+                batch.commit()
+                batch = db.batch()
+                count = 0
+
+        if count > 0:
+            batch.commit()
+
+        # 3. Sync Students
         students = Student.objects.all()
         self.stdout.write(f"Pushing {students.count()} students to Cloud...")
 
-        # Batch write in chunks of 400
         batch = db.batch()
         count = 0
         total_synced = 0
@@ -62,7 +93,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Finished syncing {total_synced} students."))
 
-        # 3. Sync Attendance (Last 30 Days)
+        # 4. Sync Attendance (Last 30 Days)
         thirty_days_ago = timezone.now().date() - datetime.timedelta(days=30)
         attendance_records = AttendanceRecord.objects.filter(date__gte=thirty_days_ago)
         self.stdout.write(f"Pushing {attendance_records.count()} attendance records...")
@@ -70,7 +101,6 @@ class Command(BaseCommand):
         batch = db.batch()
         count = 0
         for r in attendance_records:
-            # Create a unique ID for the document
             doc_id = f"ATT_{r.student.id}_{r.date}_{r.type}"
             doc_ref = db.collection('attendance').document(doc_id)
 
@@ -93,7 +123,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Finished syncing attendance."))
 
-        # 4. Sync Communications (Last 30 Days)
+        # 5. Sync Communications (Last 30 Days)
         communications = Communication.objects.filter(date__gte=thirty_days_ago)
         self.stdout.write(f"Pushing {communications.count()} messages...")
 
@@ -127,7 +157,6 @@ class Command(BaseCommand):
 
         self.stdout.write("Checking for pending updates from Employees...")
         pending_ref = db.collection('pending_updates').where('status', '==', 'pending')
-        # Stream allows iterating over large datasets without loading all into memory
         docs = pending_ref.stream()
 
         pulled_count = 0
@@ -135,8 +164,6 @@ class Command(BaseCommand):
             data = doc.to_dict()
             firestore_id = doc.id
 
-            # Create a local PendingUpdate record
-            # We store the raw data so the Director can review it
             try:
                 PendingUpdate.objects.create(
                     user=None, # System created
@@ -147,7 +174,6 @@ class Command(BaseCommand):
                     timestamp=timezone.now()
                 )
 
-                # Update status in Firestore to 'reviewing' so we don't pull it again
                 doc.reference.update({'status': 'reviewing'})
                 pulled_count += 1
 

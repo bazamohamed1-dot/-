@@ -25,8 +25,8 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 
 # --- Firebase Helper ---
-def sync_user_to_firebase(username, password):
-    """Syncs a local user to Firebase Auth with a fake email."""
+def sync_user_to_firebase(username, password=None, google_email=None):
+    """Syncs a local user to Firebase Auth."""
     try:
         # Initialize if needed
         if not firebase_admin._apps:
@@ -42,16 +42,20 @@ def sync_user_to_firebase(username, password):
         # Check if user exists
         try:
             user = firebase_auth.get_user_by_email(email)
-            # Update password
+            # Update password if provided
             if password:
                 firebase_auth.update_user(user.uid, password=password)
         except firebase_auth.UserNotFoundError:
             # Create user
             firebase_auth.create_user(
                 email=email,
-                password=password,
+                password=password or "TemporaryPass123!", # Should ideally be synced
                 display_name=username
             )
+
+        # We don't necessarily sync Google Email to Firebase Auth as a user,
+        # but we use it in the 'allowed_users' collection in Firestore via the sync script.
+
     except Exception as e:
         print(f"Firebase Sync Error: {e}")
 
@@ -459,6 +463,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                 data.append({
                     'id': u.id,
                     'username': u.username,
+                    'email': u.email,
                     'role': prof.role,
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
@@ -479,6 +484,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
         username = request.data.get('username')
         role = request.data.get('role')
+        email = request.data.get('email', '')
         permissions = request.data.get('permissions', [])
 
         # Manually provided password
@@ -491,7 +497,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         if not password:
              password = generate_random_password()
 
-        user = User.objects.create_user(username=username, password=password)
+        user = User.objects.create_user(username=username, password=password, email=email)
         EmployeeProfile.objects.create(
             user=user,
             role=role,
@@ -531,11 +537,15 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         new_pass = request.data.get('password')
         permissions = request.data.get('permissions')
         role = request.data.get('role')
+        email = request.data.get('email')
 
         if new_pass:
             user.set_password(new_pass)
             # Sync new password to Firebase
             sync_user_to_firebase(user.username, new_pass)
+
+        if email is not None:
+             user.email = email
 
         user.save()
 
