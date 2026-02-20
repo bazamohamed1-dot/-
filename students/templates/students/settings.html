@@ -193,6 +193,7 @@
         <thead>
             <tr style="background:#f8fafc; text-align:right;">
                 <th style="padding:10px;">اسم المستخدم</th>
+                <th style="padding:10px;">البريد الإلكتروني</th>
                 <th style="padding:10px;">الدور</th>
                 <th style="padding:10px;">متصل</th>
                 <th style="padding:10px;">آخر نشاط</th>
@@ -227,6 +228,10 @@
             <div style="margin-bottom:15px;">
                 <label style="display:block; margin-bottom:5px;">اسم المستخدم</label>
                 <input type="text" id="uUsername" class="form-input western-nums" style="width:100%; padding:10px; direction:ltr; text-align:left;" required>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px;">البريد الإلكتروني (جوجل)</label>
+                <input type="email" id="uEmail" class="form-input western-nums" style="width:100%; padding:10px; direction:ltr; text-align:left;">
             </div>
             <div style="margin-bottom:15px;">
                 <label style="display:block; margin-bottom:5px;">كلمة المرور</label>
@@ -740,6 +745,7 @@ async function loadUsers() {
                     ${u.username}
                     ${u.is_locked ? '<span style="color:red; font-size:0.8rem; margin-left:5px;">(مقفل)</span>' : ''}
                 </td>
+                <td class="western-nums" style="direction:ltr; text-align:left;">${u.email || '-'}</td>
                 <td>${u.role_display}</td>
                 <td>${onlineDot}</td>
                 <td class="western-nums" style="direction:ltr;">${lastActive}</td>
@@ -841,6 +847,7 @@ function editUser(user) {
     document.getElementById('editUserId').value = user.id;
     document.getElementById('uUsername').value = user.username;
     document.getElementById('uRole').value = user.role;
+    document.getElementById('uEmail').value = user.email || '';
     document.getElementById('uPassword').value = '';
     document.getElementById('uPassword').required = false;
     document.getElementById('pwdHint').style.display = 'block';
@@ -861,6 +868,7 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     const username = document.getElementById('uUsername').value;
     const password = document.getElementById('uPassword').value;
     const role = document.getElementById('uRole').value;
+    const email = document.getElementById('uEmail').value;
 
     // Collect permissions
     const permissions = [];
@@ -868,7 +876,7 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
 
     const url = id ? `/canteen/api/users/${id}/update_creds/` : '/canteen/api/users/';
 
-    const body = { username, role, permissions };
+    const body = { username, role, permissions, email };
     if (password) body.password = password;
 
     try {
@@ -1064,43 +1072,6 @@ async function disable2FA() {
 }
 
 // Sync Updates Logic
-async function triggerCloudSync() {
-    if(!confirm("هل تريد بدء المزامنة مع السحابة؟ قد يستغرق هذا بضع ثوان.")) return;
-    try {
-        // Find button to disable
-        const btn = event.target.closest('button'); // ensure we get button if icon clicked
-        if(btn) {
-             btn.disabled = true;
-             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري المزامنة...';
-        }
-
-        const res = await fetch('/canteen/api/pending_updates/trigger_sync/', {
-             method: 'POST',
-             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            alert(data.message || "تمت المزامنة");
-            loadPendingUpdates();
-        } else {
-            alert("حدث خطأ: " + (data.error || "غير معروف"));
-        }
-    } catch(e) {
-        alert("فشل المزامنة: " + e);
-    } finally {
-        // Reload page to reset button state effectively or just reload list
-        // loadPendingUpdates() is called above on success.
-        // We can re-enable the button if we found it
-        const btn = document.querySelector('button[onclick="triggerCloudSync()"]');
-        if(btn) {
-             btn.disabled = false;
-             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> مزامنة سحابية';
-        }
-    }
-}
-
 async function loadPendingUpdates() {
     if (sessionStorage.getItem('user_role') !== 'director') return;
     document.getElementById('syncUpdatesSection').style.display = 'block';

@@ -18,6 +18,13 @@
 
         <!-- Login Form -->
         <div id="login-form" class="card">
+
+            <button onclick="loginWithGoogle()" class="btn" style="background-color: #db4437; width: 100%; margin-bottom: 20px;">
+                <span style="font-weight: bold;">G</span> تسجيل الدخول عبر جوجل
+            </button>
+
+            <div style="text-align: center; margin: 10px 0; color: #aaa;">- أو -</div>
+
             <div class="form-group">
                 <label for="username">اسم المستخدم</label>
                 <input type="text" id="username" placeholder="مثال: ahmed">
@@ -104,18 +111,59 @@
         document.getElementById('action-date').valueAsDate = new Date();
 
         // Auth State Listener
-        auth.onAuthStateChanged(user => {
+        auth.onAuthStateChanged(async user => {
             if (user) {
-                document.getElementById('login-form').classList.add('hidden');
-                document.getElementById('dashboard').classList.remove('hidden');
-                // Extract username from email (remove @bazasystems.com)
-                const username = user.email.split('@')[0];
-                document.getElementById('employee-username').innerText = username;
+                // If user logged in, check authorization
+                let isAuthorized = false;
+                let displayIdentifier = user.email;
+
+                // 1. Check if it's a "fake" email (username login) -> Always allowed (backend handles it)
+                if (user.email && user.email.endsWith('@bazasystems.com')) {
+                    isAuthorized = true;
+                    displayIdentifier = user.email.split('@')[0];
+                }
+                // 2. Check if it's a Google User -> Validate against 'allowed_users' collection
+                else {
+                    try {
+                        const sanitizedEmail = user.email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
+                        const doc = await db.collection('allowed_users').doc(sanitizedEmail).get();
+
+                        if (doc.exists) {
+                            isAuthorized = true;
+                            displayIdentifier = doc.data().username || user.displayName;
+                        } else {
+                            // Not allowed
+                            alert("هذا البريد الإلكتروني غير مصرح له بالدخول. يرجى مراجعة المدير لإضافة بريدك.");
+                            auth.signOut();
+                            return;
+                        }
+                    } catch (e) {
+                        console.error("Auth check error:", e);
+                        alert("حدث خطأ أثناء التحقق من الصلاحيات.");
+                        auth.signOut();
+                        return;
+                    }
+                }
+
+                if (isAuthorized) {
+                    document.getElementById('login-form').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    document.getElementById('employee-username').innerText = displayIdentifier;
+                }
             } else {
                 document.getElementById('login-form').classList.remove('hidden');
                 document.getElementById('dashboard').classList.add('hidden');
             }
         });
+
+        function loginWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(error => {
+                const errDiv = document.getElementById('login-error');
+                errDiv.innerText = "فشل الدخول بجوجل: " + error.message;
+                errDiv.classList.remove('hidden');
+            });
+        }
 
         function loginEmployee() {
             const username = document.getElementById('username').value.trim();
@@ -148,11 +196,6 @@
             const query = document.getElementById('search-query').value;
             const resultsDiv = document.getElementById('search-results');
             resultsDiv.innerHTML = 'جاري البحث...';
-
-            // Simple search by ID
-            // Ideally, Firestore isn't great for full-text search.
-            // We'll search by exact ID match OR create a composite index for name if needed.
-            // For now, let's assume searching by Student ID Number for precision.
 
             try {
                 // Try searching by ID first
@@ -222,7 +265,7 @@
 
             const payload = {
                 student_ref: studentId, // Reference to Firestore ID
-                submitted_by: user.email.split('@')[0], // Just username
+                submitted_by: user.email, // Use email to track who submitted (Google or Local)
                 submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
                 status: 'pending',
                 date: date
