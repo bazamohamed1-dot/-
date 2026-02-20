@@ -20,6 +20,49 @@ import pyotp
 import qrcode
 import base64
 from io import BytesIO
+import os
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
+
+# --- Firebase Helper ---
+def sync_user_to_firebase(username, password):
+    """Syncs a local user to Firebase Auth with a fake email."""
+    try:
+        # Initialize if needed
+        if not firebase_admin._apps:
+            json_path = os.path.join(os.getcwd(), 'baza-school-app-firebase-adminsdk-fbsvc-c29bbfc9a8.json')
+            if os.path.exists(json_path):
+                cred = credentials.Certificate(json_path)
+                firebase_admin.initialize_app(cred)
+            else:
+                return # Skip if no key
+
+        email = f"{username}@bazasystems.com"
+
+        # Check if user exists
+        try:
+            user = firebase_auth.get_user_by_email(email)
+            # Update password
+            if password:
+                firebase_auth.update_user(user.uid, password=password)
+        except firebase_auth.UserNotFoundError:
+            # Create user
+            firebase_auth.create_user(
+                email=email,
+                password=password,
+                display_name=username
+            )
+    except Exception as e:
+        print(f"Firebase Sync Error: {e}")
+
+def delete_user_from_firebase(username):
+    try:
+        if not firebase_admin._apps: return
+        email = f"{username}@bazasystems.com"
+        user = firebase_auth.get_user_by_email(email)
+        firebase_auth.delete_user(user.uid)
+    except:
+        pass
 
 # --- 2FA Views ---
 @api_view(['POST'])
@@ -193,6 +236,10 @@ class ForceChangePasswordView(APIView):
             user.profile.must_change_password = False
             user.profile.save()
         user.save()
+
+        # Sync to Firebase
+        sync_user_to_firebase(user.username, password)
+
         return Response({'message': 'Password changed successfully.'})
 
 class UserRoleViewSet(viewsets.ModelViewSet):
@@ -434,11 +481,15 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         role = request.data.get('role')
         permissions = request.data.get('permissions', [])
 
+        # Manually provided password
+        password = request.data.get('password')
+
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username exists'}, status=400)
 
-        # Generate Secure Random Password
-        password = generate_random_password()
+        # Generate Secure Random Password if not provided
+        if not password:
+             password = generate_random_password()
 
         user = User.objects.create_user(username=username, password=password)
         EmployeeProfile.objects.create(
@@ -447,6 +498,9 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             permissions=permissions,
             must_change_password=True
         )
+
+        # Sync to Firebase
+        sync_user_to_firebase(username, password)
 
         # Send Email
         try:
@@ -461,7 +515,13 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
         user = self.get_object()
         if user == request.user or user.is_superuser: return Response({'error': 'Cannot delete'}, status=400)
+
+        username = user.username
         user.delete()
+
+        # Sync Delete to Firebase
+        delete_user_from_firebase(username)
+
         return Response({'message': 'User deleted'})
 
     @action(detail=True, methods=['post'])
@@ -472,7 +532,11 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         permissions = request.data.get('permissions')
         role = request.data.get('role')
 
-        if new_pass: user.set_password(new_pass)
+        if new_pass:
+            user.set_password(new_pass)
+            # Sync new password to Firebase
+            sync_user_to_firebase(user.username, new_pass)
+
         user.save()
 
         if permissions is not None:

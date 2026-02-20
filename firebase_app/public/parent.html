@@ -32,21 +32,33 @@
 
         <!-- Student Dashboard -->
         <div id="dashboard" class="hidden">
-            <div class="card" style="background-color: #e3f2fd;">
-                <h3 id="student-name">اسم التلميذ</h3>
-                <p>القسم: <span id="student-class"></span></p>
-                <button onclick="logout()" class="btn btn-danger" style="margin-top: 10px;">خروج</button>
+            <!-- Student Header Info -->
+            <div class="card" style="display: flex; align-items: center; gap: 20px; background-color: #f8fafc;">
+                <div id="student-photo-container">
+                    <!-- Photo injected via JS -->
+                    <div style="width: 80px; height: 80px; background-color: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                        <span style="font-size: 30px; color: #666;">👤</span>
+                    </div>
+                </div>
+                <div>
+                    <h3 id="student-name" style="margin: 0; color: #2c3e50;">اسم التلميذ</h3>
+                    <p style="margin: 5px 0; color: #64748b;">القسم: <span id="student-class" style="font-weight: bold;"></span></p>
+                    <p style="margin: 5px 0; color: #64748b; font-size: 0.9em;">تاريخ الميلاد: <span id="student-dob-display"></span></p>
+                </div>
+                <div style="margin-right: auto;">
+                    <button onclick="logout()" class="btn btn-danger" style="font-size: 0.8em;">خروج</button>
+                </div>
             </div>
 
             <div class="card">
-                <h3>سجل الغياب والتأخر</h3>
+                <h3><span style="color: #e74c3c;">●</span> سجل الغياب والتأخر</h3>
                 <div id="attendance-list">
                     <p>جاري التحميل...</p>
                 </div>
             </div>
 
             <div class="card">
-                <h3>المراسلات والملاحظات</h3>
+                <h3><span style="color: #3498db;">●</span> المراسلات والملاحظات</h3>
                 <div id="messages-list">
                     <p>جاري التحميل...</p>
                 </div>
@@ -69,7 +81,6 @@
 
             try {
                 // Query Firestore for matching student
-                // Note: Make sure to create a composite index in Firestore for this query
                 const snapshot = await db.collection('students')
                     .where('student_id_number', '==', studentId)
                     .where('date_of_birth', '==', dob)
@@ -96,6 +107,15 @@
 
             document.getElementById('student-name').innerText = `${data.first_name} ${data.last_name}`;
             document.getElementById('student-class').innerText = data.class_name;
+            document.getElementById('student-dob-display').innerText = data.date_of_birth;
+
+            // Photo Logic (Assuming photo_path might be stored or we use placeholder)
+            // Currently sync script doesn't push photo path, but if we updated it later:
+            if (data.photo_url) {
+                document.getElementById('student-photo-container').innerHTML = `
+                    <img src="${data.photo_url}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #3498db;">
+                `;
+            }
 
             // Load Attendance
             const attendanceSnap = await db.collection('attendance')
@@ -107,7 +127,7 @@
             const attendanceList = document.getElementById('attendance-list');
             attendanceList.innerHTML = '';
             if (attendanceSnap.empty) {
-                attendanceList.innerHTML = '<p>لا توجد سجلات غياب.</p>';
+                attendanceList.innerHTML = '<p style="text-align:center; color:#94a3b8;">لا توجد سجلات غياب.</p>';
             } else {
                 attendanceSnap.forEach(doc => {
                     const r = doc.data();
@@ -133,7 +153,7 @@
             const messagesList = document.getElementById('messages-list');
             messagesList.innerHTML = '';
             if (messagesSnap.empty) {
-                messagesList.innerHTML = '<p>لا توجد رسائل.</p>';
+                messagesList.innerHTML = '<p style="text-align:center; color:#94a3b8;">لا توجد رسائل.</p>';
             } else {
                 messagesSnap.forEach(doc => {
                     const m = doc.data();
