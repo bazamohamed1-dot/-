@@ -275,7 +275,7 @@ async function fetchStudents(page = 1) {
         if (className) params.append('class_name', className);
         if (search) params.append('search', search);
 
-        const response = await fetch(`/api/students/?${params.toString()}`);
+        const response = await fetch(`/canteen/api/students/?${params.toString()}`);
         if (!response.ok) throw new Error('Network response was not ok');
             const result = await response.json();
 
@@ -474,7 +474,7 @@ async function saveCurrent() {
 
     const dbId = document.getElementById('dbId').value;
     const method = (dbId && dbId !== "undefined" && dbId !== "") ? 'PUT' : 'POST';
-    const url = (dbId && dbId !== "undefined" && dbId !== "") ? `/api/students/${dbId}/` : '/api/students/';
+    const url = (dbId && dbId !== "undefined" && dbId !== "") ? `/canteen/api/students/${dbId}/` : '/canteen/api/students/';
 
     try {
         const response = await fetch(url, {
@@ -537,7 +537,7 @@ async function deleteStudent() {
     const ids = Array.from(checkboxes).map(cb => cb.value);
 
     try {
-        const response = await fetch('/api/students/bulk_delete/', {
+        const response = await fetch('/canteen/api/students/bulk_delete/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -699,7 +699,7 @@ function getCookie(name) {
 
 function exportBackup() {
     // Trigger Server-Side Export
-    window.location.href = '/api/students/export_all/';
+    window.location.href = '/canteen/api/students/export_all/';
 }
 
 function triggerImageSelect() { document.getElementById('imageSelector').click(); }

@@ -6,8 +6,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F, Q
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, SystemMessage
-from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer, SystemMessageSerializer
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, SystemMessage, PendingUpdate, AttendanceRecord, Communication
+from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer, SystemMessageSerializer, PendingUpdateSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
@@ -18,6 +18,8 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 import logging
+import base64
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -89,17 +91,71 @@ class StudentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_add'):
              return Response({'error': 'Unauthorized'}, status=403)
-        return super().create(request, *args, **kwargs)
+
+        # If user is Director or Superuser, apply immediately
+        if request.user.profile.role == 'director' or request.user.is_superuser:
+            return super().create(request, *args, **kwargs)
+
+        # For other users, create a Pending Update
+        try:
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name='Student',
+                action='create',
+                data=request.data,
+                status='pending'
+            )
+            return Response({'message': 'تم إرسال التلميذ الجديد إلى المدير للموافقة', 'pending': True}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def update(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_edit'):
              return Response({'error': 'Unauthorized'}, status=403)
-        return super().update(request, *args, **kwargs)
+
+        # If user is Director or Superuser, apply immediately
+        if request.user.profile.role == 'director' or request.user.is_superuser:
+            return super().update(request, *args, **kwargs)
+
+        # For other users, create a Pending Update
+        student = self.get_object()
+
+        try:
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name='Student',
+                action='update',
+                data={
+                    'id': student.id,
+                    **request.data
+                },
+                status='pending'
+            )
+            return Response({'message': 'تم إرسال التحديث إلى المدير للموافقة', 'pending': True}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def destroy(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_delete'):
              return Response({'error': 'Unauthorized'}, status=403)
-        return super().destroy(request, *args, **kwargs)
+
+        # If user is Director or Superuser, apply immediately
+        if request.user.profile.role == 'director' or request.user.is_superuser:
+            return super().destroy(request, *args, **kwargs)
+
+        student = self.get_object()
+
+        try:
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name='Student',
+                action='delete',
+                data={'id': student.id, 'name': str(student)},
+                status='pending'
+            )
+            return Response({'message': 'تم إرسال طلب الحذف إلى المدير', 'pending': True}, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'])
     def bulk_delete(self, request):
@@ -110,9 +166,24 @@ class StudentViewSet(viewsets.ModelViewSet):
         if not ids:
             return Response({'error': 'No IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # If user is Director or Superuser, apply immediately
+        if request.user.profile.role == 'director' or request.user.is_superuser:
+            try:
+                Student.objects.filter(id__in=ids).delete()
+                return Response({'message': f'Deleted {len(ids)} students'})
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Pending Update for Bulk Delete
         try:
-            Student.objects.filter(id__in=ids).delete()
-            return Response({'message': f'Deleted {len(ids)} students'})
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name='Student',
+                action='delete', # Using delete action, but data has list of IDs
+                data={'ids': ids, 'is_bulk': True},
+                status='pending'
+            )
+            return Response({'message': 'تم إرسال طلب الحذف الجماعي إلى المدير', 'pending': True}, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -150,6 +221,161 @@ class StudentViewSet(viewsets.ModelViewSet):
 
         wb.save(response)
         return response
+
+class PendingUpdateViewSet(viewsets.ModelViewSet):
+    queryset = PendingUpdate.objects.all().order_by('-timestamp')
+    serializer_class = PendingUpdateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Director sees all, users see nothing (or their own if we wanted)
+        if hasattr(self.request.user, 'profile') and (self.request.user.profile.role == 'director' or self.request.user.is_superuser):
+            return PendingUpdate.objects.all()
+        return PendingUpdate.objects.none()
+
+    def _apply_update(self, update):
+        # Handle inconsistent data structure (nested 'data' key vs flat)
+        data_payload = update.data.get('data', update.data)
+        if isinstance(data_payload, str): # Handle stringified JSON
+             import json
+             try: data_payload = json.loads(data_payload)
+             except: pass
+
+        if update.model_name == 'Student':
+            # Handle Photo - Base64 save is handled by Serializer usually, but here we might have raw data
+            # If using StudentSerializer to save, it handles it.
+            # But here we might be doing manual object creation/update
+
+            # Use serializer to validate and save if possible
+            if update.action == 'create':
+                serializer = StudentSerializer(data=data_payload)
+                if serializer.is_valid():
+                    serializer.save()
+                else:
+                    raise ValueError(f"Invalid data: {serializer.errors}")
+
+            elif update.action == 'update':
+                obj_id = data_payload.get('id')
+                if obj_id:
+                    try:
+                        student = Student.objects.get(id=obj_id)
+                        serializer = StudentSerializer(student, data=data_payload, partial=True)
+                        if serializer.is_valid():
+                            serializer.save()
+                        else:
+                            raise ValueError(f"Invalid data: {serializer.errors}")
+                    except Student.DoesNotExist:
+                        pass # Ignore if student gone
+
+            elif update.action == 'delete':
+                if data_payload.get('is_bulk'):
+                    ids = data_payload.get('ids', [])
+                    Student.objects.filter(id__in=ids).delete()
+                else:
+                    obj_id = data_payload.get('id')
+                    if obj_id:
+                        Student.objects.filter(id=obj_id).delete()
+
+        elif update.model_name == 'CanteenAttendance':
+            # Logic for canteen offline sync
+            barcode = data_payload.get('barcode') or data_payload.get('student_id')
+            student = None
+            if barcode:
+                student = Student.objects.filter(student_id_number=barcode).first()
+                if not student and str(barcode).isdigit():
+                        student = Student.objects.filter(id=barcode).first()
+
+            if student:
+                if not CanteenAttendance.objects.filter(student=student, date=date.today()).exists():
+                        CanteenAttendance.objects.create(student=student, date=date.today())
+
+        update.delete()
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        update = self.get_object()
+        try:
+            self._apply_update(update)
+            return Response({'message': 'Approved'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def approve_all(self, request):
+        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        updates = self.get_queryset()
+        count = 0
+        errors = []
+        for update in updates:
+             try:
+                self._apply_update(update)
+                count += 1
+             except Exception as e:
+                errors.append(f"ID {update.id}: {str(e)}")
+
+        return Response({'message': f'Approved {count}', 'errors': errors})
+
+    @action(detail=False, methods=['post'])
+    def reject_all(self, request):
+        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+             return Response({'error': 'Unauthorized'}, status=403)
+
+        self.get_queryset().delete()
+        return Response({'message': 'Rejected All'})
+
+    @action(detail=False, methods=['get'])
+    def count(self, request):
+        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+             return Response({'count': 0})
+        count = self.get_queryset().count()
+        return Response({'count': count})
+
+    # Sync Endpoint for Offline Manager
+    # This receives a list of requests from the frontend and converts them to PendingUpdates
+    @action(detail=False, methods=['post'], url_path='sync')
+    def sync_offline(self, request):
+        items = request.data
+        if not isinstance(items, list):
+            items = [items]
+
+        count = 0
+        for item in items:
+            url = item.get('url', '')
+            method = item.get('method', 'POST')
+            payload = item.get('body', {})
+
+            # Map URL to Model
+            model_name = 'Unknown'
+            action_type = 'create'
+
+            if 'students' in url:
+                model_name = 'Student'
+                if method == 'PUT' or method == 'PATCH': action_type = 'update'
+                elif method == 'DELETE': action_type = 'delete'
+                elif 'bulk_delete' in url: action_type = 'delete'
+            elif 'scan_card' in url or 'manual_attendance' in url:
+                model_name = 'CanteenAttendance'
+            elif 'loan' in url:
+                model_name = 'LibraryLoan'
+
+            # Create Pending Update directly
+            # Note: We trust the authenticated user here.
+            PendingUpdate.objects.create(
+                user=request.user,
+                model_name=model_name,
+                action=action_type,
+                data=payload,
+                status='pending'
+            )
+            count += 1
+
+        return Response({'message': f'Synced {count} items'})
+
 
 # --- Lightweight JSON Import API ---
 @api_view(['POST'])

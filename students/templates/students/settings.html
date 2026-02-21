@@ -143,6 +143,17 @@
     </form>
 </div>
 
+<!-- Pending Updates Link (Director) -->
+<div class="card" id="updatesLinkSection" style="display:none; margin-bottom: 20px; background: #fff7ed; border-color: #ffedd5;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <h3 style="color:#c2410c; margin-bottom:5px;"><i class="fas fa-sync"></i> تحديثات معلقة</h3>
+            <p style="color:#9a3412; margin:0;">يوجد تحديثات واردة من المستخدمين بانتظار المراجعة.</p>
+        </div>
+        <a href="{% url 'pending_updates_view' %}" class="btn" style="background:#ea580c; color:white;">مراجعة الآن <span id="settingsBadge" style="background:white; color:#ea580c; padding:2px 6px; border-radius:10px; font-size:0.8rem; margin-right:5px;">0</span></a>
+    </div>
+</div>
+
 <!-- Role Management Section -->
 <div class="card" id="roleManagementSection" style="display:none; margin-bottom: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
@@ -353,7 +364,20 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoles(); // Load roles
     check2FA();
     loadLevelsForDropdown(); // Load Levels
+    checkPendingUpdates(); // Check for updates
 });
+
+async function checkPendingUpdates() {
+    if (sessionStorage.getItem('user_role') !== 'director') return;
+    try {
+        const res = await fetch('/canteen/api/pending_updates/count/');
+        const data = await res.json();
+        if (data.count > 0) {
+            document.getElementById('updatesLinkSection').style.display = 'block';
+            document.getElementById('settingsBadge').innerText = data.count;
+        }
+    } catch(e){}
+}
 
 async function loadLevelsForDropdown() {
     try {
