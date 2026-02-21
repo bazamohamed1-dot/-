@@ -58,9 +58,9 @@ class LibraryLoan(models.Model):
         return f"{self.student} - {self.book_title}"
 
 class SchoolSettings(models.Model):
-    name = models.CharField(max_length=200, verbose_name="اسم المؤسسة")
-    academic_year = models.CharField(max_length=50, verbose_name="السنة الدراسية")
-    director_name = models.CharField(max_length=200, verbose_name="اسم المدير")
+    name = models.CharField(max_length=200, null=True, blank=True, verbose_name="اسم المؤسسة")
+    academic_year = models.CharField(max_length=50, null=True, blank=True, verbose_name="السنة الدراسية")
+    director_name = models.CharField(max_length=200, null=True, blank=True, verbose_name="اسم المدير")
     logo = models.ImageField(upload_to='school_logo/', null=True, blank=True, verbose_name="شعار المؤسسة")
     loan_limit = models.IntegerField(default=2, verbose_name="الحد الأقصى للإعارات")
     loan_limits_by_level = models.JSONField(default=dict, blank=True, verbose_name="حدود الإعارة حسب المستوى")

@@ -30,19 +30,6 @@ urlpatterns = [
 # For simple local setup, serving via Django is easiest, even with DEBUG=False if using 'insecure' runserver or WhiteNoise for static.
 # Media files need manual serving if DEBUG=False unless using a specific server config.
 # We will use this pattern which works for both runserver modes usually.
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-else:
-    # Force serve media in local production mode without Nginx/Apache
-    import re
-    from django.views.static import serve
-    from django.urls import re_path
-
-    urlpatterns += [
-        re_path(r'^media/(?P<path>.*)$', serve, {
-            'document_root': settings.MEDIA_ROOT,
-        }),
-        re_path(r'^static/(?P<path>.*)$', serve, {
-            'document_root': settings.STATIC_ROOT,
-        }),
-    ]
+# Always serve media/static files locally for this specific deployment style (Waitress)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
