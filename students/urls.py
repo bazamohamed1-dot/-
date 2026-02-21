@@ -11,6 +11,7 @@ router.register(r'roles', auth_views.UserRoleViewSet)
 router.register(r'archive/docs', views.ArchiveDocumentViewSet, basename='archive_docs')
 router.register(r'students', views.StudentViewSet)
 router.register(r'system_messages', views.SystemMessageViewSet, basename='system_messages')
+router.register(r'pending_updates', views.PendingUpdateViewSet, basename='pending_updates')
 
 urlpatterns = [
     # Landing
@@ -36,6 +37,7 @@ urlpatterns = [
 
     # UI Views
     path('dashboard/', ui_views.dashboard, name='dashboard'),
+    path('pending_updates/', ui_views.pending_updates_view, name='pending_updates_view'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
     path('api/import_json/', views.import_students_json, name='api_import_json'),

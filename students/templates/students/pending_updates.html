@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}مراجعة التحديثات المعلقة{% endblock %}
+{% block header_title %}مراجعة التحديثات المعلقة{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+        <h3><i class="fas fa-tasks"></i> طلبات بانتظار الموافقة</h3>
+        <div style="gap: 10px; display: flex;">
+            <button class="btn btn-success" onclick="approveAll()"><i class="fas fa-check-double"></i> قبول الكل</button>
+            <button class="btn btn-danger" onclick="rejectAll()"><i class="fas fa-trash"></i> رفض الكل</button>
+        </div>
+    </div>
+
+    <div id="updatesList">
+        <!-- Populated via JS -->
+        <p style="text-align:center; color:#64748b; padding:20px;">جاري التحميل...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', loadUpdates);
+
+async function loadUpdates() {
+    try {
+        const res = await fetch('/canteen/api/pending_updates/');
+        const data = await res.json();
+
+        // Handle pagination or list
+        const updates = Array.isArray(data) ? data : (data.results || []);
+
+        const container = document.getElementById('updatesList');
+        if(updates.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8;"><i class="fas fa-check-circle fa-3x" style="margin-bottom:10px;"></i><br>لا توجد تحديثات معلقة</div>';
+            return;
+        }
+
+        container.innerHTML = '';
+        updates.forEach(u => {
+            let desc = '';
+            let content = '';
+
+            // Parse data payload safely
+            let payload = u.data;
+            if (typeof payload === 'string') {
+                try { payload = JSON.parse(payload); } catch(e){}
+            }
+
+            if (u.model_name === 'Student') {
+                const name = `${payload.last_name || ''} ${payload.first_name || ''}`;
+                if (u.action === 'create') desc = `إضافة تلميذ جديد: <strong>${name}</strong>`;
+                else if (u.action === 'update') desc = `تعديل بيانات تلميذ: <strong>${name}</strong>`;
+                else if (u.action === 'delete') desc = `حذف تلميذ: <strong>${payload.name || payload.id || 'محدد'}</strong>`;
+
+                // Show changed fields for update
+                if(u.action === 'update') {
+                    content = `<div style="font-size:0.85rem; color:#475569; margin-top:5px; background:#f1f5f9; padding:5px; border-radius:4px;">
+                        تعديلات على: ${Object.keys(payload).filter(k => k!=='id' && k!=='photo_path').join(', ')}
+                    </div>`;
+                }
+                // Show photo for create/update if present
+                if (payload.photo_path) {
+                    content += `<div style="margin-top:5px;"><img src="${payload.photo_path}" style="height:50px; border-radius:4px; border:1px solid #ddd;"></div>`;
+                }
+            } else if (u.model_name === 'CanteenAttendance') {
+                desc = `تسجيل حضور مطعم (${u.action})`;
+            } else {
+                desc = `${u.model_name} - ${u.action}`;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'update-item';
+            div.style.borderBottom = '1px solid #e2e8f0';
+            div.style.padding = '15px';
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            div.style.background = 'white';
+
+            div.innerHTML = `
+                <div>
+                    <div style="font-size:1.1rem; color:#1e293b;">${desc}</div>
+                    ${content}
+                    <div style="font-size:0.8rem; color:#94a3b8; margin-top:5px;">
+                        <i class="fas fa-user"></i> ${u.username || 'مستخدم'} |
+                        <i class="fas fa-clock"></i> ${new Date(u.timestamp).toLocaleString()}
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-success" onclick="approve(${u.id})"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-danger" onclick="reject(${u.id})"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+
+    } catch(e) {
+        console.error(e);
+        document.getElementById('updatesList').innerHTML = '<p style="color:red; text-align:center;">خطأ في تحميل البيانات</p>';
+    }
+}
+
+async function approve(id) {
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/${id}/approve/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+        if(res.ok) {
+            loadUpdates();
+            updateBadge();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+async function reject(id) {
+    if(!confirm("هل أنت متأكد من الرفض؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/${id}/`, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+        if(res.ok) {
+            loadUpdates();
+            updateBadge();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+async function approveAll() {
+    if(!confirm("قبول جميع التحديثات؟")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/approve_all/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+        if(res.ok) {
+            loadUpdates();
+            updateBadge();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+async function rejectAll() {
+    if(!confirm("رفض جميع التحديثات؟ لا يمكن التراجع.")) return;
+    try {
+        const res = await fetch(`/canteen/api/pending_updates/reject_all/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+        if(res.ok) {
+            loadUpdates();
+            updateBadge();
+        }
+    } catch(e) { alert("خطأ"); }
+}
+
+function updateBadge() {
+    // Optional: Refresh global badge if present
+    try {
+        fetch('/canteen/api/pending_updates/count/')
+        .then(r=>r.json())
+        .then(d => {
+            const b = document.getElementById('reviewBadge');
+            if(b) {
+                b.innerText = d.count;
+                b.style.display = d.count > 0 ? 'inline-block' : 'none';
+            }
+        });
+    } catch(e){}
+}
+</script>
+{% endblock %}
