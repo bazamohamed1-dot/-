@@ -183,8 +183,8 @@
 
     <div class="id-card">
         <div class="photo-area">
-            {% if student.photo_path %}
-            <img src="{{ student.photo_path }}">
+            {% if student.photo %}
+            <img src="{{ student.photo.url }}">
             {% else %}
             <i class="fas fa-user fa-3x" style="color:#cbd5e1"></i>
             {% endif %}

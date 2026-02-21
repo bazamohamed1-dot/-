@@ -228,10 +228,11 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Director sees all, users see nothing (or their own if we wanted)
+        # Director sees all, users see their own
         if hasattr(self.request.user, 'profile') and (self.request.user.profile.role == 'director' or self.request.user.is_superuser):
             return PendingUpdate.objects.all()
-        return PendingUpdate.objects.none()
+        # Regular users see their own pending updates to reflect in UI
+        return PendingUpdate.objects.filter(user=self.request.user, status='pending')
 
     def _apply_update(self, update):
         # Handle inconsistent data structure (nested 'data' key vs flat)

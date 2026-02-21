@@ -1,6 +1,15 @@
 from django.db import models
 from datetime import date
 from django.contrib.auth.models import User
+import os
+
+def student_photo_path(instance, filename):
+    # Extract extension or default to .jpg
+    ext = os.path.splitext(filename)[1]
+    if not ext:
+        ext = '.jpg'
+    # Return path: students_photos/{student_id}{ext}
+    return f'students_photos/{instance.student_id_number}{ext}'
 
 class Student(models.Model):
     student_id_number = models.CharField(max_length=16, unique=True, verbose_name="رقم التعريف")
@@ -19,7 +28,7 @@ class Student(models.Model):
     mother_name = models.CharField(max_length=200, null=True, blank=True, verbose_name="لقب واسم الأم")
     address = models.TextField(null=True, blank=True, verbose_name="عنوان السكن")
     guardian_phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم هاتف الولي")
-    photo_path = models.TextField(null=True, blank=True, verbose_name="مسار الصورة") # Changed to TextField to support Base64
+    photo = models.ImageField(upload_to=student_photo_path, null=True, blank=True, verbose_name="الصورة")
 
     class Meta:
         verbose_name = "تلميذ"

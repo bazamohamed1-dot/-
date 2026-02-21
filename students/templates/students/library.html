@@ -429,8 +429,8 @@ function showStudent(data) {
     document.getElementById('studentIdDisplay').textContent = s.student_id_number;
 
     const img = document.getElementById('studentPhoto');
-    if (s.photo_path) {
-        img.src = s.photo_path;
+    if (s.photo) {
+        img.src = s.photo;
     } else {
         img.src = '';
     }

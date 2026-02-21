@@ -190,7 +190,12 @@ def student_list(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
         return redirect('dashboard')
+
+    # Populate initial list (First 50 for performance)
+    students = Student.objects.all().order_by('last_name')[:50]
+
     context = {
+        'students': students,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
