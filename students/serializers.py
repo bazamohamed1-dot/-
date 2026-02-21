@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, PendingUpdate, SystemMessage, UserRole
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, SystemMessage, UserRole
 from django.conf import settings
 import uuid
 import base64
@@ -82,12 +82,6 @@ class StudentListSerializer(serializers.ModelSerializer):
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRole
-        fields = '__all__'
-
-class PendingUpdateSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-    class Meta:
-        model = PendingUpdate
         fields = '__all__'
 
 class SystemMessageSerializer(serializers.ModelSerializer):

@@ -20,53 +20,6 @@ import pyotp
 import qrcode
 import base64
 from io import BytesIO
-import os
-import firebase_admin
-from firebase_admin import credentials, auth as firebase_auth
-
-# --- Firebase Helper ---
-def sync_user_to_firebase(username, password=None, is_active=True):
-    """Syncs a local user to Firebase Auth."""
-    try:
-        # Initialize if needed
-        if not firebase_admin._apps:
-            json_path = os.path.join(os.getcwd(), 'baza-school-app-firebase-adminsdk-fbsvc-c29bbfc9a8.json')
-            if os.path.exists(json_path):
-                cred = credentials.Certificate(json_path)
-                firebase_admin.initialize_app(cred)
-            else:
-                return # Skip if no key
-
-        email = f"{username}@bazasystems.com"
-
-        # Check if user exists
-        try:
-            user = firebase_auth.get_user_by_email(email)
-            # Update password if provided
-            if password:
-                firebase_auth.update_user(user.uid, password=password, disabled=(not is_active))
-            else:
-                firebase_auth.update_user(user.uid, disabled=(not is_active))
-        except firebase_auth.UserNotFoundError:
-            if is_active:
-                # Create user
-                firebase_auth.create_user(
-                    email=email,
-                    password=password or "TemporaryPass123!", # Should ideally be synced
-                    display_name=username,
-                    disabled=False
-                )
-    except Exception as e:
-        print(f"Firebase Sync Error: {e}")
-
-def delete_user_from_firebase(username):
-    try:
-        if not firebase_admin._apps: return
-        email = f"{username}@bazasystems.com"
-        user = firebase_auth.get_user_by_email(email)
-        firebase_auth.delete_user(user.uid)
-    except:
-        pass
 
 # --- 2FA Views ---
 @api_view(['POST'])
@@ -240,9 +193,6 @@ class ForceChangePasswordView(APIView):
             user.profile.must_change_password = False
             user.profile.save()
         user.save()
-
-        # Sync to Firebase
-        sync_user_to_firebase(user.username, password)
 
         return Response({'message': 'Password changed successfully.'})
 
@@ -464,8 +414,6 @@ class UserManagementViewSet(viewsets.ModelViewSet):
                     'is_locked': prof.is_locked,
                     'failed_attempts': prof.failed_login_attempts,
                     'permissions': prof.permissions,
-                    'is_active_cloud': prof.is_active_cloud,
-                    'assigned_interface': prof.assigned_interface,
                     'device_status': device_status,
                     'last_login': u.last_login,
                     'last_activity': last_active,
@@ -485,9 +433,6 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         email = request.data.get('email', '')
         permissions = request.data.get('permissions', [])
 
-        is_active_cloud = request.data.get('is_active_cloud', True)
-        assigned_interface = request.data.get('assigned_interface', 'all')
-
         password = request.data.get('password')
 
         if User.objects.filter(username=username).exists():
@@ -501,12 +446,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             user=user,
             role=role,
             permissions=permissions,
-            is_active_cloud=is_active_cloud,
-            assigned_interface=assigned_interface,
             must_change_password=True
         )
-
-        sync_user_to_firebase(username, password, is_active=is_active_cloud)
 
         try:
             sent = send_new_account_email(user, password)
@@ -521,10 +462,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         if user == request.user or user.is_superuser: return Response({'error': 'Cannot delete'}, status=400)
 
-        username = user.username
         user.delete()
-
-        delete_user_from_firebase(username)
 
         return Response({'message': 'User deleted'})
 
@@ -537,12 +475,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         role = request.data.get('role')
         email = request.data.get('email')
 
-        is_active_cloud = request.data.get('is_active_cloud')
-        assigned_interface = request.data.get('assigned_interface')
-
         if new_pass:
             user.set_password(new_pass)
-            sync_user_to_firebase(user.username, new_pass, is_active=is_active_cloud if is_active_cloud is not None else user.profile.is_active_cloud)
 
         if email is not None:
              user.email = email
@@ -551,13 +485,6 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
         if permissions is not None: user.profile.permissions = permissions
         if role: user.profile.role = role
-        if is_active_cloud is not None:
-            user.profile.is_active_cloud = is_active_cloud
-            # Sync status change only if password wasn't synced above
-            if not new_pass:
-                sync_user_to_firebase(user.username, password=None, is_active=is_active_cloud)
-
-        if assigned_interface: user.profile.assigned_interface = assigned_interface
 
         user.profile.save()
         return Response({'message': 'Updated'})

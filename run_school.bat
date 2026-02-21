@@ -18,7 +18,7 @@ if not exist "venv" (
     call venv\Scripts\activate.bat
 )
 
-:: 2. Ensure Dependencies (including firebase-admin)
+:: 2. Ensure Dependencies
 echo.
 echo [1.5/3] Checking dependencies...
 pip install -r requirements.txt

@@ -116,13 +116,6 @@ class ArchiveDocument(models.Model):
         return f"{self.reference_number} - {self.document_type}"
 
 class EmployeeProfile(models.Model):
-    INTERFACE_CHOICES = [
-        ('all', 'كامل الصلاحيات'),
-        ('canteen', 'المطعم المدرسي'),
-        ('library', 'المكتبة'),
-        ('students', 'تسيير التلاميذ'),
-    ]
-
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name="المستخدم")
     # Removed strict choices to allow custom role names
     role = models.CharField(max_length=100, verbose_name="الدور")
@@ -131,10 +124,6 @@ class EmployeeProfile(models.Model):
     current_session_token = models.CharField(max_length=100, null=True, blank=True, verbose_name="رمز الجلسة الحالي")
     device_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="معرف الجهاز")
     permissions = models.JSONField(default=list, blank=True, verbose_name="الصلاحيات")
-
-    # Cloud Control
-    is_active_cloud = models.BooleanField(default=True, verbose_name="تفعيل الدخول السحابي")
-    assigned_interface = models.CharField(max_length=50, choices=INTERFACE_CHOICES, default='all', verbose_name="الواجهة المخصصة")
 
     # 2FA Fields
     totp_secret = models.CharField(max_length=100, null=True, blank=True, verbose_name="مفتاح المصادقة الثنائية")
@@ -147,7 +136,7 @@ class EmployeeProfile(models.Model):
         return perm in self.permissions
 
     def __str__(self):
-        return f"{self.user.username} - {self.get_role_display()}"
+        return f"{self.user.username} - {self.role}"
 
 class PendingUpdate(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="المستخدم")

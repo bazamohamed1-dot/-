@@ -6,8 +6,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F, Q
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, PendingUpdate
-from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, SystemMessage
+from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer, SystemMessageSerializer
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
@@ -89,53 +89,12 @@ class StudentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_add'):
              return Response({'error': 'Unauthorized'}, status=403)
-
-        # If user is Director or Superuser, apply immediately
-        if request.user.profile.role == 'director' or request.user.is_superuser:
-            return super().create(request, *args, **kwargs)
-
-        # For other users, create a Pending Update
-        try:
-            PendingUpdate.objects.create(
-                user=request.user,
-                model_name='student',
-                action='create',
-                data=request.data,
-                status='pending'
-            )
-            return Response({'message': 'تم إرسال التلميذ الجديد إلى المدير للموافقة', 'pending': True}, status=status.HTTP_202_ACCEPTED)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_edit'):
              return Response({'error': 'Unauthorized'}, status=403)
-
-        # If user is Director or Superuser, apply immediately
-        if request.user.profile.role == 'director' or request.user.is_superuser:
-            return super().update(request, *args, **kwargs)
-
-        # For other users, create a Pending Update
-        student = self.get_object()
-
-        # Serialize the data to validate it first?
-        # Or just store the raw request data.
-        # Storing raw data is safer for "Pending" state.
-
-        try:
-            PendingUpdate.objects.create(
-                user=request.user,
-                model_name='student',
-                action='update',
-                data={
-                    'id': student.id,
-                    **request.data
-                },
-                status='pending'
-            )
-            return Response({'message': 'تم إرسال التحديث إلى المدير للموافقة', 'pending': True}, status=status.HTTP_202_ACCEPTED)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('student_delete'):
@@ -947,3 +906,14 @@ def upload_update_file(request):
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+class SystemMessageViewSet(viewsets.ModelViewSet):
+    queryset = SystemMessage.objects.filter(active=True)
+    serializer_class = SystemMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        if hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'director':
+            serializer.save()
+        else:
+            raise PermissionError("Only Director can create messages")
