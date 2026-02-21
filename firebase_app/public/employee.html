@@ -82,14 +82,9 @@
         <div class="login-card">
             <img src="https://img.icons8.com/color/96/school.png" style="margin-bottom: 20px;">
             <h2 style="margin-bottom: 20px; color: #334155;">تسجيل الدخول</h2>
+            <p style="color: #64748b; margin-bottom: 20px;">أدخل اسم المستخدم وكلمة المرور الخاصة بحسابك المحلي</p>
 
-            <button onclick="loginGoogle()" class="btn" style="background: #db4437; color: white; width: 100%; margin-bottom: 20px;">
-                <i class="fab fa-google"></i> دخول بحساب جوجل
-            </button>
-
-            <div style="margin: 15px 0; color: #94a3b8;">- أو -</div>
-
-            <input type="text" id="uUser" placeholder="اسم المستخدم (للحساب المحلي)">
+            <input type="text" id="uUser" placeholder="اسم المستخدم">
             <input type="password" id="uPass" placeholder="كلمة المرور">
             <button onclick="loginLocal()" class="btn btn-primary" style="width: 100%;">دخول</button>
             <div id="login-msg" style="color: red; margin-top: 10px; font-size: 0.9em;"></div>
@@ -172,28 +167,15 @@
     <input type="file" id="photoInput" style="display: none;" accept="image/*">
 
     <script src="app.js"></script>
+    <script src="dashboard.js"></script> <!-- New External Logic -->
     <script>
         let currentUserProfile = null;
-        let allStudents = [];
         let profileUnsubscribe = null;
 
         // Auth Listener
         auth.onAuthStateChanged(async user => {
             if (user) {
                 let username = user.email.split('@')[0];
-
-                // Google Auth Mapping
-                if (!user.email.endsWith('@bazasystems.com')) {
-                    const sanitized = user.email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
-                    const mapDoc = await db.collection('allowed_users').doc(sanitized).get();
-                    if(mapDoc.exists) {
-                        username = mapDoc.data().username;
-                    } else {
-                        alert("غير مصرح لك");
-                        auth.signOut();
-                        return;
-                    }
-                }
 
                 // Real-time Profile Listener (Kick-out & Dynamic Routing)
                 profileUnsubscribe = db.collection('users_profiles').doc(username)
@@ -213,16 +195,15 @@
                             // 2. Dynamic Routing Check
                             if (data.assigned_interface && data.assigned_interface !== 'all') {
                                 showView(data.assigned_interface);
-                                // Hide Sidebar for strict focus? Or just restrict links.
-                                // Let's hide other links.
                             }
 
                             document.getElementById('login-screen').style.display = 'none';
                             document.getElementById('app-wrapper').classList.add('loaded');
                             document.getElementById('user-display').innerText = username;
-                            loadData();
+
+                            // Load Dashboard Data (from dashboard.js)
+                            if(window.initDashboard) window.initDashboard();
                         } else {
-                            // Profile deleted?
                             alert("حسابك غير موجود في النظام السحابي.");
                             logout();
                         }
@@ -238,29 +219,12 @@
         function loginLocal() {
             const u = document.getElementById('uUser').value;
             const p = document.getElementById('uPass').value;
-            auth.signInWithEmailAndPassword(`${u}@bazasystems.com`, p).catch(e => {
-                document.getElementById('login-msg').innerText = "خطأ في الدخول";
-            });
-        }
+            if(!u || !p) return;
 
-        function loginGoogle() {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider)
-                .then((result) => {
-                    console.log("Google Sign-In Success", result.user);
-                })
-                .catch((error) => {
-                    console.error("Google Sign-In Error", error);
-                    let msg = "حدث خطأ أثناء الدخول بجوجل.";
-                    if (error.code === 'auth/unauthorized-domain') {
-                        msg += "\nالسبب: الدومين غير مصرح به في Firebase Console.";
-                    } else if (error.code === 'auth/popup-closed-by-user') {
-                        msg += "\nتم إغلاق النافذة قبل اكتمال الدخول.";
-                    } else {
-                        msg += `\n(${error.message})`;
-                    }
-                    alert(msg);
-                });
+            auth.signInWithEmailAndPassword(`${u}@bazasystems.com`, p).catch(e => {
+                console.error(e);
+                document.getElementById('login-msg').innerText = "بيانات الدخول غير صحيحة";
+            });
         }
 
         function logout() {
@@ -272,20 +236,16 @@
             const p = currentUserProfile.permissions || [];
             const r = currentUserProfile.role;
             const assigned = currentUserProfile.assigned_interface || 'all';
-
             const isDir = r === 'director';
 
-            // Reset Nav
             document.querySelectorAll('.nav-item').forEach(el => el.style.display = 'none');
 
-            // Dashboard always visible unless specific interface assigned
             if (assigned === 'all') {
                 document.getElementById('nav-dashboard').style.display = 'block';
                 if(isDir || p.includes('access_management')) document.getElementById('nav-students').style.display = 'block';
                 if(isDir || p.includes('access_canteen')) document.getElementById('nav-canteen').style.display = 'block';
                 if(isDir || p.includes('access_library')) document.getElementById('nav-library').style.display = 'block';
             } else {
-                // Show ONLY the assigned interface link
                 if(document.getElementById(`nav-${assigned}`)) {
                     document.getElementById(`nav-${assigned}`).style.display = 'block';
                 }
@@ -293,10 +253,7 @@
         }
 
         function showView(name) {
-            // Security check based on assigned_interface
-            if (currentUserProfile && currentUserProfile.assigned_interface !== 'all' && currentUserProfile.assigned_interface !== name) {
-                return; // Prevent switching
-            }
+            if (currentUserProfile && currentUserProfile.assigned_interface !== 'all' && currentUserProfile.assigned_interface !== name) return;
 
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
             const view = document.getElementById(`view-${name}`);
@@ -305,38 +262,7 @@
             document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
         }
 
-        async function loadData() {
-            if(allStudents.length > 0) return; // Already loaded
-            const snap = await db.collection('students').get();
-            allStudents = [];
-            snap.forEach(d => allStudents.push({id: d.id, ...d.data()}));
-            renderStudents('');
-        }
-
-        function renderStudents(q) {
-            const tbody = document.querySelector('#std-table tbody');
-            tbody.innerHTML = '';
-            const filtered = allStudents.filter(s =>
-                s.last_name.includes(q) || s.first_name.includes(q) || s.student_id_number.includes(q)
-            ).slice(0, 50);
-
-            filtered.forEach(s => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${s.student_id_number}</td>
-                        <td>${s.last_name}</td>
-                        <td>${s.first_name}</td>
-                        <td>${s.class_name}</td>
-                        <td style="display:flex; gap:5px; justify-content:flex-end;">
-                            <button onclick="reportAbsence('${s.id}')" class="btn btn-danger" style="padding: 5px 10px; font-size:0.8em;">غياب</button>
-                            <button onclick="triggerPhotoUpload('${s.id}')" class="btn btn-primary" style="padding: 5px 10px; font-size:0.8em;"><i class="fas fa-camera"></i></button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        // Photo Upload Logic
+        // Photo Upload Logic (Global Hook)
         let currentUploadStudentId = null;
         function triggerPhotoUpload(id) {
             currentUploadStudentId = id;
@@ -347,6 +273,9 @@
             const file = e.target.files[0];
             if(!file || !currentUploadStudentId) return;
 
+            // Basic Compression/Check
+            if(file.size > 2 * 1024 * 1024) return alert("الصورة كبيرة جداً");
+
             const storageRef = firebase.storage().ref();
             const fileRef = storageRef.child(`students_photos/${currentUploadStudentId}_${Date.now()}.jpg`);
 
@@ -354,7 +283,6 @@
                 const snapshot = await fileRef.put(file);
                 const url = await snapshot.ref.getDownloadURL();
 
-                // Create Pending Update for Local Pull
                 await db.collection('pending_updates').add({
                     type: 'PHOTO_UPLOAD',
                     student_ref: currentUploadStudentId,
@@ -363,33 +291,20 @@
                     submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
                     status: 'pending'
                 });
-                alert("تم رفع الصورة بنجاح (بانتظار المزامنة)");
+                alert("تم رفع الصورة بنجاح");
             } catch(e) {
                 console.error(e);
                 alert("فشل الرفع");
             }
         });
 
-        async function reportAbsence(id) {
-            if(!confirm("تسجيل غياب؟")) return;
-            await db.collection('pending_updates').add({
-                type: 'ATTENDANCE',
-                student_ref: id,
-                details: { status: 'ABSENT' },
-                submitted_by: currentUserProfile.username,
-                submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
-                status: 'pending',
-                date: new Date().toISOString().split('T')[0]
-            });
-            alert("تم الإرسال");
-        }
-
+        // Canteen Logic
         async function submitCanteen() {
             const id = document.getElementById('canteen-id').value;
             if(!id) return;
-            // Find student ID ref
-            const s = allStudents.find(x => x.student_id_number == id);
-            if(!s) return alert("تلميذ غير موجود");
+
+            // Check student existence via Global students list (populated in dashboard.js)
+            const s = currentStudents ? currentStudents.find(x => x.student_id_number == id) : null;
 
             await db.collection('pending_updates').add({
                 type: 'CanteenAttendance',
@@ -398,7 +313,7 @@
                 timestamp: new Date().toISOString(),
                 status: 'pending'
             });
-            alert("تم تسجيل الحضور (بانتظار الموافقة)");
+            alert("تم تسجيل الحضور");
             document.getElementById('canteen-id').value = '';
         }
     </script>
