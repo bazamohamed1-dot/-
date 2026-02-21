@@ -37,6 +37,15 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 APP_DOMAIN = os.getenv('APP_DOMAIN', 'http://localhost:8000')
 CSRF_TRUSTED_ORIGINS = [APP_DOMAIN, 'https://*.hf.space', 'https://*.bazasystems.com', 'http://*.bazasystems.com', 'http://127.0.0.1:8000', 'http://localhost:8000']
 
+# Auto-add local IP to Trusted Origins for LAN access
+try:
+    import socket
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+    CSRF_TRUSTED_ORIGINS.append(f'http://{local_ip}:8000')
+except:
+    pass
+
 # Session Security
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True # Logout on browser close
 

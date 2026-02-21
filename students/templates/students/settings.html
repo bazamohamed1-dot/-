@@ -163,21 +163,6 @@
     </table>
 </div>
 
-<!-- Sync Updates Section -->
-<div class="card" id="syncUpdatesSection" style="display:none; margin-bottom: 20px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
-        <h3><i class="fas fa-sync"></i> مزامنة التحديثات</h3>
-        <div style="display:flex; gap:10px;">
-             <button class="btn btn-primary" onclick="triggerCloudSync()"><i class="fas fa-cloud-download-alt"></i> مزامنة سحابية</button>
-             <button class="btn btn-success" onclick="approveAllUpdates()"><i class="fas fa-check-double"></i> قبول الكل</button>
-             <button class="btn btn-danger" onclick="rejectAllUpdates()"><i class="fas fa-times"></i> رفض الكل</button>
-        </div>
-    </div>
-    <div id="pendingUpdatesList" style="max-height: 400px; overflow-y: auto;">
-        <!-- Populated via JS -->
-        <p style="text-align:center; color:#94a3b8;">لا توجد تحديثات معلقة.</p>
-    </div>
-</div>
 
 <!-- User Management Section -->
 <div class="card" id="userManagementSection" style="display:none; margin-bottom: 20px;">
@@ -236,38 +221,20 @@
                 <small style="color:#666; display:none;" id="pwdHint">اتركه فارغاً إذا لم ترد التغيير</small>
             </div>
 
-            <div style="margin-bottom:15px; display:flex; gap:15px;">
-                <div style="flex:1;">
-                    <label style="display:block; margin-bottom:5px;">الدور</label>
-                    <select id="uRole" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()" required>
-                        <option value="">اختر...</option>
-                        <optgroup label="أدوار النظام">
-                            <option value="librarian" data-perms='["access_library","library_scan","library_loan","library_return","library_readers_list"]'>مكتبي</option>
-                            <option value="storekeeper" data-perms='["access_canteen","canteen_scan","canteen_manual","canteen_export"]'>مخزني (مطعم)</option>
-                            <option value="archivist" data-perms='["access_archive"]'>أرشيفي</option>
-                            <option value="secretariat" data-perms='["access_management","student_add","student_edit","student_print","import_data"]'>أمانة</option>
-                        </optgroup>
-                        <optgroup label="أدوار مخصصة" id="customRolesOptGroup">
-                            <!-- Populated via JS -->
-                        </optgroup>
-                    </select>
-                </div>
-                <div style="flex:1;">
-                    <label style="display:block; margin-bottom:5px;">الواجهة المخصصة</label>
-                    <select id="uInterface" class="form-input" style="width:100%; padding:10px;">
-                        <option value="all">كامل الصلاحيات</option>
-                        <option value="canteen">المطعم المدرسي</option>
-                        <option value="library">المكتبة</option>
-                        <option value="students">تسيير التلاميذ</option>
-                    </select>
-                </div>
-            </div>
-
             <div style="margin-bottom:15px;">
-                <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
-                    <input type="checkbox" id="uActiveCloud" style="width:20px; height:20px;">
-                    <span>تفعيل الدخول السحابي (Cloud Access)</span>
-                </label>
+                <label style="display:block; margin-bottom:5px;">الدور</label>
+                <select id="uRole" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()" required>
+                    <option value="">اختر...</option>
+                    <optgroup label="أدوار النظام">
+                        <option value="librarian" data-perms='["access_library","library_scan","library_loan","library_return","library_readers_list"]'>مكتبي</option>
+                        <option value="storekeeper" data-perms='["access_canteen","canteen_scan","canteen_manual","canteen_export"]'>مخزني (مطعم)</option>
+                        <option value="archivist" data-perms='["access_archive"]'>أرشيفي</option>
+                        <option value="secretariat" data-perms='["access_management","student_add","student_edit","student_print","import_data"]'>أمانة</option>
+                    </optgroup>
+                    <optgroup label="أدوار مخصصة" id="customRolesOptGroup">
+                        <!-- Populated via JS -->
+                    </optgroup>
+                </select>
             </div>
 
             <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
@@ -385,7 +352,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadUsers();
     loadRoles(); // Load roles
     check2FA();
-    loadPendingUpdates();
     loadLevelsForDropdown(); // Load Levels
 });
 
@@ -753,10 +719,6 @@ async function loadUsers() {
                 ? '<i class="fas fa-circle" style="color:#10b981; font-size:0.8rem;"></i> متصل'
                 : '<i class="fas fa-circle" style="color:#cbd5e1; font-size:0.8rem;"></i> غير متصل';
 
-            const cloudStatus = u.is_active_cloud
-                ? '<span style="color:#10b981;"><i class="fas fa-cloud"></i> مفعل</span>'
-                : '<span style="color:#ef4444;"><i class="fas fa-cloud-slash"></i> معطل</span>';
-
             tr.innerHTML = `
                 <td class="western-nums" style="direction:ltr; text-align:left;">
                     ${u.username}
@@ -764,7 +726,6 @@ async function loadUsers() {
                 </td>
                 <td class="western-nums" style="direction:ltr; text-align:left;">${u.email || '-'}</td>
                 <td>${u.role_display}</td>
-                <td>${cloudStatus}</td>
                 <td>${deviceBtn}</td>
                 <td>
                     <button class="btn btn-info" onclick='editUser(${JSON.stringify(u).replace(/'/g, "&#39;")})' style="padding:5px 10px;" title="تعديل"><i class="fas fa-edit"></i></button>
@@ -848,7 +809,6 @@ function openAddUserModal() {
     document.getElementById('editUserId').value = '';
     document.getElementById('pwdHint').style.display = 'none';
     document.getElementById('uPassword').required = true;
-    document.getElementById('uActiveCloud').checked = true; // Default
     document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
 }
 
@@ -866,10 +826,6 @@ function editUser(user) {
     document.getElementById('uPassword').value = '';
     document.getElementById('uPassword').required = false;
     document.getElementById('pwdHint').style.display = 'block';
-
-    // New Fields
-    document.getElementById('uActiveCloud').checked = user.is_active_cloud;
-    document.getElementById('uInterface').value = user.assigned_interface || 'all';
 
     // Populate permissions
     document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
@@ -889,9 +845,6 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     const role = document.getElementById('uRole').value;
     const email = document.getElementById('uEmail').value;
 
-    const isActiveCloud = document.getElementById('uActiveCloud').checked;
-    const assignedInterface = document.getElementById('uInterface').value;
-
     // Collect permissions
     const permissions = [];
     document.querySelectorAll('.perm-check:checked').forEach(c => permissions.push(c.value));
@@ -899,9 +852,7 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     const url = id ? `/canteen/api/users/${id}/update_creds/` : '/canteen/api/users/';
 
     const body = {
-        username, role, permissions, email,
-        is_active_cloud: isActiveCloud,
-        assigned_interface: assignedInterface
+        username, role, permissions, email
     };
 
     if (password) body.password = password;
@@ -1095,170 +1046,6 @@ async function disable2FA() {
             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
         if(res.ok) alert("تم التعطيل");
-    } catch(e) { alert("Error"); }
-}
-
-// Sync Updates Logic
-async function triggerCloudSync() {
-    if(!confirm("هل تريد بدء المزامنة مع السحابة؟ قد يستغرق هذا بضع ثوان.")) return;
-    try {
-        // Find button to disable
-        const btn = event.target.closest('button');
-        if(btn) {
-             btn.disabled = true;
-             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري المزامنة...';
-        }
-
-        const res = await fetch('/canteen/api/pending_updates/trigger_sync/', {
-             method: 'POST',
-             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            alert(data.message || "تمت المزامنة");
-            loadPendingUpdates();
-        } else {
-            alert("حدث خطأ: " + (data.error || "غير معروف"));
-        }
-    } catch(e) {
-        alert("فشل المزامنة: " + e);
-    } finally {
-        // Re-enable button
-        const btn = document.querySelector('button[onclick="triggerCloudSync()"]');
-        if(btn) {
-             btn.disabled = false;
-             btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> مزامنة سحابية';
-        }
-    }
-}
-
-async function loadPendingUpdates() {
-    if (sessionStorage.getItem('user_role') !== 'director') return;
-    document.getElementById('syncUpdatesSection').style.display = 'block';
-
-    try {
-        const res = await fetch('/canteen/api/pending_updates/');
-        if (!res.ok) return;
-        const data = await res.json();
-
-        // Ensure data is array
-        const updates = Array.isArray(data) ? data : (data.results || []);
-
-        const container = document.getElementById('pendingUpdatesList');
-
-        if (updates.length === 0) {
-            container.innerHTML = '<p style="text-align:center; color:#94a3b8;">لا توجد تحديثات معلقة.</p>';
-            return;
-        }
-
-        container.innerHTML = '';
-        updates.forEach(u => {
-            let details = '';
-
-            // Handle different update types
-            let d = u.data;
-            if (typeof d === 'string') {
-                try { d = JSON.parse(d); } catch(e){}
-            }
-
-            if (u.model_name === 'ATTENDANCE') {
-                const status = (d.details && d.details.status === 'ABSENT') ? 'غياب' : 'تأخر';
-                const submitter = d.submitted_by || 'غير معروف';
-                details = `تسجيل ${status} - تاريخ: ${d.date} - بواسطة: ${submitter}`;
-            } else if (u.model_name === 'COMMUNICATION') {
-                 const title = d.details ? d.details.title : 'ملاحظة';
-                 const submitter = d.submitted_by || 'غير معروف';
-                 details = `مراسلة: ${title} - بواسطة: ${submitter}`;
-            } else if (u.model_name === 'Student') {
-                const studentName = (d.last_name || '') + ' ' + (d.first_name || '');
-                details = `تلميذ: ${studentName} (${u.action})`;
-            } else if (u.model_name === 'CanteenAttendance') {
-                details = `تسجيل حضور مطعم (${u.action})`;
-            } else {
-                details = `${u.model_name} - ${u.action}`;
-            }
-
-            const item = document.createElement('div');
-            item.style.borderBottom = '1px solid #f1f5f9';
-            item.style.padding = '10px';
-            item.style.display = 'flex';
-            item.style.justifyContent = 'space-between';
-            item.style.alignItems = 'center';
-
-            item.innerHTML = `
-                <div>
-                    <div style="font-weight:bold;">${details}</div>
-                    <div style="font-size:0.8rem; color:#64748b;">${new Date(u.timestamp).toLocaleString()} - المستخدم: ${u.user || 'System/Cloud'}</div>
-                </div>
-                <div>
-                    <button class="btn btn-success" onclick="approveUpdate(${u.id})" style="padding:5px 10px;"><i class="fas fa-check"></i></button>
-                    <button class="btn btn-danger" onclick="rejectUpdate(${u.id})" style="padding:5px 10px;"><i class="fas fa-times"></i></button>
-                </div>
-            `;
-            container.appendChild(item);
-        });
-    } catch(e) { console.error(e); }
-}
-
-async function approveUpdate(id) {
-    try {
-        const res = await fetch(`/canteen/api/pending_updates/${id}/approve/`, {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) {
-            loadPendingUpdates();
-            // Update badge if exists
-            const badge = document.getElementById('reviewBadge');
-            if(badge) {
-                let count = parseInt(badge.innerText) || 0;
-                if(count > 0) badge.innerText = count - 1;
-                if(count - 1 <= 0) badge.style.display = 'none';
-            }
-        }
-    } catch(e) { alert("Error"); }
-}
-
-async function rejectUpdate(id) {
-    if(!confirm("رفض هذا التحديث؟")) return;
-    try {
-        const res = await fetch(`/canteen/api/pending_updates/${id}/`, {
-            method: 'DELETE',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) {
-            loadPendingUpdates();
-        }
-    } catch(e) { alert("Error"); }
-}
-
-async function approveAllUpdates() {
-    if(!confirm("الموافقة على جميع التحديثات المعلقة؟")) return;
-    try {
-        const res = await fetch(`/canteen/api/pending_updates/approve_all/`, {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) {
-            alert("تمت الموافقة على الجميع");
-            loadPendingUpdates();
-        }
-    } catch(e) { alert("Error"); }
-}
-
-async function rejectAllUpdates() {
-    if(!confirm("رفض جميع التحديثات المعلقة؟ لا يمكن التراجع عن هذا.")) return;
-    try {
-        const res = await fetch(`/canteen/api/pending_updates/reject_all/`, {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) {
-            alert("تم الرفض");
-            loadPendingUpdates();
-        }
     } catch(e) { alert("Error"); }
 }
 

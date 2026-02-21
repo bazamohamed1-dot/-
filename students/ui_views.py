@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.management import call_command
-from .models import Student, CanteenAttendance, SchoolSettings, PendingUpdate, Employee, SystemMessage, Survey
+from .models import Student, CanteenAttendance, SchoolSettings, Employee, SystemMessage, Survey
 from datetime import date
 from io import StringIO
 import os
@@ -12,19 +12,6 @@ import openpyxl
 from tablib import Dataset
 from .resources import StudentResource
 from .import_utils import parse_student_file
-
-def pending_updates_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
-    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-        return redirect('dashboard')
-
-    updates = PendingUpdate.objects.all().order_by('-timestamp')
-    context = {
-        'updates': updates,
-        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
-        'is_director': True
-    }
-    return render(request, 'students/pending_updates.html', context)
 
 def landing_view(request):
     if request.user.is_authenticated:

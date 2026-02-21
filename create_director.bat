@@ -9,7 +9,7 @@ echo.
 
 :: Check Virtual Environment
 if not exist "venv" (
-    echo [ERROR] Virtual Environment not found. Run GO_LOCAL.bat first.
+    echo [ERROR] Virtual Environment not found. Run run_school.bat first.
     pause
     exit /b
 )

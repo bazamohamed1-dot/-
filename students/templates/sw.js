@@ -8,9 +8,7 @@ const STATIC_ASSETS = [
     '/static_v2/manifest.json', // Updated path
     '/static_v2/images/logo.png', // Updated path
     '/static_v2/js/auth_manager.js',
-    '/static_v2/js/offline_manager.js',
     '/static_v2/js/xlsx.full.min.js',
-    '/static_v2/js/dexie.min.js',
     '/static_v2/js/browser-image-compression.js',
     '/static_v2/js/html5-qrcode.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',

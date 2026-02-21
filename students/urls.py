@@ -2,7 +2,6 @@ from django.urls import path, include
 from . import views
 from . import ui_views
 from . import auth_views
-from . import sync_views
 from . import qr_views
 from rest_framework.routers import DefaultRouter
 
@@ -11,8 +10,7 @@ router.register(r'users', auth_views.UserManagementViewSet)
 router.register(r'roles', auth_views.UserRoleViewSet)
 router.register(r'archive/docs', views.ArchiveDocumentViewSet, basename='archive_docs')
 router.register(r'students', views.StudentViewSet)
-router.register(r'pending_updates', sync_views.PendingUpdateViewSet, basename='pending_updates')
-router.register(r'system_messages', sync_views.SystemMessageViewSet, basename='system_messages')
+router.register(r'system_messages', views.SystemMessageViewSet, basename='system_messages')
 
 urlpatterns = [
     # Landing
@@ -30,9 +28,6 @@ urlpatterns = [
     path('auth/2fa/disable/', auth_views.disable_2fa, name='auth_2fa_disable'),
     path('auth/2fa/login/', auth_views.verify_2fa_login, name='auth_2fa_login'),
 
-    # Sync API
-    path('api/sync/', sync_views.SyncViewSet.as_view({'post': 'create'}), name='sync_data'),
-
     # QR Generation
     path('api/generate_qr/', qr_views.generate_user_qr, name='generate_user_qr'),
 
@@ -41,7 +36,6 @@ urlpatterns = [
 
     # UI Views
     path('dashboard/', ui_views.dashboard, name='dashboard'),
-    path('pending_updates/', ui_views.pending_updates_view, name='pending_updates_view'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
     path('api/import_json/', views.import_students_json, name='api_import_json'),
