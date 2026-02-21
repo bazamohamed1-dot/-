@@ -102,7 +102,7 @@ def process_rows(rows, mode):
 
             # Filter valid rows (Student ID must be digit)
             # Relaxed check: Many formats might have fewer columns, we need at least ID (0), Name (1,2), DOB (4)
-            if not cols or len(cols) < 5:
+            if not cols or len(cols) < 2:
                 continue
 
             sid = cols[0]
@@ -114,7 +114,7 @@ def process_rows(rows, mode):
             processed_ids.add(sid)
 
             # Extract Data
-            # Safe extraction with defaults
+            # Safe extraction with defaults - Handle cases with fewer columns
             last_name = cols[1] if len(cols) > 1 else ""
             first_name = cols[2] if len(cols) > 2 else ""
             gender = cols[3] if len(cols) > 3 else ""
@@ -123,7 +123,12 @@ def process_rows(rows, mode):
 
             level = cols[10] if len(cols) > 10 else ""
             class_code = cols[11] if len(cols) > 11 else ""
-            full_class = f"{level} {class_code}".strip()
+            # Fix: Check if class_code is already full class name (e.g. "1AM 1")
+            full_class = ""
+            if class_code and level and level in class_code:
+                 full_class = class_code # Already contains level
+            else:
+                 full_class = f"{level} {class_code}".strip()
 
             attendance_sys = cols[12] if len(cols) > 12 else "نصف داخلي"
             enroll_num = cols[13] if len(cols) > 13 else ""
