@@ -4,10 +4,15 @@ from django.conf import settings
 import uuid
 import base64
 import os
+from PIL import Image
+from io import BytesIO
 
 def save_base64_image(image_data, student_id):
     """
     Saves a base64 encoded image to the local media directory.
+    - Resizes to max 1000x1000 pixels.
+    - Converts to JPEG format (Quality 95).
+    - Renames to {student_id}.jpg.
     Returns the relative path to be stored in the DB.
     """
     if not image_data or not str(image_data).startswith('data:image'):
@@ -16,17 +21,31 @@ def save_base64_image(image_data, student_id):
     try:
         # Format: "data:image/jpeg;base64,..."
         header, encoded = str(image_data).split(',', 1)
-        extension = header.split('/')[1].split(';')[0] # e.g., jpeg
 
-        filename = f"student_{student_id}_{uuid.uuid4().hex[:8]}.{extension}"
+        # Decode
+        image_bytes = base64.b64decode(encoded)
+        img = Image.open(BytesIO(image_bytes))
+
+        # Resize (Thumbnail maintains aspect ratio)
+        img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
+
+        # Convert to RGB (in case of PNG/RGBA)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        # Filename: {student_id}.jpg
+        # Sanitize student_id to be safe filename
+        safe_id = str(student_id).strip().replace('/', '_').replace('\\', '_')
+        filename = f"{safe_id}.jpg"
+
         relative_path = os.path.join('students_photos', filename)
         full_path = os.path.join(settings.MEDIA_ROOT, 'students_photos', filename)
 
         # Ensure directory exists
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
-        with open(full_path, "wb") as fh:
-            fh.write(base64.b64decode(encoded))
+        # Save (Overwrite if exists)
+        img.save(full_path, "JPEG", quality=95)
 
         return relative_path
     except Exception as e:
@@ -43,6 +62,8 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_photo_url(self, obj):
         if obj.photo_path:
+            # Append timestamp to bust cache if needed?
+            # For now, let's stick to standard URL. Frontend can handle cache busting if needed.
             return f"{settings.MEDIA_URL}{obj.photo_path}"
         return None
 
@@ -58,7 +79,9 @@ class StudentSerializer(serializers.ModelSerializer):
             new_photo = validated_data['photo_path']
             # If changed and is base64
             if new_photo != instance.photo_path and str(new_photo).startswith('data:image'):
-                saved_path = save_base64_image(new_photo, instance.student_id_number)
+                # Use new ID if changed, else old
+                sid = validated_data.get('student_id_number', instance.student_id_number)
+                saved_path = save_base64_image(new_photo, sid)
                 if saved_path:
                     validated_data['photo_path'] = saved_path
         return super().update(instance, validated_data)
