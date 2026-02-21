@@ -344,10 +344,18 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
             items = [items]
 
         count = 0
+        import json
         for item in items:
             url = item.get('url', '')
             method = item.get('method', 'POST')
             payload = item.get('body', {})
+
+            # Ensure payload is a dictionary, not a stringified JSON from FormData
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except:
+                    pass # Keep as string if not valid JSON
 
             # Map URL to Model
             model_name = 'Unknown'
