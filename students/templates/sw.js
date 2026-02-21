@@ -1,16 +1,21 @@
 const CACHE_NAME = 'school-pwa-v2'; // Incremented version
+{% load static %}
+const CACHE_NAME = 'school-pwa-v3'; // Bump version
 const STATIC_ASSETS = [
     '/canteen/',
     '/canteen/dashboard/',
     '/canteen/ui/',
     '/canteen/management/',
     '/canteen/settings/',
-    '/static_v2/manifest.json', // Updated path
-    '/static_v2/images/logo.png', // Updated path
-    '/static_v2/js/auth_manager.js',
-    '/static_v2/js/xlsx.full.min.js',
-    '/static_v2/js/browser-image-compression.js',
-    '/static_v2/js/html5-qrcode.min.js',
+    '/canteen/pending_updates/',
+    "{% static 'manifest.json' %}",
+    "{% static 'images/logo.png' %}",
+    "{% static 'js/auth_manager.js' %}",
+    "{% static 'js/offline_manager.js' %}",
+    "{% static 'js/dexie.min.js' %}",
+    "{% static 'js/xlsx.full.min.js' %}",
+    "{% static 'js/browser-image-compression.js' %}",
+    "{% static 'js/html5-qrcode.min.js' %}",
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
 ];
