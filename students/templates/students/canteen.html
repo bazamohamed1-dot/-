@@ -282,8 +282,8 @@
         document.getElementById('system').textContent = s.attendance_system;
 
         const img = document.getElementById('studentImage');
-        if (s.photo_path) {
-            img.src = s.photo_path;
+        if (s.photo) {
+            img.src = s.photo;
             img.style.display = 'block';
             document.getElementById('placeholderIcon').style.display = 'none';
         } else {

@@ -166,3 +166,11 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// Public API for UI Integration
+window.OfflineManager = {
+    getLocalPending: async () => {
+        return await db.offlineQueue.toArray();
+    },
+    syncNow: () => processOfflineQueue()
+};

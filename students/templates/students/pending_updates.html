@@ -25,6 +25,21 @@
 <script>
 document.addEventListener('DOMContentLoaded', loadUpdates);
 
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 async function loadUpdates() {
     try {
         const res = await fetch('/canteen/api/pending_updates/');
@@ -49,25 +64,33 @@ async function loadUpdates() {
             if (typeof payload === 'string') {
                 try { payload = JSON.parse(payload); } catch(e){}
             }
+            if (typeof payload !== 'object' || payload === null) payload = {};
 
             if (u.model_name === 'Student') {
                 const name = `${payload.last_name || ''} ${payload.first_name || ''}`;
+
                 if (u.action === 'create') desc = `إضافة تلميذ جديد: <strong>${name}</strong>`;
                 else if (u.action === 'update') desc = `تعديل بيانات تلميذ: <strong>${name}</strong>`;
                 else if (u.action === 'delete') desc = `حذف تلميذ: <strong>${payload.name || payload.id || 'محدد'}</strong>`;
 
                 // Show changed fields for update
                 if(u.action === 'update') {
-                    content = `<div style="font-size:0.85rem; color:#475569; margin-top:5px; background:#f1f5f9; padding:5px; border-radius:4px;">
-                        تعديلات على: ${Object.keys(payload).filter(k => k!=='id' && k!=='photo_path').join(', ')}
-                    </div>`;
+                    const changedKeys = Object.keys(payload).filter(k => k!=='id' && k!=='photo' && k!=='photo_path');
+                    if (changedKeys.length > 0) {
+                        content += `<div style="font-size:0.85rem; color:#475569; margin-top:5px; background:#f1f5f9; padding:5px; border-radius:4px;">
+                            تعديلات على: ${changedKeys.join(', ')}
+                        </div>`;
+                    }
                 }
-                // Show photo for create/update if present
-                if (payload.photo_path) {
-                    content += `<div style="margin-top:5px;"><img src="${payload.photo_path}" style="height:50px; border-radius:4px; border:1px solid #ddd;"></div>`;
+
+                // Show photo
+                const photo = payload.photo || payload.photo_path;
+                if (photo && photo.startsWith('data:image')) {
+                    content += `<div style="margin-top:5px;"><img src="${photo}" style="height:50px; border-radius:4px; border:1px solid #ddd;"></div>`;
                 }
+
             } else if (u.model_name === 'CanteenAttendance') {
-                desc = `تسجيل حضور مطعم (${u.action})`;
+                desc = `تسجيل حضور مطعم (${u.action}): ${payload.student_id || payload.barcode || 'Unknown'}`;
             } else {
                 desc = `${u.model_name} - ${u.action}`;
             }
@@ -113,8 +136,11 @@ async function approve(id) {
         if(res.ok) {
             loadUpdates();
             updateBadge();
+        } else {
+             const err = await res.json();
+             alert("خطأ: " + (err.error || JSON.stringify(err)));
         }
-    } catch(e) { alert("خطأ"); }
+    } catch(e) { alert("خطأ في الاتصال"); }
 }
 
 async function reject(id) {
@@ -160,15 +186,16 @@ async function rejectAll() {
 }
 
 function updateBadge() {
-    // Optional: Refresh global badge if present
     try {
         fetch('/canteen/api/pending_updates/count/')
         .then(r=>r.json())
         .then(d => {
             const b = document.getElementById('reviewBadge');
-            if(b) {
-                b.innerText = d.count;
-                b.style.display = d.count > 0 ? 'inline-block' : 'none';
+            // Assuming reviewBadge exists in parent frame/base.html
+            if(window.parent && window.parent.document.getElementById('reviewBadge')) {
+                 const pb = window.parent.document.getElementById('reviewBadge');
+                 pb.innerText = d.count;
+                 pb.style.display = d.count > 0 ? 'inline-block' : 'none';
             }
         });
     } catch(e){}

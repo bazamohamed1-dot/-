@@ -311,8 +311,11 @@ async function fetchStudents(page = 1) {
             mother: s.mother_name,
             phone: s.guardian_phone,
             addr: s.address,
-            photo: s.photo_path
+            photo: s.photo,
+            isPending: false
         }));
+
+        await applyPendingUpdates(); // Merge pending changes
 
         filteredList = studentsList;
         renderTable();
@@ -468,9 +471,13 @@ async function saveCurrent() {
         guardian_name: document.getElementById('guardianName').value,
         mother_name: document.getElementById('motherName').value,
         guardian_phone: document.getElementById('guardianPhone').value,
-        address: document.getElementById('address').value,
-        photo_path: document.getElementById('photoPath').value
+        address: document.getElementById('address').value
     };
+
+    const photoVal = document.getElementById('photoPath').value;
+    if (photoVal && photoVal.startsWith('data:image')) {
+        studentData.photo = photoVal;
+    }
 
     const dbId = document.getElementById('dbId').value;
     const method = (dbId && dbId !== "undefined" && dbId !== "") ? 'PUT' : 'POST';
@@ -642,6 +649,67 @@ function filterTable() {
     fetchStudents(1);
 }
 
+async function applyPendingUpdates() {
+    // 1. Get Server Pending (if online)
+    let server = [];
+    try {
+        const res = await fetch('/canteen/api/pending_updates/');
+        if (res.ok) server = await res.json();
+    } catch(e) {}
+
+    // 2. Get Local Pending
+    let local = [];
+    if (window.OfflineManager) {
+        local = await window.OfflineManager.getLocalPending();
+    }
+
+    const updates = {};
+
+    // Process Server Updates
+    const serverList = Array.isArray(server) ? server : (server.results || []);
+    if(Array.isArray(serverList)) {
+        serverList.forEach(u => {
+            if (u.model_name === 'Student' && u.action === 'update') {
+                 let data = u.data;
+                 if (typeof data === 'string') try { data = JSON.parse(data); } catch(e){}
+                 const id = data.id;
+                 if (id) updates[id] = { ...data, isPending: true };
+            }
+        });
+    }
+
+    // Process Local Updates (Precedence)
+    if(Array.isArray(local)) {
+        local.forEach(u => {
+            let body = u.body;
+            if (typeof body === 'string') try { body = JSON.parse(body); } catch(e){}
+
+            if (u.url.includes('/canteen/api/students/') && u.method !== 'GET') {
+                 // Update ID
+                 const parts = u.url.split('/');
+                 // URL ends in / usually, so last is empty, second last is ID
+                 const id = parts[parts.length - 2];
+                 if (id && !isNaN(id) && u.method === 'PUT') {
+                     updates[id] = { ...(updates[id] || {}), ...body, isPending: true };
+                 }
+            }
+        });
+    }
+
+    // Apply to studentsList
+    studentsList.forEach(s => {
+        if (updates[s.dbId]) {
+            const up = updates[s.dbId];
+            if (up.first_name) s.fn = up.first_name;
+            if (up.last_name) s.ln = up.last_name;
+            if (up.photo) s.photo = up.photo;
+            if (up.class_name) s.class = up.class_name;
+            if (up.academic_year) s.level = up.academic_year;
+            s.isPending = true;
+        }
+    });
+}
+
 function renderTable() {
     const tbody = document.querySelector('#studentsTable tbody');
     tbody.innerHTML = filteredList.map((s, i) => {
@@ -651,13 +719,16 @@ function renderTable() {
             shortClass = shortClass.replace(s.level, '').trim();
         }
 
+        const pendingStyle = s.isPending ? 'background-color: #fff7ed;' : '';
+        const pendingBadge = s.isPending ? '<i class="fas fa-clock" title="تعديلات معلقة" style="color:#f59e0b; margin-right:5px;"></i>' : '';
+
         return `
-        <tr onclick="fillForm(${i}, this)">
+        <tr onclick="fillForm(${i}, this)" style="${pendingStyle}">
             <td onclick="event.stopPropagation()">
                 <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox">
             </td>
             <td>${s.id}</td>
-            <td>${s.ln}</td>
+            <td>${s.ln} ${pendingBadge}</td>
             <td>${s.fn}</td>
             <td style="direction:ltr; font-family: 'Segoe UI', sans-serif;">${s.dob || ''}</td>
             <td>${s.level}</td>

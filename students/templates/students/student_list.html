@@ -28,7 +28,7 @@
             </thead>
             <tbody>
                 {% for student in students %}
-                <tr>
+                <tr id="student-row-{{ student.id }}">
                     <td>{{ student.student_id_number }}</td>
                     <td>{{ student.last_name }}</td>
                     <td>{{ student.first_name }}</td>
@@ -54,4 +54,68 @@
         </table>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    let local = [];
+    if (window.OfflineManager) local = await window.OfflineManager.getLocalPending();
+
+    let server = [];
+    try {
+        const res = await fetch('/canteen/api/pending_updates/');
+        if (res.ok) {
+            const json = await res.json();
+            server = Array.isArray(json) ? json : (json.results || []);
+        }
+    } catch(e) {}
+
+    const updates = {};
+
+    // Server
+    if(Array.isArray(server)) {
+        server.forEach(u => {
+            if (u.model_name === 'Student' && u.action === 'update') {
+                 let data = u.data;
+                 if (typeof data === 'string') try { data = JSON.parse(data); } catch(e){}
+                 const id = data.id;
+                 if (id) updates[id] = { ...data };
+            }
+        });
+    }
+    // Local
+    if(Array.isArray(local)) {
+        local.forEach(u => {
+            let body = u.body;
+            if (typeof body === 'string') try { body = JSON.parse(body); } catch(e){}
+            if (u.url.includes('/canteen/api/students/') && u.method === 'PUT') {
+                 const parts = u.url.split('/');
+                 const id = parts[parts.length - 2];
+                 if (id) updates[id] = { ...(updates[id] || {}), ...body };
+            }
+        });
+    }
+
+    // Apply to DOM
+    Object.keys(updates).forEach(id => {
+        const row = document.getElementById(`student-row-${id}`);
+        if (row) {
+            const up = updates[id];
+            const cells = row.cells; // 0=ID, 1=Last, 2=First, 3=DOB, 4=Class
+
+            if (up.student_id_number) cells[0].innerText = up.student_id_number;
+            if (up.last_name) cells[1].innerText = up.last_name;
+            if (up.first_name) cells[2].innerText = up.first_name;
+            if (up.class_name) cells[4].innerText = up.class_name;
+
+            // Add Badge
+            if (!row.querySelector('.pending-badge')) {
+                cells[1].innerHTML += ' <i class="fas fa-clock pending-badge" title="تعديل معلق" style="color:#f59e0b"></i>';
+                row.style.backgroundColor = '#fff7ed';
+            }
+        }
+    });
+});
+</script>
 {% endblock %}
