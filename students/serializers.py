@@ -50,7 +50,9 @@ def save_base64_image(image_data, student_id):
         return relative_path
     except Exception as e:
         print(f"Image Save Error: {e}")
-        return None
+        # Return the original data if save fails, so we don't lose the photo string
+        # This allows re-trying or debugging
+        return image_data
 
 class StudentSerializer(serializers.ModelSerializer):
     # Use method field to generate full URL for frontend

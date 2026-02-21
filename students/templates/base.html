@@ -301,8 +301,11 @@
                 </a>
             </li>
             <li class="nav-item" style="margin-top: auto;">
-                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
-                    <i class="fas fa-cog"></i> الإعدادات
+                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}" style="display: flex; justify-content: space-between;">
+                    <span><i class="fas fa-cog"></i> الإعدادات</span>
+                    {% if request.user.profile.role == 'director' or request.user.is_superuser %}
+                    <span id="navUpdateBadge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; display: none;">0</span>
+                    {% endif %}
                 </a>
             </li>
         </ul>
@@ -539,8 +542,30 @@
         }
     }
 
+    // Update Sync Updates Badge (Global)
+    {% if request.user.profile.role == 'director' or request.user.is_superuser %}
+    function updateGlobalBadge() {
+        fetch('/canteen/api/pending_updates/count/')
+            .then(r => r.json())
+            .then(data => {
+                const b = document.getElementById('navUpdateBadge');
+                if(b) {
+                    if (data.count > 0) {
+                        b.innerText = data.count;
+                        b.style.display = 'inline-block';
+                    } else {
+                        b.style.display = 'none';
+                    }
+                }
+            })
+            .catch(e => console.log(e));
+    }
+    updateGlobalBadge();
+    // Poll every 30 seconds
+    setInterval(updateGlobalBadge, 30000);
+    {% endif %}
+
     // Fetch System Messages (Active)
-    fetch('/canteen/api/system_messages/')
         .then(res => res.json())
         .then(data => {
             const container = document.getElementById('systemMessagesContainer');
