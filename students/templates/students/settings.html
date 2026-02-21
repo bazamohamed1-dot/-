@@ -11,15 +11,15 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
             <div>
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">اسم المؤسسة</label>
-                <input type="text" id="schoolName" class="form-input" required style="width:100%; padding:10px;">
+                <input type="text" id="schoolName" class="form-input" style="width:100%; padding:10px;">
             </div>
             <div>
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">السنة الدراسية</label>
-                <input type="text" id="academicYear" class="form-input" required style="width:100%; padding:10px;">
+                <input type="text" id="academicYear" class="form-input" style="width:100%; padding:10px;">
             </div>
             <div>
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">اسم المدير</label>
-                <input type="text" id="directorName" class="form-input" required style="width:100%; padding:10px;">
+                <input type="text" id="directorName" class="form-input" style="width:100%; padding:10px;">
             </div>
             <div>
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">بريد المدير (للاستعادة)</label>
@@ -35,7 +35,7 @@
     <form id="librarySettingsForm" onsubmit="saveLibrarySettings(event)">
         <div style="margin-bottom:15px;">
             <label style="display:block; margin-bottom:5px; font-weight:bold;">الحد الأقصى للإعارات (الافتراضي)</label>
-            <input type="number" id="loanLimit" class="form-input western-nums" required style="width:100%; padding:10px; direction: ltr;" min="1" value="2">
+            <input type="number" id="loanLimit" class="form-input western-nums" style="width:100%; padding:10px; direction: ltr;" min="1" value="2">
         </div>
 
         <div style="margin-bottom:15px;">
@@ -65,11 +65,11 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
              <div>
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">وقت الفتح</label>
-                <input type="time" id="canteenOpen" class="form-input western-nums" required style="width:100%; padding:10px; direction: ltr;">
+                <input type="time" id="canteenOpen" class="form-input western-nums" style="width:100%; padding:10px; direction: ltr;">
             </div>
             <div>
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">وقت الغلق</label>
-                <input type="time" id="canteenClose" class="form-input western-nums" required style="width:100%; padding:10px; direction: ltr;">
+                <input type="time" id="canteenClose" class="form-input western-nums" style="width:100%; padding:10px; direction: ltr;">
             </div>
         </div>
         <div style="margin-top: 15px;">
