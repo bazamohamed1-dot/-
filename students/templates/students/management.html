@@ -715,10 +715,11 @@ async function handleImageSelection(input) {
         statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري ضغط الصورة...';
 
         try {
-            // Options for aggressive compression (Offline First optimization)
+            // Options for compression (Balanced for Quality/Network)
+            // Server will resize to 1000x1000 @ 95% quality.
             const options = {
-                maxSizeMB: 0.2,          // Max 200KB
-                maxWidthOrHeight: 800,   // Resize if huge
+                maxSizeMB: 1,            // Max 1MB (High quality input)
+                maxWidthOrHeight: 1200,  // Enough resolution for server to work with
                 useWebWorker: true,
                 fileType: 'image/jpeg'
             };
