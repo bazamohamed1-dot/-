@@ -38,6 +38,8 @@ if (!navigator.onLine) updateStatus('offline');
 async function serializeBody(body) {
     if (!body) return null;
     if (typeof body === 'string') return body; // Already JSON
+
+    // Handle FormData
     if (body instanceof FormData) {
         const obj = {};
         for (let [key, value] of body.entries()) {
@@ -54,6 +56,8 @@ async function serializeBody(body) {
         }
         return JSON.stringify(obj);
     }
+
+    // Handle Regular Object
     return JSON.stringify(body);
 }
 
@@ -62,54 +66,53 @@ const originalFetch = window.fetch;
 window.fetch = async (...args) => {
     let [resource, config] = args;
 
-    // Only intercept mutations (POST, PUT, DELETE) to our API
-    if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && resource.includes(API_BASE)) {
-        if (!navigator.onLine) {
-            // Queue it
-            try {
-                const serializedBody = await serializeBody(config.body);
-                await db.offlineQueue.add({
-                    url: resource,
-                    method: config.method,
-                    body: serializedBody,
-                    timestamp: Date.now()
-                });
-                alert("لا يوجد اتصال. تم حفظ العملية محلياً وسيتم إرسالها عند عودة الاتصال.");
+    // Ensure we are dealing with a URL string, Request object handled less gracefully here but standard usage passes string
+    const url = resource instanceof Request ? resource.url : resource;
 
-                // Return a fake successful response to keep UI happy (Optimistic UI)
-                return new Response(JSON.stringify({ message: "Saved offline (Pending)" }), {
-                    status: 202,
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            } catch (e) {
-                console.error("Offline Save Failed", e);
-                throw e;
-            }
+    // Only intercept mutations (POST, PUT, DELETE) to our API
+    if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && url.includes(API_BASE)) {
+
+        // 1. Explicit Offline Check
+        if (!navigator.onLine) {
+            console.log("Offline interception triggered for:", url);
+            return await queueRequest(url, config);
         }
     }
 
-    // Normal request
-    return originalFetch(...args).catch(async (error) => {
+    // 2. Try Network, Catch Failure (Flaky Connection)
+    try {
+        return await originalFetch(...args);
+    } catch (error) {
         // Double check: if network error on mutation, queue it
-        if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && resource.includes(API_BASE)) {
-             try {
-                const serializedBody = await serializeBody(config.body);
-                await db.offlineQueue.add({
-                    url: resource,
-                    method: config.method,
-                    body: serializedBody,
-                    timestamp: Date.now()
-                });
-                alert("فشل الاتصال. تم حفظ العملية محلياً.");
-                return new Response(JSON.stringify({ message: "Saved offline (Pending)" }), {
-                    status: 202,
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            } catch (e) { throw error; }
+        if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && url.includes(API_BASE)) {
+             console.log("Network error interception triggered for:", url);
+             return await queueRequest(url, config);
         }
         throw error;
-    });
+    }
 };
+
+async function queueRequest(url, config) {
+    try {
+        const serializedBody = await serializeBody(config.body);
+        await db.offlineQueue.add({
+            url: url,
+            method: config.method,
+            body: serializedBody,
+            timestamp: Date.now()
+        });
+
+        // Return a fake successful response to keep UI happy (Optimistic UI)
+        return new Response(JSON.stringify({ message: "Saved offline (Pending)" }), {
+            status: 202,
+            statusText: "Accepted",
+            headers: { 'Content-Type': 'application/json' }
+        });
+    } catch (e) {
+        console.error("Offline Save Failed", e);
+        throw e;
+    }
+}
 
 async function processOfflineQueue() {
     const count = await db.offlineQueue.count();
@@ -119,11 +122,6 @@ async function processOfflineQueue() {
 
     // Get all items
     const items = await db.offlineQueue.toArray();
-
-    // Prepare bulk sync payload
-    // We send them to a special sync endpoint to handle them in bulk
-    // OR we process one by one. Bulk is safer for order but requires backend support.
-    // Let's use the existing 'sync_offline' endpoint we added to PendingUpdateViewSet.
 
     try {
         const response = await originalFetch('/canteen/api/pending_updates/sync/', {
@@ -138,14 +136,19 @@ async function processOfflineQueue() {
         if (response.ok) {
             console.log("Sync Successful");
             await db.offlineQueue.clear();
-            alert("تمت مزامنة جميع العمليات المعلقة بنجاح.");
+            // Don't alert on automatic sync, just update UI
+            const syncNotif = document.getElementById('syncNotification');
+            if(syncNotif) {
+                syncNotif.innerHTML = '<i class="fas fa-check"></i> تمت المزامنة';
+                setTimeout(() => { updateStatus('online'); }, 2000);
+            }
         } else {
             console.error("Sync Failed", await response.text());
+            updateStatus('online'); // Reset status even if failed to hide spinner
         }
     } catch (e) {
         console.error("Sync Error", e);
-    } finally {
-        updateStatus('online');
+        updateStatus('offline'); // Probably still offline
     }
 }
 
