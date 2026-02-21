@@ -260,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function fetchStudents(page = 1) {
     try {
+        console.log("Fetching students page", page);
         currentPage = page;
         let data = [];
 
@@ -278,6 +279,7 @@ async function fetchStudents(page = 1) {
         const response = await fetch(`/canteen/api/students/?${params.toString()}`);
         if (!response.ok) throw new Error('Network response was not ok');
             const result = await response.json();
+            console.log("API Result:", result);
 
             // Handle Pagination (DRF returns { count: ..., results: [...] })
             if (result.results && Array.isArray(result.results)) {
@@ -289,9 +291,12 @@ async function fetchStudents(page = 1) {
                 data = result;
                 totalPages = 1;
             } else {
+                console.warn("Unexpected API format", result);
                 data = []; // Fallback
                 totalPages = 1;
             }
+
+        console.log("Mapped Data Length:", data.length);
 
         studentsList = data.map(s => ({
             dbId: s.id,
@@ -315,9 +320,10 @@ async function fetchStudents(page = 1) {
             isPending: false
         }));
 
-        await applyPendingUpdates(); // Merge pending changes
+        try { await applyPendingUpdates(); } catch(e) { console.error("Update merge error", e); }
 
         filteredList = studentsList;
+        console.log("Rendering table with items:", filteredList.length);
         renderTable();
         updatePaginationUI();
     } catch (error) {
@@ -712,9 +718,19 @@ async function applyPendingUpdates() {
 
 function renderTable() {
     const tbody = document.querySelector('#studentsTable tbody');
+    if (!tbody) {
+        console.error("Table body not found!");
+        return;
+    }
+
+    if (filteredList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#64748b;">لا توجد بيانات لعرضها</td></tr>';
+        return;
+    }
+
     tbody.innerHTML = filteredList.map((s, i) => {
         // Strip level from class name if present (e.g. "أولى 1" -> "1")
-        let shortClass = s.class;
+        let shortClass = s.class || '';
         if (s.level && shortClass && shortClass.includes(s.level)) {
             shortClass = shortClass.replace(s.level, '').trim();
         }
@@ -727,15 +743,16 @@ function renderTable() {
             <td onclick="event.stopPropagation()">
                 <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox">
             </td>
-            <td>${s.id}</td>
-            <td>${s.ln} ${pendingBadge}</td>
-            <td>${s.fn}</td>
+            <td>${s.id || ''}</td>
+            <td>${s.ln || ''} ${pendingBadge}</td>
+            <td>${s.fn || ''}</td>
             <td style="direction:ltr; font-family: 'Segoe UI', sans-serif;">${s.dob || ''}</td>
-            <td>${s.level}</td>
+            <td>${s.level || ''}</td>
             <td>${shortClass}</td>
         </tr>
         `;
     }).join('');
+    console.log("Table rendered with rows:", filteredList.length);
 }
 
 function toggleSelectAll(source) {
