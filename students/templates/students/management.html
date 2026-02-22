@@ -235,6 +235,11 @@ let totalPages = 1;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    // Show Offline Manager Status
+    if (window.OfflineManager) {
+        console.log("OfflineManager Ready");
+    }
+
     populateFilters(); // Load filters first
     fetchStudents(1); // Load students page 1
     lockFields(true);
@@ -828,8 +833,10 @@ function renderTable() {
         let levelStr = s.level || "";
 
         // Normalize and check
-        if (levelStr && shortClass && shortClass.indexOf(levelStr) !== -1) {
-            shortClass = shortClass.replace(levelStr, '').trim();
+        if (levelStr && shortClass) {
+            // Regex to replace level at start, case insensitive, plus spaces
+            const regex = new RegExp('^' + levelStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i');
+            shortClass = shortClass.replace(regex, '').trim();
         }
 
         const pendingStyle = s.isPending ? 'background-color: #fff7ed;' : '';

@@ -111,9 +111,18 @@ def normalize_header(header):
 def detect_columns(header_row):
     """
     Returns a dict mapping field_name -> column_index
+    Prioritizes 'السنة' for academic_year if found.
     """
     col_map = {}
     used_indices = set()
+
+    # Pre-scan for 'السنة' specifically for academic_year to override 'المستوى'
+    year_idx = -1
+    for idx, col in enumerate(header_row):
+        val = normalize_header(col)
+        if 'السنة' in val:
+            year_idx = idx
+            break
 
     for idx, col in enumerate(header_row):
         val = normalize_header(col)
@@ -122,6 +131,12 @@ def detect_columns(header_row):
         # Check against HEADER_MAP
         for field, keywords in HEADER_MAP.items():
             if field in col_map: continue # Already found
+
+            # Special case for academic_year
+            if field == 'academic_year' and year_idx != -1:
+                col_map['academic_year'] = year_idx
+                used_indices.add(year_idx)
+                continue
 
             # Exact or fuzzy match
             for kw in keywords:
