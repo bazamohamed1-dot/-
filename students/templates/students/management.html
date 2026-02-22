@@ -525,6 +525,9 @@ async function saveCurrent() {
                     alert("لقد تم الحفظ بانتظار موافقة المدير على التعديلات");
                 }
 
+                // Refresh table to show the pending item (from local or server pending list)
+                await fetchStudents();
+
                 // Clear form to avoid confusion
                 prepareNew();
             } else {
