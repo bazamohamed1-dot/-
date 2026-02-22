@@ -664,6 +664,7 @@ async function applyPendingUpdates() {
     }
 
     const updates = {};
+    const createdStudents = [];
 
     // Process Server Updates
     const serverList = Array.isArray(server) ? server : (server.results || []);
@@ -684,30 +685,69 @@ async function applyPendingUpdates() {
             let body = u.body;
             if (typeof body === 'string') try { body = JSON.parse(body); } catch(e){}
 
-            if (u.url.includes('/canteen/api/students/') && u.method !== 'GET') {
+            const url = u.url || "";
+            const method = u.method || "GET";
+
+            // Handle CREATE (POST) - New Student
+            // URL usually: /canteen/api/students/
+            if (url.includes('/canteen/api/students/') && method === 'POST') {
+                 const newS = {
+                     dbId: `temp_${u.timestamp}`, // Temporary ID
+                     id: body.student_id_number,
+                     ln: body.last_name,
+                     fn: body.first_name,
+                     dob: body.date_of_birth,
+                     pob: body.place_of_birth,
+                     gender: body.gender,
+                     level: body.academic_year,
+                     class: body.class_name,
+                     sys: body.attendance_system || "",
+                     enrollNum: body.enrollment_number || "",
+                     enrollDate: body.enrollment_date || "",
+                     exitDate: body.exit_date || "",
+                     guard: body.guardian_name || "",
+                     mother: body.mother_name || "",
+                     phone: body.guardian_phone || "",
+                     addr: body.address || "",
+                     photo: body.photo, // Base64
+                     isPending: true,
+                     isNew: true
+                 };
+                 createdStudents.push(newS);
+            }
+
+            // Handle UPDATE (PUT) - Existing Student
+            // URL usually: /canteen/api/students/{id}/
+            else if (url.includes('/canteen/api/students/') && method === 'PUT') {
                  // Update ID
-                 const parts = u.url.split('/');
+                 const parts = url.split('/');
                  // URL ends in / usually, so last is empty, second last is ID
                  const id = parts[parts.length - 2];
-                 if (id && !isNaN(id) && u.method === 'PUT') {
+                 if (id && !isNaN(id)) {
                      updates[id] = { ...(updates[id] || {}), ...body, isPending: true };
                  }
             }
         });
     }
 
-    // Apply to studentsList
+    // Apply Updates to Existing Students
     studentsList.forEach(s => {
         if (updates[s.dbId]) {
             const up = updates[s.dbId];
             if (up.first_name) s.fn = up.first_name;
             if (up.last_name) s.ln = up.last_name;
-            if (up.photo) s.photo = up.photo;
+            if (up.photo) s.photo = up.photo; // Update photo in memory
             if (up.class_name) s.class = up.class_name;
             if (up.academic_year) s.level = up.academic_year;
             s.isPending = true;
         }
     });
+
+    // Add Newly Created Students to the List (Prepend)
+    if (createdStudents.length > 0) {
+        // Sort by timestamp if needed, but usually insertion order is fine
+        studentsList = [...createdStudents, ...studentsList];
+    }
 }
 
 function renderTable() {
@@ -720,7 +760,10 @@ function renderTable() {
         }
 
         const pendingStyle = s.isPending ? 'background-color: #fff7ed;' : '';
-        const pendingBadge = s.isPending ? '<i class="fas fa-clock" title="تعديلات معلقة" style="color:#f59e0b; margin-right:5px;"></i>' : '';
+        let pendingBadge = s.isPending ? '<i class="fas fa-clock" title="تعديلات معلقة" style="color:#f59e0b; margin-right:5px;"></i>' : '';
+        if (s.isNew) {
+            pendingBadge = '<i class="fas fa-plus-circle" title="جديد (غير متزامن)" style="color:#10b981; margin-right:5px;"></i>';
+        }
 
         return `
         <tr onclick="fillForm(${i}, this)" style="${pendingStyle}">
