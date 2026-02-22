@@ -226,7 +226,7 @@ class StudentViewSet(viewsets.ModelViewSet):
                 s.academic_year, s.class_name, s.attendance_system,
                 s.enrollment_number, s.enrollment_date, s.exit_date,
                 s.guardian_name, s.mother_name, s.guardian_phone,
-                s.address, s.photo_path
+                s.address, s.photo.name if s.photo else ''
             ])
 
         wb.save(response)
