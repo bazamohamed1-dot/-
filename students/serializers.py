@@ -18,30 +18,40 @@ class Base64ImageField(serializers.ImageField):
         if isinstance(data, str) and data.startswith('data:image'):
             try:
                 # Format: "data:image/jpeg;base64,..."
+                if ';base64,' not in data:
+                    self.fail('invalid_image')
+
                 header, encoded = data.split(';base64,')
                 ext = header.split('/')[-1]
                 if ext == 'jpeg': ext = 'jpg'
 
                 # Decode
-                decoded_file = base64.b64decode(encoded)
+                try:
+                    decoded_file = base64.b64decode(encoded)
+                except Exception:
+                    self.fail('invalid_image')
 
                 # Resize and Optimize
-                img = Image.open(BytesIO(decoded_file))
-                img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
+                try:
+                    img = Image.open(BytesIO(decoded_file))
+                    img.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
 
-                # Force Convert to RGB/JPEG for consistency
-                if img.mode in ("RGBA", "P"):
-                    img = img.convert("RGB")
+                    # Force Convert to RGB/JPEG for consistency
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
 
-                output = BytesIO()
-                img.save(output, format='JPEG', quality=95)
-                output.seek(0)
+                    output = BytesIO()
+                    img.save(output, format='JPEG', quality=95)
+                    output.seek(0)
 
-                file_name = f"temp.jpg" # Name doesn't matter, model upload_to handles it
-                data = ContentFile(output.read(), name=file_name)
+                    file_name = f"temp.jpg" # Name doesn't matter, model upload_to handles it
+                    data = ContentFile(output.read(), name=file_name)
+                except Exception as e:
+                    print(f"Image Processing Error: {e}")
+                    self.fail('invalid_image')
 
             except Exception as e:
-                print(f"Base64 Decode Error: {e}")
+                print(f"Base64 General Error: {e}")
                 self.fail('invalid_image')
 
         return super().to_internal_value(data)
