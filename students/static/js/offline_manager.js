@@ -1,7 +1,8 @@
 // offline_manager.js - Powered by Dexie.js for Robust Offline Storage
 const db = new Dexie("SchoolOfflineDB");
-db.version(1).stores({
-    offlineQueue: '++id, url, method, body, timestamp' // Removed 'type' index
+db.version(2).stores({
+    offlineQueue: '++id, url, method, body, timestamp',
+    cache: 'key, data, timestamp'
 });
 
 const API_BASE = '/canteen/api/';
@@ -172,5 +173,16 @@ window.OfflineManager = {
     getLocalPending: async () => {
         return await db.offlineQueue.toArray();
     },
-    syncNow: () => processOfflineQueue()
+    syncNow: () => processOfflineQueue(),
+    saveCache: async (key, data) => {
+        try {
+            await db.cache.put({key: key, data: data, timestamp: Date.now()});
+        } catch(e) { console.warn("Cache Save Failed", e); }
+    },
+    getCache: async (key) => {
+        try {
+            const item = await db.cache.get(key);
+            return item ? item.data : null;
+        } catch(e) { return null; }
+    }
 };
