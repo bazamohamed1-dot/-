@@ -70,7 +70,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get('search') or self.request.query_params.get('q')
 
         if level:
-            queryset = queryset.filter(academic_year=level)
+            queryset = queryset.filter(Q(academic_year__icontains=level) | Q(class_name__istartswith=level))
         if class_name:
             queryset = queryset.filter(class_name__icontains=class_name) # Using icontains to be safe with partial matches or "Level Class" format
         if search:
@@ -1058,12 +1058,21 @@ def student_filters(request):
     Uses robust query to ensure all variations are captured.
     """
     # Exclude empty or null values
-    levels = Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct().order_by('academic_year')
-    classes = Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct().order_by('class_name')
+    levels = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct().order_by('academic_year'))
+    classes = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct().order_by('class_name'))
+
+    # Fallback: Extract levels from class names if levels are missing
+    if not levels:
+        derived_levels = set()
+        for c in classes:
+            parts = c.split()
+            if parts:
+                derived_levels.add(parts[0]) # Assume first part is level (e.g. "1AM 1")
+        levels = sorted(list(derived_levels))
 
     return Response({
-        'levels': list(levels),
-        'classes': list(classes)
+        'levels': levels,
+        'classes': classes
     })
 
 from .resources import StudentResource

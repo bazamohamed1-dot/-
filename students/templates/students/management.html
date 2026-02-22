@@ -276,7 +276,12 @@ async function fetchStudents(page = 1) {
         if (search) params.append('search', search);
 
         const response = await fetch(`/canteen/api/students/?${params.toString()}`);
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) {
+            const err = new Error('Network response was not ok');
+            err.responseStatus = response.status;
+            err.responseText = response.statusText;
+            throw err;
+        }
             const result = await response.json();
 
             // Handle Pagination (DRF returns { count: ..., results: [...] })
@@ -324,9 +329,13 @@ async function fetchStudents(page = 1) {
         console.error('Error fetching students:', error);
         const tableBody = document.querySelector('#studentsTable tbody');
         if (tableBody) {
+            let errorDetails = error.message;
+            if (error.responseStatus) {
+                errorDetails += ` (Status: ${error.responseStatus} ${error.responseText || ''})`;
+            }
             tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px; color: red;">
-                <i class="fas fa-exclamation-triangle"></i> حدث خطأ أثناء تحميل البيانات. يرجى التحقق من الاتصال أو تحديث الصفحة.
-                <br><small>${error.message}</small>
+                <i class="fas fa-exclamation-triangle"></i> حدث خطأ أثناء تحميل البيانات. يرجى الاتصال بالمسؤول.
+                <br><small style="direction:ltr; display:inline-block; margin-top:5px;">${errorDetails}</small>
             </td></tr>`;
         }
     }
@@ -669,8 +678,12 @@ async function applyPendingUpdates() {
 
     // 2. Get Local Pending
     let local = [];
-    if (window.OfflineManager) {
-        local = await window.OfflineManager.getLocalPending();
+    try {
+        if (window.OfflineManager) {
+            local = await window.OfflineManager.getLocalPending();
+        }
+    } catch(e) {
+        console.warn("OfflineManager Access Failed:", e);
     }
 
     const updates = {};
