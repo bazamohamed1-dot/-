@@ -253,16 +253,21 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
              except: pass
 
         if update.model_name == 'Student':
-            # Handle Photo - Base64 save is handled by Serializer usually, but here we might have raw data
-            # If using StudentSerializer to save, it handles it.
-            # But here we might be doing manual object creation/update
+            # Safety: Remove 'photo' from payload if it's not a valid Base64 string
+            # This prevents existing photo URLs from triggering validation errors or being cleared
+            if 'photo' in data_payload:
+                photo_val = data_payload['photo']
+                if isinstance(photo_val, str) and not photo_val.startswith('data:image'):
+                    # It's likely a URL/Path string, ignore it to preserve existing photo
+                    del data_payload['photo']
 
-            # Use serializer to validate and save if possible
+            # Use serializer to validate and save
             if update.action == 'create':
                 serializer = StudentSerializer(data=data_payload)
                 if serializer.is_valid():
                     serializer.save()
                 else:
+                    logger.error(f"Create Student Failed: {serializer.errors}")
                     raise ValueError(f"Invalid data: {serializer.errors}")
 
             elif update.action == 'update':
@@ -274,9 +279,11 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
                         if serializer.is_valid():
                             serializer.save()
                         else:
+                            logger.error(f"Update Student Failed: {serializer.errors}")
                             raise ValueError(f"Invalid data: {serializer.errors}")
                     except Student.DoesNotExist:
-                        pass # Ignore if student gone
+                        logger.warning(f"Student {obj_id} not found for update")
+                        pass
 
             elif update.action == 'delete':
                 if data_payload.get('is_bulk'):
