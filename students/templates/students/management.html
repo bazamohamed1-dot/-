@@ -334,27 +334,36 @@ async function fetchStudents(page = 1) {
             }
         }
 
-        studentsList = data.map(s => ({
-            dbId: s.id,
-            id: s.student_id_number,
-            ln: s.last_name,
-            fn: s.first_name,
-            dob: s.date_of_birth,
-            pob: s.place_of_birth,
-            gender: s.gender,
-            level: s.academic_year || "",
-            class: s.class_name || "",
-            sys: s.attendance_system,
-            enrollNum: s.enrollment_number,
-            enrollDate: s.enrollment_date,
-            exitDate: s.exit_date,
-            guard: s.guardian_name,
-            mother: s.mother_name,
-            phone: s.guardian_phone,
-            addr: s.address,
-            photo: s.photo,
-            isPending: false
-        }));
+        studentsList = data.map(s => {
+            let lvl = s.academic_year || "";
+            // Fallback: If level is empty, try to extract from class name
+            if (!lvl && s.class_name) {
+                const parts = s.class_name.split(' ');
+                if (parts.length > 0) lvl = parts[0];
+            }
+
+            return {
+                dbId: s.id,
+                id: s.student_id_number,
+                ln: s.last_name,
+                fn: s.first_name,
+                dob: s.date_of_birth,
+                pob: s.place_of_birth,
+                gender: s.gender,
+                level: lvl,
+                class: s.class_name || "",
+                sys: s.attendance_system,
+                enrollNum: s.enrollment_number,
+                enrollDate: s.enrollment_date,
+                exitDate: s.exit_date,
+                guard: s.guardian_name,
+                mother: s.mother_name,
+                phone: s.guardian_phone,
+                addr: s.address,
+                photo: s.photo,
+                isPending: false
+            };
+        });
 
         await applyPendingUpdates(); // Merge pending changes
 

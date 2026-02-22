@@ -15,7 +15,7 @@ HEADER_MAP = {
     'gender': ['الجنس', 'gender', 'sexe', 'sex'],
     'date_of_birth': ['تاريخ الميلاد', 'date_of_birth', 'dob', 'date_naissance', 'tarihk_milad', 'تاريخ الازدياد'],
     'place_of_birth': ['مكان الميلاد', 'place_of_birth', 'pob', 'lieu_naissance', 'makan_milad', 'مكان الازدياد'],
-    'academic_year': ['المستوى', 'academic_year', 'level', 'niveau', 'annee_scolaire', 'السنة الدراسية', 'السنة'],
+    'academic_year': ['المستوى', 'academic_year', 'level', 'niveau', 'annee_scolaire', 'السنة الدراسية', 'السنة', 'الصف', 'annee'],
     'class_name': ['القسم', 'class_name', 'class', 'classe', 'fawj', 'الفوج التربوي', 'الفوج'],
     'attendance_system': ['نظام التمدرس', 'attendance_system', 'system', 'regime', 'nizam', 'النظام'],
     'enrollment_number': ['رقم القيد', 'enrollment_number', 'enroll_num', 'numero_inscription', 'raqm_kaid'],
@@ -243,6 +243,12 @@ def process_rows(rows, mode):
 
             level = get_val('academic_year')
             class_code = get_val('class_name')
+
+            # Fallback: If level is missing, try to extract from class_code
+            if not level and class_code:
+                 parts = str(class_code).split()
+                 if parts:
+                     level = parts[0] # Use first part as level (e.g. "1AM 1" -> "1AM")
 
             # Smart Class Name Construction
             full_class = ""
