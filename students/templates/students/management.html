@@ -322,7 +322,13 @@ async function fetchStudents(page = 1) {
         updatePaginationUI();
     } catch (error) {
         console.error('Error fetching students:', error);
-        // alert('حدث خطأ أثناء تحميل البيانات');
+        const tableBody = document.querySelector('#studentsTable tbody');
+        if (tableBody) {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px; color: red;">
+                <i class="fas fa-exclamation-triangle"></i> حدث خطأ أثناء تحميل البيانات. يرجى التحقق من الاتصال أو تحديث الصفحة.
+                <br><small>${error.message}</small>
+            </td></tr>`;
+        }
     }
 }
 
@@ -504,7 +510,11 @@ async function saveCurrent() {
 
             if (response.status === 202) {
                 // Pending Update (Offline or Non-Director)
-                alert("لقد تم الحفظ بانتظار موافقة المدير على التعديلات");
+                if (!navigator.onLine) {
+                    alert("تم الحفظ محلياً (وضع العمل بدون اتصال). ستتم المزامنة عند عودة الإنترنت.");
+                } else {
+                    alert("لقد تم الحفظ بانتظار موافقة المدير على التعديلات");
+                }
 
                 // Clear form to avoid confusion
                 prepareNew();
@@ -734,11 +744,24 @@ async function applyPendingUpdates() {
     studentsList.forEach(s => {
         if (updates[s.dbId]) {
             const up = updates[s.dbId];
+            // Comprehensive update of all fields for offline editing
             if (up.first_name) s.fn = up.first_name;
             if (up.last_name) s.ln = up.last_name;
-            if (up.photo) s.photo = up.photo; // Update photo in memory
+            if (up.photo) s.photo = up.photo;
             if (up.class_name) s.class = up.class_name;
             if (up.academic_year) s.level = up.academic_year;
+            if (up.attendance_system) s.sys = up.attendance_system;
+            if (up.enrollment_number) s.enrollNum = up.enrollment_number;
+            if (up.enrollment_date) s.enrollDate = up.enrollment_date;
+            if (up.exit_date) s.exitDate = up.exit_date;
+            if (up.guardian_name) s.guard = up.guardian_name;
+            if (up.mother_name) s.mother = up.mother_name;
+            if (up.guardian_phone) s.phone = up.guardian_phone;
+            if (up.address) s.addr = up.address;
+            if (up.date_of_birth) s.dob = up.date_of_birth;
+            if (up.place_of_birth) s.pob = up.place_of_birth;
+            if (up.gender) s.gender = up.gender;
+
             s.isPending = true;
         }
     });
