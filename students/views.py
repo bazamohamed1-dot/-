@@ -189,7 +189,17 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def export_all(self, request):
-        if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('import_data'):
+        # Allow export for management, import_data, or director
+        has_perm = False
+        if request.user.is_superuser:
+            has_perm = True
+        elif hasattr(request.user, 'profile'):
+            if request.user.profile.role == 'director':
+                has_perm = True
+            elif request.user.profile.has_perm('import_data') or request.user.profile.has_perm('access_management'):
+                has_perm = True
+
+        if not has_perm:
              return Response({'error': 'Unauthorized'}, status=403)
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
