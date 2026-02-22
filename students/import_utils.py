@@ -24,7 +24,7 @@ HEADER_MAP = {
     'gender': ['الجنس', 'gender', 'sexe', 'sex'],
     'date_of_birth': ['تاريخ الميلاد', 'date_of_birth', 'dob', 'date_naissance', 'tarihk_milad', 'تاريخ الازدياد'],
     'place_of_birth': ['مكان الميلاد', 'place_of_birth', 'pob', 'lieu_naissance', 'makan_milad', 'مكان الازدياد'],
-    'academic_year': ['المستوى', 'academic_year', 'level', 'niveau', 'annee_scolaire', 'السنة الدراسية'],
+    'academic_year': ['المستوى', 'academic_year', 'level', 'niveau', 'annee_scolaire', 'السنة الدراسية', 'السنة'],
     'class_name': ['القسم', 'class_name', 'class', 'classe', 'fawj', 'الفوج التربوي', 'الفوج'],
     'attendance_system': ['نظام التمدرس', 'attendance_system', 'system', 'regime', 'nizam', 'النظام'],
     'enrollment_number': ['رقم القيد', 'enrollment_number', 'enroll_num', 'numero_inscription', 'raqm_kaid'],
