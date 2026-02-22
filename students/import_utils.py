@@ -1,11 +1,30 @@
 import openpyxl
 import xlrd
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, date
 import logging
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Column Headers Mapping (Arabic, French, English)
+HEADER_MAP = {
+    'student_id_number': ['رقم التعريف', 'id', 'student_id', 'matricule', 'رقم التسجيل', 'رقم'],
+    'last_name': ['اللقب', 'last_name', 'nom', 'surname', 'family_name'],
+    'first_name': ['الاسم', 'first_name', 'prenom', 'given_name'],
+    'gender': ['الجنس', 'gender', 'sexe', 'sex'],
+    'date_of_birth': ['تاريخ الميلاد', 'date_of_birth', 'dob', 'date_naissance', 'tarihk_milad', 'تاريخ الازدياد'],
+    'place_of_birth': ['مكان الميلاد', 'place_of_birth', 'pob', 'lieu_naissance', 'makan_milad', 'مكان الازدياد'],
+    'academic_year': ['المستوى', 'academic_year', 'level', 'niveau', 'annee_scolaire', 'السنة الدراسية'],
+    'class_name': ['القسم', 'class_name', 'class', 'classe', 'fawj', 'الفوج التربوي', 'الفوج'],
+    'attendance_system': ['نظام التمدرس', 'attendance_system', 'system', 'regime', 'nizam', 'النظام'],
+    'enrollment_number': ['رقم القيد', 'enrollment_number', 'enroll_num', 'numero_inscription', 'raqm_kaid'],
+    'enrollment_date': ['تاريخ التسجيل', 'enrollment_date', 'date_inscription', 'tarihk_tasjil', 'تاريخ الدخول'],
+    'guardian_name': ['اسم الولي', 'guardian_name', 'tuteur', 'wali', 'الولي'],
+    'mother_name': ['اسم الأم', 'mother_name', 'mere', 'oum', 'لقب واسم الأم'],
+    'address': ['العنوان', 'address', 'adresse', 'sakan', 'مقر السكن'],
+    'guardian_phone': ['رقم الهاتف', 'phone', 'telephone', 'mobile', 'hatif', 'رقم الولي']
+}
 
 def parse_student_file(file_path):
     """
@@ -85,54 +104,144 @@ def parse_xls(file_path):
         rows.append(cols)
     return process_rows(rows, 'xls')
 
+def normalize_header(header):
+    if not header: return ""
+    return str(header).strip().lower().replace('_', ' ').replace('-', ' ')
+
+def detect_columns(header_row):
+    """
+    Returns a dict mapping field_name -> column_index
+    """
+    col_map = {}
+    used_indices = set()
+
+    for idx, col in enumerate(header_row):
+        val = normalize_header(col)
+        if not val: continue
+
+        # Check against HEADER_MAP
+        for field, keywords in HEADER_MAP.items():
+            if field in col_map: continue # Already found
+
+            # Exact or fuzzy match
+            for kw in keywords:
+                if kw in val:
+                    col_map[field] = idx
+                    used_indices.add(idx)
+                    break
+
+    return col_map
+
 def process_rows(rows, mode):
     processed_data = []
     processed_ids = set()
-    row_count = 0
 
-    for row in rows:
+    # Identify Headers
+    header_row = None
+    col_map = {}
+    data_rows = []
+
+    # Iterate to find header row (first row with enough string columns)
+    iterator = iter(rows)
+
+    for row in iterator:
+        # Convert row to list of strings
+        if mode == 'html':
+            cells = row.find_all(['td', 'th'])
+            cols = [c.get_text(strip=True) for c in cells]
+        else:
+            cols = [str(c).strip() if c is not None else '' for c in row]
+
+        # Check if this is a potential header row
+        # Heuristic: Contains "Name" or "ID" or "Nom" or "Matricule"
+        is_header = False
+        temp_map = detect_columns(cols)
+
+        # If we found at least 3 recognizable columns (ID, Name, DOB usually), assume it's a header
+        if len(temp_map) >= 3:
+            col_map = temp_map
+            is_header = True
+            # Consume rest of iterator into data_rows
+            break
+
+        # If not header, maybe data? Wait, we need headers first.
+        # But for files without headers (legacy support), we might fallback.
+        # Let's collect rows just in case we default to fixed index.
+        data_rows.append(cols)
+
+    # Continue iterator for data
+    for row in iterator:
+        if mode == 'html':
+            cells = row.find_all(['td', 'th'])
+            cols = [c.get_text(strip=True) for c in cells]
+        else:
+            cols = [str(c).strip() if c is not None else '' for c in row]
+        data_rows.append(cols)
+
+    # Fallback for Fixed Indices (Legacy Support) if header detection failed
+    if not col_map:
+        # Default mapping based on previous hardcoded indices
+        col_map = {
+            'student_id_number': 0,
+            'last_name': 1,
+            'first_name': 2,
+            'gender': 3,
+            'date_of_birth': 4,
+            'place_of_birth': 9,
+            'academic_year': 10,
+            'class_name': 11,
+            'attendance_system': 12,
+            'enrollment_number': 13,
+            'enrollment_date': 14
+        }
+        logger.warning("Header detection failed. Using default column indices.")
+
+    row_count = 0
+    for cols in data_rows:
         row_count += 1
         try:
-            # Normalize row to list of strings
-            if mode == 'html':
-                cells = row.find_all(['td', 'th'])
-                cols = [c.get_text(strip=True) for c in cells]
-            else:
-                cols = [str(c).strip() if c is not None else '' for c in row]
+            if not cols: continue
 
-            # Filter valid rows (Student ID must be digit)
-            # Relaxed check: Many formats might have fewer columns, we need at least ID (0), Name (1,2), DOB (4)
-            if not cols or len(cols) < 2:
-                continue
+            # Get ID
+            idx_id = col_map.get('student_id_number', 0)
+            if idx_id >= len(cols): continue
 
-            sid = cols[0]
-            if not sid.isdigit():
-                continue # Skip headers or invalid IDs
+            sid = cols[idx_id]
+            if not sid.isdigit(): continue # Skip empty or invalid lines
 
-            if sid in processed_ids:
-                continue
+            if sid in processed_ids: continue
             processed_ids.add(sid)
 
+            # Helper to safely get value
+            def get_val(field, default=""):
+                idx = col_map.get(field)
+                if idx is not None and idx < len(cols):
+                    return cols[idx]
+                return default
+
             # Extract Data
-            # Safe extraction with defaults - Handle cases with fewer columns
-            last_name = cols[1] if len(cols) > 1 else ""
-            first_name = cols[2] if len(cols) > 2 else ""
-            gender = cols[3] if len(cols) > 3 else ""
-            dob = parse_date(cols[4]) if len(cols) > 4 else datetime(2000, 1, 1).date()
-            pob = cols[9] if len(cols) > 9 else ""
+            last_name = get_val('last_name')
+            first_name = get_val('first_name')
+            gender = get_val('gender')
+            dob = parse_date(get_val('date_of_birth'))
+            pob = get_val('place_of_birth')
 
-            level = cols[10] if len(cols) > 10 else ""
-            class_code = cols[11] if len(cols) > 11 else ""
-            # Fix: Check if class_code is already full class name (e.g. "1AM 1")
+            level = get_val('academic_year')
+            class_code = get_val('class_name')
+
+            # Smart Class Name Construction
             full_class = ""
-            if class_code and level and level in class_code:
-                 full_class = class_code # Already contains level
-            else:
-                 full_class = f"{level} {class_code}".strip()
+            if class_code:
+                if level and level in class_code:
+                    full_class = class_code
+                elif level:
+                     full_class = f"{level} {class_code}".strip()
+                else:
+                    full_class = class_code
 
-            attendance_sys = cols[12] if len(cols) > 12 else "نصف داخلي"
-            enroll_num = cols[13] if len(cols) > 13 else ""
-            enroll_date = parse_date(cols[14]) if len(cols) > 14 else datetime.now().date()
+            attendance_sys = get_val('attendance_system', "نصف داخلي")
+            enroll_num = get_val('enrollment_number')
+            enroll_date = parse_date(get_val('enrollment_date', datetime.now().date()))
 
             student_data = {
                 'student_id_number': sid,
@@ -158,6 +267,9 @@ def process_rows(rows, mode):
 def parse_date(date_str):
     if not date_str or str(date_str).lower() in ['none', 'nan', '']:
             return datetime(1900, 1, 1).date()
+
+    if isinstance(date_str, datetime) or isinstance(date_str, date):
+        return date_str
 
     # Handle Excel Serial Date
     if str(date_str).replace('.', '', 1).isdigit():
