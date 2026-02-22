@@ -57,15 +57,29 @@ class StudentListSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for listing students.
     """
+    level = serializers.SerializerMethodField()
+
     class Meta:
         model = Student
         fields = [
             'id', 'student_id_number', 'first_name', 'last_name',
-            'class_name', 'academic_year', 'gender', 'date_of_birth',
+            'class_name', 'academic_year', 'level', 'gender', 'date_of_birth',
             'place_of_birth', 'attendance_system', 'enrollment_date',
             'enrollment_number', 'exit_date', 'guardian_name', 'mother_name',
             'guardian_phone', 'address', 'photo'
         ]
+
+    def get_level(self, obj):
+        if obj.academic_year:
+            return obj.academic_year
+        # Try to extract from class_name (e.g., "1AM 2" -> "1AM")
+        if obj.class_name:
+            parts = obj.class_name.split()
+            if parts:
+                possible_level = parts[0]
+                # Validate if it looks like a level (optional)
+                return possible_level
+        return ""
 
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
