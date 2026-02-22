@@ -824,9 +824,12 @@ function renderTable() {
     const tbody = document.querySelector('#studentsTable tbody');
     tbody.innerHTML = filteredList.map((s, i) => {
         // Strip level from class name if present (e.g. "أولى 1" -> "1")
-        let shortClass = s.class;
-        if (s.level && shortClass && shortClass.includes(s.level)) {
-            shortClass = shortClass.replace(s.level, '').trim();
+        let shortClass = s.class || "";
+        let levelStr = s.level || "";
+
+        // Normalize and check
+        if (levelStr && shortClass && shortClass.indexOf(levelStr) !== -1) {
+            shortClass = shortClass.replace(levelStr, '').trim();
         }
 
         const pendingStyle = s.isPending ? 'background-color: #fff7ed;' : '';

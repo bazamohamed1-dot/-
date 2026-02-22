@@ -21,6 +21,7 @@
                     <th>اللقب</th>
                     <th>الاسم</th>
                     <th>تاريخ الميلاد</th>
+                    <th>المستوى</th>
                     <th>القسم</th>
                     <th>النظام</th>
                     <th>إجراءات</th>
@@ -33,7 +34,8 @@
                     <td>{{ student.last_name }}</td>
                     <td>{{ student.first_name }}</td>
                     <td class="western-nums" style="direction:ltr;">{{ student.date_of_birth|date:"Y/m/d" }}</td>
-                    <td>{{ student.class_name }}</td>
+                    <td>{{ student.academic_year }}</td>
+                    <td>{{ student.class_name|cut:student.academic_year|cut:" " }}</td>
                     <td>
                         <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;
                         {% if student.attendance_system == 'نصف داخلي' %}background: #d1fae5; color: #065f46;{% else %}background: #f1f5f9; color: #64748b;{% endif %}">
