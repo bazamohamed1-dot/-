@@ -7,6 +7,15 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Level Normalization Map
+LEVEL_MAP = {
+    'أولى': '1AM', 'اولى': '1AM', '1am': '1AM', '1': '1AM',
+    'ثانية': '2AM', 'ثانية': '2AM', '2am': '2AM', '2': '2AM',
+    'ثالثة': '3AM', 'ثالثة': '3AM', '3am': '3AM', '3': '3AM',
+    'رابعة': '4AM', 'رابعة': '4AM', '4am': '4AM', '4': '4AM',
+    'أولى متوسط': '1AM', 'ثانية متوسط': '2AM', 'ثالثة متوسط': '3AM', 'رابعة متوسط': '4AM'
+}
+
 # Column Headers Mapping (Arabic, French, English)
 HEADER_MAP = {
     'student_id_number': ['رقم التعريف', 'id', 'student_id', 'matricule', 'رقم التسجيل', 'رقم'],
@@ -226,14 +235,25 @@ def process_rows(rows, mode):
             dob = parse_date(get_val('date_of_birth'))
             pob = get_val('place_of_birth')
 
-            level = get_val('academic_year')
+            raw_level = get_val('academic_year')
+            # Normalize Level
+            level = raw_level
+            for k, v in LEVEL_MAP.items():
+                if k in str(raw_level).strip():
+                    level = v
+                    break
+
             class_code = get_val('class_name')
 
             # Smart Class Name Construction
             full_class = ""
             if class_code:
+                # If class already contains the normalized level (e.g. "1AM 1")
                 if level and level in class_code:
                     full_class = class_code
+                # If class contains the RAW level (e.g. "أولى 1") -> normalize it
+                elif raw_level and raw_level in class_code and raw_level != level:
+                     full_class = class_code.replace(raw_level, level).strip()
                 elif level:
                      full_class = f"{level} {class_code}".strip()
                 else:
