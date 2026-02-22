@@ -190,12 +190,15 @@ function updateBadge() {
         fetch('/canteen/api/pending_updates/count/')
         .then(r=>r.json())
         .then(d => {
-            const b = document.getElementById('reviewBadge');
-            // Assuming reviewBadge exists in parent frame/base.html
-            if(window.parent && window.parent.document.getElementById('reviewBadge')) {
-                 const pb = window.parent.document.getElementById('reviewBadge');
-                 pb.innerText = d.count;
-                 pb.style.display = d.count > 0 ? 'inline-block' : 'none';
+            // Update local badge if exists (in settings page)
+            const b = document.getElementById('settingsBadge');
+            if(b) b.innerText = d.count;
+
+            // Update Sidebar Badge (navUpdateBadge)
+            const navBadge = document.getElementById('navUpdateBadge');
+            if (navBadge) {
+                navBadge.innerText = d.count;
+                navBadge.style.display = d.count > 0 ? 'inline-block' : 'none';
             }
         });
     } catch(e){}
