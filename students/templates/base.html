@@ -50,7 +50,15 @@
             box-shadow: -4px 0 15px rgba(0,0,0,0.1); transition: transform 0.3s ease;
         }
         .brand { padding: 20px; font-size: 1.2rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center; }
-        .nav-links { list-style: none; padding: 20px 10px; margin: 0; flex: 1; }
+        .nav-links {
+            list-style: none; padding: 20px 10px; margin: 0; flex: 1;
+            overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;
+        }
+        /* Custom Scrollbar for Webkit */
+        .nav-links::-webkit-scrollbar { width: 4px; }
+        .nav-links::-webkit-scrollbar-track { background: transparent; }
+        .nav-links::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
         .nav-item { margin-bottom: 5px; }
         .nav-link {
             display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: #94a3b8;
@@ -300,6 +308,19 @@
                     <i class="fas fa-compass"></i> الإرشاد والتوجيه
                 </a>
             </li>
+
+            <!-- Shared Links for Tasks/Observations (Moved to main list) -->
+            <li class="nav-item">
+                <a href="{% url 'tasks_view' %}" class="nav-link {% if 'tasks' in request.path %}active{% endif %}">
+                    <i class="fas fa-list-check"></i> المهام
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'observations_view' %}" class="nav-link {% if 'observations' in request.path %}active{% endif %}">
+                    <i class="fas fa-comments"></i> الملاحظات والوساطة
+                </a>
+            </li>
+
             <li class="nav-item" style="margin-top: auto;">
                 <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
                     <i class="fas fa-cog"></i> الإعدادات
@@ -318,18 +339,6 @@
                 </a>
             </li>
             {% endif %}
-
-            <!-- Shared Links for Tasks/Observations -->
-            <li class="nav-item">
-                <a href="{% url 'tasks_view' %}" class="nav-link {% if 'tasks' in request.path %}active{% endif %}">
-                    <i class="fas fa-list-check"></i> المهام
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="{% url 'observations_view' %}" class="nav-link {% if 'observations' in request.path %}active{% endif %}">
-                    <i class="fas fa-comments"></i> الملاحظات والوساطة
-                </a>
-            </li>
         </ul>
     </aside>
 
