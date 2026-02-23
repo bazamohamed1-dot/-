@@ -143,57 +143,6 @@
     </form>
 </div>
 
-<!-- Pending Updates Section (Director) -->
-{% if is_director and pending_updates %}
-<div class="card" id="pendingUpdatesSection" style="margin-bottom: 20px; border: 2px solid #f97316;">
-    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #ffedd5; padding-bottom: 15px; margin-bottom: 15px;">
-        <h3 style="color:#ea580c;"><i class="fas fa-sync fa-spin" style="animation-duration: 3s;"></i> تحديثات معلقة للموافقة</h3>
-        <div style="display:flex; gap:10px;">
-            <button class="btn btn-success" onclick="approveAllUpdates()"><i class="fas fa-check-double"></i> قبول الكل</button>
-            <button class="btn btn-danger" onclick="rejectAllUpdates()"><i class="fas fa-times-circle"></i> رفض الكل</button>
-        </div>
-    </div>
-
-    <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background:#fff7ed; color:#9a3412;">
-                    <th style="padding:10px; text-align:right;">المستخدم</th>
-                    <th style="padding:10px; text-align:right;">النوع</th>
-                    <th style="padding:10px; text-align:right;">الإجراء</th>
-                    <th style="padding:10px; text-align:right;">التفاصيل</th>
-                    <th style="padding:10px; text-align:right;">التوقيت</th>
-                    <th style="padding:10px; text-align:center;">قرار</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for update in pending_updates %}
-                <tr style="border-bottom:1px solid #ffedd5;">
-                    <td style="padding:10px;">{{ update.user.username }}</td>
-                    <td style="padding:10px;">{{ update.model_name }}</td>
-                    <td style="padding:10px;">
-                        {% if update.action == 'create' %}<span style="color:green; font-weight:bold;">إضافة</span>
-                        {% elif update.action == 'update' %}<span style="color:orange; font-weight:bold;">تعديل</span>
-                        {% elif update.action == 'delete' %}<span style="color:red; font-weight:bold;">حذف</span>
-                        {% endif %}
-                    </td>
-                    <td style="padding:10px; font-size:0.9rem;">
-                        <div style="max-height:60px; overflow-y:auto; background:#fff; padding:5px; border:1px solid #eee; direction:ltr; text-align:left;">
-                            {{ update.data }}
-                        </div>
-                    </td>
-                    <td style="padding:10px; direction:ltr;">{{ update.timestamp|date:"Y-m-d H:i" }}</td>
-                    <td style="padding:10px; text-align:center;">
-                        <button class="btn btn-success" onclick="processUpdate({{ update.id }}, 'approve')" style="padding:5px 10px;"><i class="fas fa-check"></i></button>
-                        <button class="btn btn-danger" onclick="processUpdate({{ update.id }}, 'reject')" style="padding:5px 10px;"><i class="fas fa-times"></i></button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
 
 <!-- Role Management Section -->
 <div class="card" id="roleManagementSection" style="display:none; margin-bottom: 20px;">
@@ -412,41 +361,6 @@ async function checkPendingUpdates() {
     // Deprecated: Now rendered server-side in this view
 }
 
-async function processUpdate(id, action) {
-    if(!confirm('تأكيد الإجراء؟')) return;
-    try {
-        const res = await fetch(`/canteen/api/pending_updates/${id}/${action}/`, {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) window.location.reload();
-        else alert("خطأ");
-    } catch(e){ alert("Error"); }
-}
-
-async function approveAllUpdates() {
-    if(!confirm("هل أنت متأكد من قبول جميع التحديثات؟")) return;
-    try {
-        const res = await fetch('/canteen/api/pending_updates/approve_all/', {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) window.location.reload();
-        else alert("خطأ");
-    } catch(e){ alert("Error"); }
-}
-
-async function rejectAllUpdates() {
-    if(!confirm("هل أنت متأكد من رفض جميع التحديثات؟")) return;
-    try {
-        const res = await fetch('/canteen/api/pending_updates/reject_all/', {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
-        });
-        if(res.ok) window.location.reload();
-        else alert("خطأ");
-    } catch(e){ alert("Error"); }
-}
 
 async function loadLevelsForDropdown() {
     try {

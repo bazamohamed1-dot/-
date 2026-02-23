@@ -107,18 +107,10 @@ def settings_view(request):
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('manage_settings'):
          return redirect('dashboard')
 
-    # Fetch Pending Updates for Director
-    pending_updates = []
-    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
-
-    if is_director:
-        pending_updates = PendingUpdate.objects.all().order_by('-timestamp')
-
     context = {
         'total_students': Student.objects.count(),
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
-        'is_director': is_director,
-        'pending_updates': pending_updates
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
     return render(request, 'students/settings.html', context)
 

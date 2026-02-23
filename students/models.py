@@ -30,6 +30,28 @@ class Student(models.Model):
     guardian_phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم هاتف الولي")
     photo = models.ImageField(upload_to=student_photo_path, null=True, blank=True, verbose_name="الصورة")
 
+    def save(self, *args, **kwargs):
+        # Handle Force Photo Replacement
+        # If we have a PK, this is an update.
+        if self.pk:
+            try:
+                old = Student.objects.get(pk=self.pk)
+                # If there is an old photo AND it's different from the new one (or new one is being set)
+                # Note: When uploading a new file, self.photo is the InMemoryUploadedFile/ContentFile,
+                # while old.photo is the FieldFile pointing to storage.
+                # If they are different objects, we should check if we need to clean up.
+
+                # Specifically for Base64 updates where we reuse the filename ID.jpg:
+                # The file path logic tries to reuse the name.
+                # We explicitly delete the old file to ensure overwrite instead of rename (e.g. ID_1.jpg).
+                if old.photo and self.photo and old.photo != self.photo:
+                    if os.path.isfile(old.photo.path):
+                        os.remove(old.photo.path)
+            except Student.DoesNotExist:
+                pass
+
+        super().save(*args, **kwargs)
+
     class Meta:
         verbose_name = "تلميذ"
         verbose_name_plural = "التلاميذ"

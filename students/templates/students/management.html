@@ -980,7 +980,17 @@ function removePhotoImage() {
 function updatePhotoUI(data) {
     const img = document.getElementById('displayImage');
     const icon = document.getElementById('placeholderIcon');
-    if (data) { img.src = data; img.style.display = "block"; icon.style.display = "none"; }
+    if (data) {
+        // If data is a URL path (not Base64), append timestamp to bust cache
+        if (data.startsWith('/media/') || data.startsWith('http')) {
+            const separator = data.includes('?') ? '&' : '?';
+            img.src = `${data}${separator}t=${new Date().getTime()}`;
+        } else {
+            img.src = data;
+        }
+        img.style.display = "block";
+        icon.style.display = "none";
+    }
     else { img.style.display = "none"; icon.style.display = "block"; }
 }
 </script>
