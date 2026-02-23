@@ -987,7 +987,7 @@ function selectAllMatching() {
     document.getElementById('headerCheckbox').checked = true;
 }
 
-function resetSelectAllMatching() {
+function resetSelectAllMatching(clearUI = true) {
     isAllMatchingSelected = false;
     document.getElementById('selectAllMatchingInput').value = "false";
 
@@ -996,22 +996,29 @@ function resetSelectAllMatching() {
 
     document.getElementById('globalSelectStatus').style.display = 'none';
 
-    // Uncheck
-    const checkboxes = document.querySelectorAll('.row-checkbox');
-    checkboxes.forEach(cb => cb.checked = false);
-    document.getElementById('headerCheckbox').checked = false;
+    if (clearUI) {
+        // Uncheck all
+        const checkboxes = document.querySelectorAll('.row-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        document.getElementById('headerCheckbox').checked = false;
+    }
 }
 
 function updateSelectionState() {
     // If any individual checkbox is unchecked, we lose "Select All Matching" state
-    // But simplistic approach: just hide banner if manual interaction happens
-    // Unless we track every ID, simpler to reset if user unchecks something.
     const checkboxes = document.querySelectorAll('.row-checkbox');
     const allChecked = Array.from(checkboxes).every(cb => cb.checked);
 
     if (!allChecked) {
-        resetSelectAllMatching();
+        // Do NOT clear UI, just disable global mode
+        if (isAllMatchingSelected) {
+            resetSelectAllMatching(false);
+        }
         document.getElementById('headerCheckbox').checked = false;
+    } else {
+        // If user manually checked all visible boxes, we check header,
+        // BUT we don't necessarily enable global select (that requires explicit action)
+        document.getElementById('headerCheckbox').checked = true;
     }
 }
 
