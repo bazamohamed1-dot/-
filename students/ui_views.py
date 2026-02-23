@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.management import call_command
-from .models import Student, CanteenAttendance, SchoolSettings, Employee, SystemMessage, Survey, PendingUpdate
+from .models import Student, CanteenAttendance, SchoolSettings, Employee, SystemMessage, Survey, PendingUpdate, Task, TeacherObservation, SchoolMemory, UserRole
 from datetime import date
 from io import StringIO
 import os
@@ -52,9 +52,7 @@ def dashboard(request):
             elif profile.has_perm('access_archive'):
                 return redirect('archive_home')
             else:
-                # No known access
-                logout(request)
-                return redirect('canteen_landing')
+                pass # Default dashboard for others (Teachers)
         else:
             # No profile (e.g., admin). If not superuser, redirect
             if not request.user.is_superuser:
@@ -348,3 +346,44 @@ def guidance_home(request):
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
     return render(request, 'students/guidance.html', context)
+
+# --- AI & Task UI Views ---
+
+def tasks_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    # Simple permission check: must be logged in
+    # Director sees dashboard for managing tasks
+    # Regular users see their list
+
+    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+
+    context = {
+        'is_director': is_director,
+        'roles': UserRole.objects.all(),
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+    }
+    return render(request, 'students/tasks.html', context)
+
+def ai_control_panel(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+
+    if not is_director: return redirect('dashboard')
+
+    context = {
+        'is_director': True,
+        'memories': SchoolMemory.objects.all().order_by('-created_at')
+    }
+    return render(request, 'students/ai_control.html', context)
+
+def observations_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+
+    context = {
+        'is_director': is_director,
+        'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
+    }
+    return render(request, 'students/observations.html', context)
