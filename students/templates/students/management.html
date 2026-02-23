@@ -244,6 +244,19 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchStudents(1); // Load students page 1
     lockFields(true);
 
+    // Listen for Sync Completion (Offline -> Online -> Sync)
+    window.addEventListener('sync-complete', () => {
+        console.log("Sync complete event received. Refreshing table...");
+        // Re-fetch to clear pending icons or show updated server status
+        fetchStudents(currentPage);
+    });
+
+    // Listen for System Messages (e.g., Approval/Rejection)
+    window.addEventListener('system-message-received', () => {
+        console.log("System message received. Refreshing table...");
+        fetchStudents(currentPage);
+    });
+
     // Click outside to cancel edit
     document.addEventListener('click', function(event) {
         const form = document.getElementById('studentForm');

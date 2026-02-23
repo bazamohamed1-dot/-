@@ -35,6 +35,13 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => updateStatus('offline'));
 if (!navigator.onLine) updateStatus('offline');
 
+// Periodic Sync Check (Every 30 seconds) to ensure reliable upload if event missed
+setInterval(() => {
+    if (navigator.onLine) {
+        processOfflineQueue();
+    }
+}, 30000);
+
 // Helper to serialize FormData (because IndexedDB can't store FormData directly)
 async function serializeBody(body) {
     if (!body) return null;
@@ -137,6 +144,10 @@ async function processOfflineQueue() {
         if (response.ok) {
             console.log("Sync Successful");
             await db.offlineQueue.clear();
+
+            // Dispatch Event for UI Refresh
+            window.dispatchEvent(new CustomEvent('sync-complete'));
+
             // Don't alert on automatic sync, just update UI
             const syncNotif = document.getElementById('syncNotification');
             if(syncNotif) {

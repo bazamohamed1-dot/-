@@ -300,12 +300,12 @@
                     <i class="fas fa-compass"></i> الإرشاد والتوجيه
                 </a>
             </li>
-            <li class="nav-item" style="margin-top: auto; position: relative;">
-                {% if request.user.profile.role == 'director' or request.user.is_superuser %}
-                <div id="navUpdateBadge" style="display: none; position: absolute; top: -12px; right: 20px; background: #ef4444; color: white; padding: 3px 8px; border-radius: 50%; font-size: 0.75rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 1002; min-width: 18px; text-align: center;">0</div>
-                {% endif %}
-                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}" style="display: flex; justify-content: space-between;">
+            <li class="nav-item" style="margin-top: auto;">
+                <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}" style="display: flex; justify-content: space-between; align-items: center;">
                     <span><i class="fas fa-cog"></i> الإعدادات</span>
+                    {% if request.user.profile.role == 'director' or request.user.is_superuser %}
+                    <span id="navUpdateBadge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; display: none;">0</span>
+                    {% endif %}
                 </a>
             </li>
         </ul>
@@ -566,27 +566,38 @@
     {% endif %}
 
     // Fetch System Messages (Active)
-        .then(res => res.json())
-        .then(data => {
-            const container = document.getElementById('systemMessagesContainer');
-            if(data && Array.isArray(data) && data.length > 0) {
-                data.forEach(msg => {
-                    const div = document.createElement('div');
-                    div.style.padding = '15px';
-                    div.style.marginBottom = '20px';
-                    div.style.borderRadius = '8px';
-                    div.style.background = '#fff3cd';
-                    div.style.color = '#856404';
-                    div.style.border = '1px solid #ffeeba';
-                    div.style.display = 'flex';
-                    div.style.alignItems = 'center';
-                    div.style.gap = '10px';
-                    div.innerHTML = `<i class="fas fa-bullhorn"></i> <span>${msg.message}</span>`;
-                    container.appendChild(div);
-                });
-            }
-        })
-        .catch(e => console.log("SysMsg Error", e));
+    function checkSystemMessages() {
+        fetch('/canteen/api/system_messages/')
+            .then(res => res.json())
+            .then(data => {
+                const container = document.getElementById('systemMessagesContainer');
+                if(data && Array.isArray(data) && data.length > 0) {
+
+                    // Dispatch Event that messages arrived (likely implies an approval/rejection happened)
+                    window.dispatchEvent(new CustomEvent('system-message-received', { detail: data }));
+
+                    data.forEach(msg => {
+                        const div = document.createElement('div');
+                        div.style.padding = '15px';
+                        div.style.marginBottom = '20px';
+                        div.style.borderRadius = '8px';
+                        div.style.background = '#fff3cd';
+                        div.style.color = '#856404';
+                        div.style.border = '1px solid #ffeeba';
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.gap = '10px';
+                        div.innerHTML = `<i class="fas fa-bullhorn"></i> <span>${msg.message}</span>`;
+                        container.appendChild(div);
+                    });
+                }
+            })
+            .catch(e => console.log("SysMsg Error", e));
+    }
+
+    // Poll every 10 seconds for messages
+    setInterval(checkSystemMessages, 10000);
+    checkSystemMessages();
 </script>
 </body>
 </html>
