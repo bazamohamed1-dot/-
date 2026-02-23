@@ -240,3 +240,8 @@ Forbidden: /canteen/auth/login/
 [23/Feb/2026 14:40:37] "POST /canteen/auth/login/ HTTP/1.1" 403 54
 [23/Feb/2026 14:40:49] "GET /canteen/pending_updates/ HTTP/1.1" 302 0
 [23/Feb/2026 14:40:49] "GET /canteen/ HTTP/1.1" 200 25768
+[23/Feb/2026 15:02:11] "GET /canteen/ HTTP/1.1" 200 25768
+Forbidden: /canteen/auth/login/
+[23/Feb/2026 15:02:14] "POST /canteen/auth/login/ HTTP/1.1" 403 54
+[23/Feb/2026 15:02:27] "GET /canteen/pending_updates/ HTTP/1.1" 302 0
+[23/Feb/2026 15:02:27] "GET /canteen/ HTTP/1.1" 200 25768
