@@ -655,3 +655,143 @@ For more information on production servers see: https://docs.djangoproject.com/e
 Watching for file changes with StatReloader
 /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
   mw_instance = middleware(adapted_handler)
+/app/students/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 16:52:59
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 16:52:59
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+/app/students/ui_views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 17:25:51
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 17:25:51
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 17:26:55
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/app/students/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 17:26:55
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+  Your models in app(s): 'students' have changes that are not yet reflected in a migration, and so won't be applied.
+  Run 'manage.py makemigrations' to make new migrations, and then re-run 'manage.py migrate' to apply them.
+February 23, 2026 - 17:28:53
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/app/students/ai_views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+  Your models in app(s): 'students' have changes that are not yet reflected in a migration, and so won't be applied.
+  Run 'manage.py makemigrations' to make new migrations, and then re-run 'manage.py migrate' to apply them.
+February 23, 2026 - 17:28:53
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)

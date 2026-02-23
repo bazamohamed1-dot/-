@@ -8,6 +8,7 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, SystemMessage, PendingUpdate, AttendanceRecord, Communication
 from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer, SystemMessageSerializer, PendingUpdateSerializer
+from .utils import normalize_arabic
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
@@ -74,11 +75,25 @@ class StudentViewSet(viewsets.ModelViewSet):
         if class_name:
             queryset = queryset.filter(class_name__icontains=class_name) # Using icontains to be safe with partial matches or "Level Class" format
         if search:
-            queryset = queryset.filter(
-                Q(last_name__icontains=search) |
-                Q(first_name__icontains=search) |
-                Q(student_id_number__icontains=search)
-            )
+            norm_search = normalize_arabic(search)
+            q_obj = Q(student_id_number__icontains=search) | \
+                    Q(first_name__icontains=search) | \
+                    Q(last_name__icontains=search)
+
+            # Add normalized search
+            if norm_search != search:
+                q_obj |= Q(first_name__icontains=norm_search) | \
+                         Q(last_name__icontains=norm_search)
+
+            # Common variations (Ha/Ta Marbuta, Alef)
+            if 'ه' in search:
+                 alt = search.replace('ه', 'ة')
+                 q_obj |= Q(first_name__icontains=alt) | Q(last_name__icontains=alt)
+            if 'ة' in search:
+                 alt = search.replace('ة', 'ه')
+                 q_obj |= Q(first_name__icontains=alt) | Q(last_name__icontains=alt)
+
+            queryset = queryset.filter(q_obj)
 
         return queryset
 

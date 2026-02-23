@@ -12,6 +12,8 @@ import openpyxl
 from tablib import Dataset
 from .resources import StudentResource
 from .import_utils import parse_student_file
+from .utils import normalize_arabic
+from django.db.models import Q
 
 def pending_updates_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
@@ -235,8 +237,38 @@ def print_student_cards(request):
         return redirect('dashboard')
 
     if request.method == 'POST':
-        student_ids = request.POST.getlist('student_ids')
-        students = Student.objects.filter(id__in=student_ids)
+        # Check for Select All Matching Mode
+        select_all = request.POST.get('select_all_matching') == 'true'
+
+        if select_all:
+             # Reconstruct Filter Query
+             qs = Student.objects.all().order_by('last_name', 'first_name')
+             level = request.POST.get('filter_level')
+             cls = request.POST.get('filter_class')
+             search = request.POST.get('filter_search')
+
+             if level: qs = qs.filter(academic_year=level)
+             if cls: qs = qs.filter(class_name=cls)
+             if search:
+                 norm_search = normalize_arabic(search)
+                 q_obj = Q(student_id_number__icontains=search) | \
+                         Q(first_name__icontains=search) | \
+                         Q(last_name__icontains=search)
+                 if norm_search != search:
+                     q_obj |= Q(first_name__icontains=norm_search) | \
+                              Q(last_name__icontains=norm_search)
+                 if 'ه' in search:
+                      alt = search.replace('ه', 'ة')
+                      q_obj |= Q(first_name__icontains=alt) | Q(last_name__icontains=alt)
+                 if 'ة' in search:
+                      alt = search.replace('ة', 'ه')
+                      q_obj |= Q(first_name__icontains=alt) | Q(last_name__icontains=alt)
+                 qs = qs.filter(q_obj)
+
+             students = qs
+        else:
+             student_ids = request.POST.getlist('student_ids')
+             students = Student.objects.filter(id__in=student_ids).order_by('last_name')
     else:
         # Fallback or empty
         students = []

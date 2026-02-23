@@ -6,6 +6,7 @@ from django.db.models import Q
 from .models import Task, TeacherObservation, SchoolMemory
 from .serializers import TaskSerializer, TeacherObservationSerializer, SchoolMemorySerializer
 from .ai_utils import AIService
+from .document_processor import DocumentProcessor
 
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
@@ -119,3 +120,27 @@ class SchoolMemoryViewSet(viewsets.ModelViewSet):
         if request.user.profile.role != 'director':
              return Response({'error': 'Unauthorized'}, status=403)
         return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        # Extract text from File or URL if provided
+        instance = serializer.save()
+        extracted_text = ""
+
+        # Check Attachment
+        if instance.attachment:
+            try:
+                extracted_text = DocumentProcessor.extract_text_from_file(instance.attachment.file)
+            except Exception as e:
+                extracted_text = f"[File Extraction Error: {str(e)}]"
+
+        # Check URL
+        if instance.url:
+            try:
+                extracted_text += "\n\n" + DocumentProcessor.extract_text_from_url(instance.url)
+            except Exception as e:
+                extracted_text += f"\n[URL Extraction Error: {str(e)}]"
+
+        # Append to content if not empty
+        if extracted_text:
+            instance.content = f"{instance.content}\n\n--- Extracted Content ---\n{extracted_text}"
+            instance.save()
