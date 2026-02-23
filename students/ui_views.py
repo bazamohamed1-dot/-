@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.management import call_command
 from .models import Student, CanteenAttendance, SchoolSettings, Employee, SystemMessage, Survey, PendingUpdate, Task, TeacherObservation, SchoolMemory, UserRole
-from datetime import date
+from datetime import date, datetime
 from io import StringIO
 import os
 import tempfile
@@ -65,6 +65,21 @@ def dashboard(request):
         logout(request)
         return redirect('canteen_landing')
 
+    # Teacher Assignment Logic
+    assigned_students = None
+    teacher_classes = []
+
+    if hasattr(request.user, 'employee_hr') and request.user.employee_hr.rank == 'teacher':
+        assignments = TeacherAssignment.objects.filter(teacher=request.user.employee_hr)
+        for assign in assignments:
+            if assign.classes:
+                teacher_classes.extend(assign.classes)
+
+        # Remove duplicates
+        teacher_classes = list(set(teacher_classes))
+        if teacher_classes:
+            assigned_students = Student.objects.filter(class_name__in=teacher_classes).order_by('class_name', 'last_name')
+
     # Detailed Stats for Dashboard Table
     from django.db.models import Count
 
@@ -97,6 +112,8 @@ def dashboard(request):
         'present_today': CanteenAttendance.objects.filter(date=date.today()).count(),
         'absent_today': Student.objects.filter(attendance_system='نصف داخلي').count() - CanteenAttendance.objects.filter(date=date.today()).count(),
         'detailed_stats': detailed_stats,
+        'assigned_students': assigned_students,
+        'teacher_classes': teacher_classes,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
@@ -286,46 +303,127 @@ def print_student_cards(request):
 
 # --- New Modules ---
 
+from .models import TeacherAssignment
+from .ai_utils import analyze_assignment_document
+
 def hr_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    # Permission check can be added if we have 'access_hr'
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
+        return redirect('dashboard')
 
     if request.method == 'POST':
-        # Import Logic
-        if request.FILES.get('file'):
+        action = request.POST.get('action')
+
+        if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
             try:
                 wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
                 ws = wb.active
                 count = 0
-                for row in ws.iter_rows(min_row=2, values_only=True): # Skip header
-                    if row and row[0]: # Assume Name is col 0
-                        Employee.objects.create(
-                            full_name=row[0],
-                            role=row[1] if len(row)>1 else "Unknown",
-                            phone=str(row[2]) if len(row)>2 and row[2] else "",
-                            notes=str(row[3]) if len(row)>3 and row[3] else ""
-                        )
-                        count += 1
-                messages.success(request, f"تم استيراد {count} موظف.")
+                # Expecting: Photo, Code, Surname, Name, DOB, Rank, Subject, Grade, Effective Date
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    # Robust check: need at least Code, Surname, Name
+                    if not row or len(row) < 4: continue
+
+                    code = str(row[1]).strip() if row[1] else None
+                    surname = str(row[2]).strip() if row[2] else ""
+                    name = str(row[3]).strip() if row[3] else ""
+
+                    if not code or not surname: continue
+
+                    # Map Rank
+                    rank_str = str(row[5]).strip() if len(row) > 5 and row[5] else "worker"
+                    rank_map = {'أستاذ': 'teacher', 'عامل': 'worker', 'إداري': 'admin'}
+                    rank = rank_map.get(rank_str, 'worker') # Default to worker
+
+                    # Parse Date
+                    dob = None
+                    if len(row) > 4 and row[4]:
+                        val = row[4]
+                        if isinstance(val, (date, datetime)):
+                             dob = val
+                        else:
+                             try: dob = datetime.strptime(str(val), '%Y-%m-%d').date()
+                             except: pass
+
+                    # Parse Effective Date
+                    eff_date = None
+                    if len(row) > 8 and row[8]:
+                        val = row[8]
+                        if isinstance(val, (date, datetime)):
+                             eff_date = val
+                        else:
+                             try: eff_date = datetime.strptime(str(val), '%Y-%m-%d').date()
+                             except: pass
+
+                    Employee.objects.update_or_create(
+                        employee_code=code,
+                        defaults={
+                            'last_name': surname,
+                            'first_name': name,
+                            'full_name': f"{surname} {name}",
+                            'date_of_birth': dob,
+                            'rank': rank,
+                            'subject': str(row[6]).strip() if len(row) > 6 and row[6] else "",
+                            'grade': str(row[7]).strip() if len(row) > 7 and row[7] else "",
+                            'effective_date': eff_date,
+                            'role': rank # Sync legacy role
+                        }
+                    )
+                    count += 1
+                messages.success(request, f"تم استيراد/تحديث {count} موظف.")
             except Exception as e:
-                messages.error(request, f"Error: {e}")
+                messages.error(request, f"خطأ في الملف: {e}")
             return redirect('hr_home')
 
-        # Add Logic
-        elif request.POST.get('action') == 'add':
-            Employee.objects.create(
-                full_name=request.POST.get('full_name'),
-                role=request.POST.get('role'),
-                phone=request.POST.get('phone'),
-                notes=request.POST.get('notes')
-            )
-            messages.success(request, "تمت الإضافة")
+        elif action == 'add_manual':
+            try:
+                Employee.objects.create(
+                    employee_code=request.POST.get('employee_code'),
+                    last_name=request.POST.get('last_name'),
+                    first_name=request.POST.get('first_name'),
+                    full_name=f"{request.POST.get('last_name')} {request.POST.get('first_name')}",
+                    rank=request.POST.get('rank'),
+                    subject=request.POST.get('subject'),
+                    grade=request.POST.get('grade'),
+                    phone=request.POST.get('phone'),
+                    email=request.POST.get('email'),
+                    date_of_birth=request.POST.get('date_of_birth') or None,
+                    effective_date=request.POST.get('effective_date') or None,
+                    role=request.POST.get('rank')
+                )
+                messages.success(request, "تمت إضافة الموظف بنجاح.")
+            except Exception as e:
+                messages.error(request, f"خطأ في الإضافة: {e}")
             return redirect('hr_home')
 
-    employees = Employee.objects.all().order_by('full_name')
+        elif action == 'import_assignment':
+            teacher_id = request.POST.get('teacher_id')
+            file = request.FILES.get('assignment_file')
+            if teacher_id and file:
+                try:
+                    teacher = Employee.objects.get(id=teacher_id)
+                    assignment = TeacherAssignment.objects.create(
+                        teacher=teacher,
+                        original_file=file,
+                        subject=teacher.subject or "مادة غير محددة"
+                    )
+                    # Call AI Analysis (Mock/Regex)
+                    analyze_assignment_document(assignment)
+                    messages.success(request, "تم رفع الإسناد وجاري تحليله بالذكاء الاصطناعي.")
+                except Exception as e:
+                    messages.error(request, f"خطأ: {e}")
+            return redirect('hr_home')
+
+    # Filtering
+    rank_filter = request.GET.get('rank')
+    employees = Employee.objects.all().order_by('last_name')
+    if rank_filter:
+        employees = employees.filter(rank=rank_filter)
+
     context = {
         'employees': employees,
+        'current_rank': rank_filter,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
@@ -333,12 +431,17 @@ def hr_home(request):
 
 def hr_delete(request, pk):
     if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
+        return redirect('dashboard')
+
     get_object_or_404(Employee, pk=pk).delete()
     messages.success(request, "تم الحذف")
     return redirect('hr_home')
 
 def parents_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_parents'):
+        return redirect('dashboard')
 
     # Just list students with parent info
     # Optimize: only fetch needed fields
@@ -357,23 +460,39 @@ def parents_home(request):
 
 def guidance_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_guidance'):
+        return redirect('dashboard')
+
+    ai_suggestion = None
 
     if request.method == 'POST':
-        try:
-            Survey.objects.create(
-                title=request.POST.get('title'),
-                description=request.POST.get('description'),
-                target_audience=request.POST.get('target_audience'),
-                link=request.POST.get('link')
-            )
-            messages.success(request, "تم إنشاء الاستبيان")
-        except Exception as e:
-            messages.error(request, "خطأ في الإنشاء")
-        return redirect('guidance_home')
+        action = request.POST.get('action')
+
+        if action == 'ai_suggest':
+            topic = request.POST.get('topic')
+            target = request.POST.get('target_audience')
+            from .ai_utils import AIService
+            ai = AIService()
+            prompt = f"اقترح خطوات ومحاور لاستبيان حول الموضوع: {topic}. الجمهور المستهدف: {target}. قدم إجابة مهيكلة في شكل خطوات."
+            ai_suggestion = ai.generate_response("أنت مستشار توجيه مدرسي خبير.", prompt, rag_enabled=False)
+
+        elif action == 'create_survey':
+            try:
+                Survey.objects.create(
+                    title=request.POST.get('title'),
+                    description=request.POST.get('description'),
+                    target_audience=request.POST.get('target_audience'),
+                    link=request.POST.get('link')
+                )
+                messages.success(request, "تم إنشاء الاستبيان")
+                return redirect('guidance_home')
+            except Exception as e:
+                messages.error(request, "خطأ في الإنشاء")
 
     surveys = Survey.objects.all().order_by('-created_at')
     context = {
         'surveys': surveys,
+        'ai_suggestion': ai_suggestion,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }

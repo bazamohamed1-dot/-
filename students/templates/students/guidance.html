@@ -1,10 +1,112 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}الإرشاد والتوجيه{% endblock %}
 {% block header_title %}الإرشاد والتوجيه{% endblock %}
 {% block content %}
-<div class="card" style="text-align:center; padding:50px;">
-    <i class="fas fa-compass fa-4x" style="color:#10b981; margin-bottom:20px;"></i>
-    <h2>هذه الواجهة قيد التطوير</h2>
-    <p style="color:#64748b;">سيتم تفعيل هذه الميزة في التحديث القادم.</p>
+
+<!-- AI Assistant Section -->
+<div class="card mb-4" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
+    <h3 style="color: #15803d;"><i class="fas fa-robot"></i> المساعد الذكي للاستبيانات</h3>
+    <p>استخدم الذكاء الاصطناعي لاقتراح محاور وأسئلة للاستبيانات حسب الجمهور المستهدف.</p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="ai_suggest">
+        <div class="grid-2">
+            <div>
+                <label>موضوع الاستبيان</label>
+                <input type="text" name="topic" class="form-control" placeholder="مثال: تأثير الألعاب الإلكترونية على التحصيل" required>
+            </div>
+            <div>
+                <label>الجمهور المستهدف</label>
+                <select name="target_audience" class="form-control">
+                    <option value="التلاميذ">التلاميذ</option>
+                    <option value="الأساتذة">الأساتذة</option>
+                    <option value="الأولياء">الأولياء</option>
+                    <option value="العمال">العمال</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success mt-3"><i class="fas fa-magic"></i> اقترح المحاور والأسئلة</button>
+    </form>
+
+    {% if ai_suggestion %}
+    <div class="mt-4 p-3" style="background: white; border-radius: 8px; border: 1px solid #ddd;">
+        <h4 style="color: #d97706;"><i class="fas fa-lightbulb"></i> مقترح الذكاء الاصطناعي:</h4>
+        <div style="background: #fffbeb; padding: 15px; border-radius: 8px; line-height: 1.8; white-space: pre-line;">{{ ai_suggestion }}</div>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Create Survey Form -->
+<div class="card mb-4">
+    <h3><i class="fas fa-plus-circle"></i> إنشاء استبيان جديد</h3>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_survey">
+        <div class="grid-2">
+            <div>
+                <label>عنوان الاستبيان</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+             <div>
+                <label>الجمهور المستهدف</label>
+                <select name="target_audience" class="form-control">
+                    <option value="التلاميذ">التلاميذ</option>
+                    <option value="الأساتذة">الأساتذة</option>
+                    <option value="الأولياء">الأولياء</option>
+                    <option value="العمال">العمال</option>
+                </select>
+            </div>
+        </div>
+        <div class="mt-2">
+            <label>وصف الاستبيان</label>
+            <textarea name="description" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="mt-2">
+            <label>رابط الاستبيان (Google Forms مثلاً)</label>
+            <input type="url" name="link" class="form-control" placeholder="https://forms.google.com/...">
+        </div>
+        <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save"></i> حفظ الاستبيان</button>
+    </form>
+</div>
+
+<!-- Existing Surveys -->
+<div class="card">
+    <h3><i class="fas fa-list"></i> الاستبيانات المسجلة</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>العنوان</th>
+                <th>الجمهور</th>
+                <th>التاريخ</th>
+                <th>الرابط</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for survey in surveys %}
+            <tr>
+                <td>{{ survey.title }}</td>
+                <td>{{ survey.target_audience }}</td>
+                <td>{{ survey.created_at|date:"Y-m-d" }}</td>
+                <td>
+                    {% if survey.link %}
+                    <a href="{{ survey.link }}" target="_blank" class="btn btn-sm btn-info"><i class="fas fa-external-link-alt"></i> فتح</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center">لا توجد استبيانات</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+.form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 10px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media(max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+
 {% endblock %}

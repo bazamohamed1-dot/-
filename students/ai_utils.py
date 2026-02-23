@@ -1,5 +1,8 @@
 from .models import SchoolMemory, SchoolSettings
 import logging
+import os
+import re
+from PyPDF2 import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -81,3 +84,73 @@ class AIService:
         Generates a creative reminder message.
         """
         return f"تذكير ودي: لا تنس {task_title}. {manager_instructions[:50]}... إنجازك لهذا العمل يساهم في سير المؤسسة بامتياز!"
+
+
+def analyze_assignment_document(assignment):
+    """
+    Extracts Subject and Classes from an uploaded assignment document.
+    Supports PDF and Excel (basic text scan).
+    Updates the TeacherAssignment object.
+    """
+    file_path = assignment.original_file.path
+    ext = os.path.splitext(file_path)[1].lower()
+    text = ""
+
+    try:
+        if ext == '.pdf':
+            reader = PdfReader(file_path)
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+        elif ext in ['.xlsx', '.xls']:
+            import openpyxl
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            for sheet in wb.sheetnames:
+                ws = wb[sheet]
+                for row in ws.iter_rows(values_only=True):
+                    row_str = " ".join([str(c) for c in row if c])
+                    text += row_str + "\n"
+        # Images/Word requires more libs, assume text for now
+
+        # Regex to find Classes (e.g. 1M1, 2M3, 4AM2)
+        # Matches typical class names in Algerian schools: 1M1, 2M1, 3AM4
+        class_pattern = r'\b(\d+[AM]+\d+)\b' # Matches 1AM1, 4AM2 etc.
+        # Also simple ones like 1M1
+        class_pattern_simple = r'\b(\d+M\d+)\b'
+
+        classes_found = set()
+        classes_found.update(re.findall(class_pattern, text))
+        classes_found.update(re.findall(class_pattern_simple, text))
+
+        # Arabic Class Names (أولى 1, الثانية 3)
+        # Check against existing class names in DB to be safe
+        from .models import Student
+        all_classes = set(Student.objects.values_list('class_name', flat=True).distinct())
+
+        valid_classes = []
+        for c in classes_found:
+            if c in all_classes:
+                valid_classes.append(c)
+
+        # Also try to match exact class names from DB in text
+        for db_class in all_classes:
+            if db_class and db_class in text:
+                valid_classes.append(db_class)
+
+        assignment.classes = list(set(valid_classes))
+
+        # Try to find Subject
+        subjects = ['رياضيات', 'فيزياء', 'علوم', 'عربية', 'فرنسية', 'انجليزية', 'تاريخ', 'جغرافيا', 'إسلامية', 'مدنية', 'إعلام آلي', 'تكنولوجية', 'بدنية', 'تشكيلية', 'موسيقى']
+
+        for subj in subjects:
+            if subj in text:
+                assignment.subject = subj
+                # Also update teacher profile subject if empty
+                if not assignment.teacher.subject:
+                    assignment.teacher.subject = subj
+                    assignment.teacher.save()
+                break
+
+        assignment.save()
+
+    except Exception as e:
+        print(f"Error analyzing document: {e}")
