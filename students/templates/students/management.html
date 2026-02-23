@@ -172,18 +172,35 @@
 
     <!-- Search and Filter -->
     <!-- Filters enabled always as requested -->
-    <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." oninput="debounceFilterTable()" style="margin-bottom: 0; flex: 2;">
+    <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;">
+        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." oninput="debounceFilterTable()" style="margin-bottom: 0; flex: 2; min-width: 200px;">
 
-        <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="onLevelChange()">
-            <option value="">جميع المستويات</option>
-            <!-- Populated via JS -->
-        </select>
+        <!-- Level Filter Group -->
+        <div style="display:flex; align-items:center; gap:5px; flex: 1; min-width: 180px;">
+            <select id="filterLevel" class="filter-input" style="width:100%;" onchange="onLevelChange()">
+                <option value="">جميع المستويات</option>
+                <!-- Populated via JS -->
+            </select>
+            <button class="btn" id="btnSelectLevel" onclick="selectAllByLevel()" style="padding: 10px; background: #e2e8f0; color: #334155; display:none;" title="تحديد كل تلاميذ هذا المستوى">
+                <i class="fas fa-check-double"></i>
+            </button>
+        </div>
 
-        <select id="filterClass" class="filter-input" style="flex: 1;" onchange="filterTable()">
-            <option value="">جميع الأقسام</option>
-            <!-- Populated via JS -->
-        </select>
+        <!-- Class Filter Group -->
+        <div style="display:flex; align-items:center; gap:5px; flex: 1; min-width: 180px;">
+            <select id="filterClass" class="filter-input" style="width:100%;" onchange="filterTable()">
+                <option value="">جميع الأقسام</option>
+                <!-- Populated via JS -->
+            </select>
+            <button class="btn" id="btnSelectClass" onclick="selectAllByClass()" style="padding: 10px; background: #e2e8f0; color: #334155; display:none;" title="تحديد كل تلاميذ هذا القسم">
+                <i class="fas fa-check-double"></i>
+            </button>
+        </div>
+
+        <!-- Global Select Status -->
+        <button id="globalSelectStatus" class="btn btn-success" style="display:none;" onclick="resetSelectAllMatching()">
+            <i class="fas fa-check-circle"></i> تم تحديد الكل (<span id="globalCount">0</span>)
+        </button>
     </div>
 
     <!-- Table -->
@@ -727,15 +744,28 @@ function onLevelChange() {
         classSelect.value = "";
     }
 
+    // Update Select Buttons Visibility
+    updateFilterButtons();
+
     // Trigger Server Fetch
     // Reset to page 1 on filter change
     fetchStudents(1);
 }
 
 function filterTable() {
-    // This function now just triggers a server fetch
-    // Reset to page 1 on filter change
+    updateFilterButtons();
     fetchStudents(1);
+}
+
+function updateFilterButtons() {
+    const level = document.getElementById('filterLevel').value;
+    const cls = document.getElementById('filterClass').value;
+
+    document.getElementById('btnSelectLevel').style.display = level ? 'inline-block' : 'none';
+    document.getElementById('btnSelectClass').style.display = cls ? 'inline-block' : 'none';
+
+    // If filters changed, reset global selection to avoid confusion
+    resetSelectAllMatching();
 }
 
 let debounceTimer;
@@ -908,35 +938,68 @@ function toggleSelectAll(source) {
     const checkboxes = document.querySelectorAll('.row-checkbox');
     checkboxes.forEach(cb => cb.checked = source.checked);
 
-    // If checking ON, and total count > current page count, show banner
-    if (source.checked && totalMatchingCount > checkboxes.length) {
+    // Legacy Banner Logic (Optional, kept as secondary)
+    if (source.checked && totalMatchingCount > checkboxes.length && !isAllMatchingSelected) {
         const banner = document.getElementById('selectAllBanner');
-        banner.style.display = 'block';
-        banner.innerHTML = `<i class="fas fa-check-double"></i> لقد قمت بتحديد ${checkboxes.length} تلميذ في هذه الصفحة. <u>اضغط هنا لتحديد كل ${totalMatchingCount} تلميذ المطابقين للبحث</u>`;
+        if(banner) {
+            banner.style.display = 'block';
+            banner.innerHTML = `<i class="fas fa-check-double"></i> لقد قمت بتحديد ${checkboxes.length} تلميذ في هذه الصفحة. <u>اضغط هنا لتحديد كل ${totalMatchingCount} تلميذ المطابقين للبحث</u>`;
+        }
     } else {
-        resetSelectAllMatching();
+        if(!isAllMatchingSelected) resetSelectAllMatching();
     }
+}
+
+// New Explicit Select Functions
+function selectAllByLevel() {
+    const level = document.getElementById('filterLevel').value;
+    if(!level) return;
+    selectAllMatching();
+}
+
+function selectAllByClass() {
+    const cls = document.getElementById('filterClass').value;
+    if(!cls) return;
+    selectAllMatching();
 }
 
 function selectAllMatching() {
     isAllMatchingSelected = true;
+
+    // Set Hidden Form Inputs for Print
     document.getElementById('selectAllMatchingInput').value = "true";
     document.getElementById('filterLevelInput').value = document.getElementById('filterLevel').value;
     document.getElementById('filterClassInput').value = document.getElementById('filterClass').value;
     document.getElementById('filterSearchInput').value = document.getElementById('searchInput').value;
 
+    // UI Feedback
     const banner = document.getElementById('selectAllBanner');
-    banner.style.background = '#dcfce7'; // Green
-    banner.style.color = '#166534';
-    banner.innerHTML = `<i class="fas fa-check-circle"></i> تم تحديد جميع التلاميذ (${totalMatchingCount}) المطابقين للبحث/الفلترة.`;
+    if(banner) {
+        banner.style.display = 'none'; // Hide banner, use button
+    }
+
+    document.getElementById('globalSelectStatus').style.display = 'inline-flex';
+    document.getElementById('globalCount').innerText = totalMatchingCount;
+
+    // Check all visible boxes visually
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    document.getElementById('headerCheckbox').checked = true;
 }
 
 function resetSelectAllMatching() {
     isAllMatchingSelected = false;
     document.getElementById('selectAllMatchingInput').value = "false";
+
     const banner = document.getElementById('selectAllBanner');
-    banner.style.display = 'none';
-    banner.style.background = '#e0f2fe'; // Reset color
+    if(banner) banner.style.display = 'none';
+
+    document.getElementById('globalSelectStatus').style.display = 'none';
+
+    // Uncheck
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    document.getElementById('headerCheckbox').checked = false;
 }
 
 function updateSelectionState() {
