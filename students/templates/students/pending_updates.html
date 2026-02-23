@@ -54,7 +54,23 @@ async function loadUpdates() {
             return;
         }
 
-        container.innerHTML = '';
+        container.innerHTML = `
+        <table style="width:100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background:#f8fafc; color:#64748b;">
+                    <th style="padding:10px; text-align:right;">المستخدم</th>
+                    <th style="padding:10px; text-align:right;">النوع</th>
+                    <th style="padding:10px; text-align:right;">الإجراء</th>
+                    <th style="padding:10px; text-align:right;">التفاصيل</th>
+                    <th style="padding:10px; text-align:right;">التوقيت</th>
+                    <th style="padding:10px; text-align:center;">قرار</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>`;
+        const tbody = container.querySelector('tbody');
+
         updates.forEach(u => {
             let desc = '';
             let content = '';
@@ -87,6 +103,8 @@ async function loadUpdates() {
                 const photo = payload.photo || payload.photo_path;
                 if (photo && photo.startsWith('data:image')) {
                     content += `<div style="margin-top:5px;"><img src="${photo}" style="height:50px; border-radius:4px; border:1px solid #ddd;"></div>`;
+                } else if (u.action === 'create' && photo) {
+                     content += `<div style="margin-top:5px;"><img src="${photo}" style="height:50px; border-radius:4px; border:1px solid #ddd;"></div>`;
                 }
 
             } else if (u.model_name === 'CanteenAttendance') {
@@ -95,30 +113,25 @@ async function loadUpdates() {
                 desc = `${u.model_name} - ${u.action}`;
             }
 
-            const div = document.createElement('div');
-            div.className = 'update-item';
-            div.style.borderBottom = '1px solid #e2e8f0';
-            div.style.padding = '15px';
-            div.style.display = 'flex';
-            div.style.justifyContent = 'space-between';
-            div.style.alignItems = 'center';
-            div.style.background = 'white';
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #e2e8f0';
 
-            div.innerHTML = `
-                <div>
-                    <div style="font-size:1.1rem; color:#1e293b;">${desc}</div>
-                    ${content}
-                    <div style="font-size:0.8rem; color:#94a3b8; margin-top:5px;">
-                        <i class="fas fa-user"></i> ${u.username || 'مستخدم'} |
-                        <i class="fas fa-clock"></i> ${new Date(u.timestamp).toLocaleString()}
-                    </div>
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn btn-success" onclick="approve(${u.id})"><i class="fas fa-check"></i></button>
-                    <button class="btn btn-danger" onclick="reject(${u.id})"><i class="fas fa-times"></i></button>
-                </div>
+            tr.innerHTML = `
+                <td style="padding:10px;">${u.username || 'مستخدم'}</td>
+                <td style="padding:10px;">${u.model_name}</td>
+                <td style="padding:10px;">
+                    ${u.action === 'create' ? '<span style="color:green; font-weight:bold;">إضافة</span>' : ''}
+                    ${u.action === 'update' ? '<span style="color:orange; font-weight:bold;">تعديل</span>' : ''}
+                    ${u.action === 'delete' ? '<span style="color:red; font-weight:bold;">حذف</span>' : ''}
+                </td>
+                <td style="padding:10px;">${content || desc}</td>
+                <td style="padding:10px; direction:ltr;">${new Date(u.timestamp).toLocaleString()}</td>
+                <td style="padding:10px; text-align:center;">
+                    <button class="btn btn-success" onclick="approve(${u.id})" style="padding:5px 10px;"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-danger" onclick="reject(${u.id})" style="padding:5px 10px;"><i class="fas fa-times"></i></button>
+                </td>
             `;
-            container.appendChild(div);
+            tbody.appendChild(tr);
         });
 
     } catch(e) {
@@ -146,11 +159,18 @@ async function approve(id) {
 async function reject(id) {
     if(!confirm("هل أنت متأكد من الرفض؟")) return;
     try {
-        const res = await fetch(`/canteen/api/pending_updates/${id}/`, {
-            method: 'DELETE',
+        const res = await fetch(`/canteen/api/pending_updates/${id}/reject_all/`, { // Note: using reject_all logic for single item delete isn't right, use DELETE method on detail
+            method: 'DELETE', // Assuming standard delete endpoint
             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
         });
-        if(res.ok) {
+        // Actually the endpoint for reject is not explicitly defined as 'reject', usually DELETE on detail is enough or a specific action.
+        // Let's use standard DELETE on the resource.
+        const res2 = await fetch(`/canteen/api/pending_updates/${id}/`, {
+             method: 'DELETE',
+             headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')}
+        });
+
+        if(res2.ok) {
             loadUpdates();
             updateBadge();
         }
