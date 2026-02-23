@@ -72,3 +72,81 @@ For more information on production servers see: https://docs.djangoproject.com/e
 Watching for file changes with StatReloader
 /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
   mw_instance = middleware(adapted_handler)
+/app/students/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 08:01:39
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 08:01:39
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 11:18:54
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/app/students/ui_views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 23, 2026 - 11:18:54
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8001/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+Watching for file changes with StatReloader
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+[23/Feb/2026 11:22:37] "GET /canteen/ HTTP/1.1" 200 25768
+Forbidden: /canteen/auth/login/
+[23/Feb/2026 11:22:39] "POST /canteen/auth/login/ HTTP/1.1" 403 54
+[23/Feb/2026 11:22:51] "GET /canteen/settings/ HTTP/1.1" 302 0
+[23/Feb/2026 11:22:51] "GET /canteen/ HTTP/1.1" 200 25768
+[23/Feb/2026 11:23:44] "GET /canteen/ HTTP/1.1" 200 25768
+Forbidden: /canteen/auth/login/
+[23/Feb/2026 11:23:45] "POST /canteen/auth/login/ HTTP/1.1" 403 54
+[23/Feb/2026 11:23:57] "GET /canteen/settings/ HTTP/1.1" 302 0
+[23/Feb/2026 11:23:57] "GET /canteen/ HTTP/1.1" 200 25768

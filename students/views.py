@@ -253,13 +253,29 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
              except: pass
 
         if update.model_name == 'Student':
-            # Safety: Remove 'photo' from payload if it's not a valid Base64 string
-            # This prevents existing photo URLs from triggering validation errors or being cleared
+            # Handle Photo: If it's a new Base64 string, it should be processed.
+            # If it's an existing URL (string not starting with data:image), we REMOVE it from payload
+            # so the serializer (partial=True) doesn't touch the existing photo.
             if 'photo' in data_payload:
                 photo_val = data_payload['photo']
-                if isinstance(photo_val, str) and not photo_val.startswith('data:image'):
-                    # It's likely a URL/Path string, ignore it to preserve existing photo
-                    del data_payload['photo']
+                if isinstance(photo_val, str):
+                    if photo_val.startswith('data:image'):
+                        # Valid Base64 - Keep it, it will overwrite existing.
+                        pass
+                    else:
+                        # Existing URL or Path - Remove to prevent clearing/error.
+                        del data_payload['photo']
+                elif photo_val is None:
+                    # Explicit null might mean "delete photo".
+                    # However, in offline context, user might not have cleared it.
+                    # Safety check: if user INTENDS to delete, we might need a flag.
+                    # For now, let's assume null means "no change" unless we have a specific delete flag.
+                    # But serializer allows null. Let's rely on frontend sending "" for no change or null for delete?
+                    # Frontend (management.html) logic:
+                    # if (photoVal && photoVal.startsWith('data:image')) { studentData.photo = photoVal; }
+                    # So frontend DOES NOT send photo if it's not changed (it sends nothing).
+                    # If data_payload has 'photo': null, it might be an explicit clear.
+                    pass
 
             # Use serializer to validate and save
             if update.action == 'create':
