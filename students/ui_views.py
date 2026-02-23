@@ -317,11 +317,26 @@ def hr_home(request):
         if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
             try:
-                wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
-                ws = wb.active
+                # Try handling as standard XLSX (openpyxl)
+                rows_generator = []
+                try:
+                    wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                    ws = wb.active
+                    rows_generator = ws.iter_rows(min_row=2, values_only=True)
+                except Exception:
+                    # Fallback: Try reading as legacy XLS using xlrd
+                    try:
+                        import xlrd
+                        file.seek(0)
+                        wb = xlrd.open_workbook(file_contents=file.read())
+                        sheet = wb.sheet_by_index(0)
+                        rows_generator = (sheet.row_values(r) for r in range(1, sheet.nrows))
+                    except Exception as e2:
+                        raise Exception(f"File format not supported. Please upload .xlsx or .xls. Error: {e2}")
+
                 count = 0
                 # Expecting: Photo, Code, Surname, Name, DOB, Rank, Subject, Grade, Effective Date
-                for row in ws.iter_rows(min_row=2, values_only=True):
+                for row in rows_generator:
                     # Robust check: need at least Code, Surname, Name
                     if not row or len(row) < 4: continue
 
@@ -342,6 +357,10 @@ def hr_home(request):
                         val = row[4]
                         if isinstance(val, (date, datetime)):
                              dob = val
+                        elif isinstance(val, float): # Excel Serial Date
+                             try:
+                                 dob = date.fromordinal(date(1900, 1, 1).toordinal() + int(val) - 2)
+                             except: pass
                         else:
                              try: dob = datetime.strptime(str(val), '%Y-%m-%d').date()
                              except: pass
@@ -352,6 +371,10 @@ def hr_home(request):
                         val = row[8]
                         if isinstance(val, (date, datetime)):
                              eff_date = val
+                        elif isinstance(val, float):
+                             try:
+                                 eff_date = date.fromordinal(date(1900, 1, 1).toordinal() + int(val) - 2)
+                             except: pass
                         else:
                              try: eff_date = datetime.strptime(str(val), '%Y-%m-%d').date()
                              except: pass
