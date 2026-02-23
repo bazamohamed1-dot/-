@@ -311,10 +311,12 @@ class SchoolMemory(models.Model):
     title = models.CharField(max_length=200, verbose_name="العنوان")
     content = models.TextField(verbose_name="المحتوى")
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='general')
-    created_at = models.DateTimeField(auto_now_add=True)
 
-    # In a real vector DB scenario, we would store vector embeddings here or in a separate table.
-    # For this implementation, we will rely on text search (simple RAG).
+    # New Fields for File Import
+    attachment = models.FileField(upload_to='rag_docs/', null=True, blank=True, verbose_name="ملف مرفق")
+    url = models.URLField(null=True, blank=True, verbose_name="رابط مرجعي")
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "ذاكرة المؤسسة"

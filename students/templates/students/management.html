@@ -173,7 +173,7 @@
     <!-- Search and Filter -->
     <!-- Filters enabled always as requested -->
     <div id="filterContainer" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." onchange="filterTable()" style="margin-bottom: 0; flex: 2;">
+        <input type="text" id="searchInput" class="search-box" placeholder="ابحث بالاسم أو رقم التعريف..." oninput="debounceFilterTable()" style="margin-bottom: 0; flex: 2;">
 
         <select id="filterLevel" class="filter-input" style="flex: 1;" onchange="onLevelChange()">
             <option value="">جميع المستويات</option>
@@ -188,12 +188,21 @@
 
     <!-- Table -->
     <div class="table-container">
+        <div id="selectAllBanner" style="display:none; background:#e0f2fe; color:#0369a1; padding:10px; text-align:center; font-weight:bold; cursor:pointer; border-bottom:1px solid #bae6fd;" onclick="selectAllMatching()">
+            <!-- Dynamic Text Injected Here -->
+        </div>
         <form id="printForm" action="{% url 'print_student_cards' %}" method="POST">
             {% csrf_token %}
+            <!-- Hidden inputs for "Select All Matching" mode -->
+            <input type="hidden" name="select_all_matching" id="selectAllMatchingInput" value="false">
+            <input type="hidden" name="filter_level" id="filterLevelInput">
+            <input type="hidden" name="filter_class" id="filterClassInput">
+            <input type="hidden" name="filter_search" id="filterSearchInput">
+
             <table id="studentsTable">
                 <thead>
                     <tr>
-                        <th style="width: 40px;"><input type="checkbox" onclick="toggleSelectAll(this)"></th>
+                        <th style="width: 40px;"><input type="checkbox" id="headerCheckbox" onclick="toggleSelectAll(this)"></th>
                         <th>رقم التعريف</th>
                         <th>اللقب</th>
                         <th>الاسم</th>
@@ -729,6 +738,14 @@ function filterTable() {
     fetchStudents(1);
 }
 
+let debounceTimer;
+function debounceFilterTable() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        fetchStudents(1);
+    }, 300);
+}
+
 async function applyPendingUpdates() {
     // 1. Get Server Pending (if online)
     let server = [];
@@ -870,7 +887,7 @@ function renderTable() {
         return `
         <tr onclick="fillForm(${i}, this)" style="${pendingStyle}">
             <td onclick="event.stopPropagation()">
-                <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox">
+                <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox" onchange="updateSelectionState()">
             </td>
             <td>${s.id}</td>
             <td>${s.ln} ${pendingBadge}</td>
@@ -883,9 +900,56 @@ function renderTable() {
     }).join('');
 }
 
+// "Select All Matching" Logic
+let isAllMatchingSelected = false;
+let totalMatchingCount = 0; // Set by fetchStudents from result.count
+
 function toggleSelectAll(source) {
     const checkboxes = document.querySelectorAll('.row-checkbox');
     checkboxes.forEach(cb => cb.checked = source.checked);
+
+    // If checking ON, and total count > current page count, show banner
+    if (source.checked && totalMatchingCount > checkboxes.length) {
+        const banner = document.getElementById('selectAllBanner');
+        banner.style.display = 'block';
+        banner.innerHTML = `<i class="fas fa-check-double"></i> لقد قمت بتحديد ${checkboxes.length} تلميذ في هذه الصفحة. <u>اضغط هنا لتحديد كل ${totalMatchingCount} تلميذ المطابقين للبحث</u>`;
+    } else {
+        resetSelectAllMatching();
+    }
+}
+
+function selectAllMatching() {
+    isAllMatchingSelected = true;
+    document.getElementById('selectAllMatchingInput').value = "true";
+    document.getElementById('filterLevelInput').value = document.getElementById('filterLevel').value;
+    document.getElementById('filterClassInput').value = document.getElementById('filterClass').value;
+    document.getElementById('filterSearchInput').value = document.getElementById('searchInput').value;
+
+    const banner = document.getElementById('selectAllBanner');
+    banner.style.background = '#dcfce7'; // Green
+    banner.style.color = '#166534';
+    banner.innerHTML = `<i class="fas fa-check-circle"></i> تم تحديد جميع التلاميذ (${totalMatchingCount}) المطابقين للبحث/الفلترة.`;
+}
+
+function resetSelectAllMatching() {
+    isAllMatchingSelected = false;
+    document.getElementById('selectAllMatchingInput').value = "false";
+    const banner = document.getElementById('selectAllBanner');
+    banner.style.display = 'none';
+    banner.style.background = '#e0f2fe'; // Reset color
+}
+
+function updateSelectionState() {
+    // If any individual checkbox is unchecked, we lose "Select All Matching" state
+    // But simplistic approach: just hide banner if manual interaction happens
+    // Unless we track every ID, simpler to reset if user unchecks something.
+    const checkboxes = document.querySelectorAll('.row-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+    if (!allChecked) {
+        resetSelectAllMatching();
+        document.getElementById('headerCheckbox').checked = false;
+    }
 }
 
 function submitPrint() {

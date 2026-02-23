@@ -47,8 +47,23 @@
             </select>
         </div>
         <div style="margin-bottom:10px;">
-            <textarea id="memContent" placeholder="نص الوثيقة أو تفاصيل الحل..." class="form-input" style="width:100%; height:100px;" required></textarea>
+            <textarea id="memContent" placeholder="نص الوثيقة أو تفاصيل الحل... (اختياري عند رفع ملف)" class="form-input" style="width:100%; height:100px;"></textarea>
         </div>
+
+        <div style="background: #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #94a3b8;">
+            <div style="font-weight: bold; margin-bottom: 10px; color: #475569;">
+                <i class="fas fa-paperclip"></i> إرفاق ملفات أو روابط (لتحليل المحتوى)
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">ملف (PDF, TXT, MD)</label>
+                <input type="file" id="memFile" class="form-input" style="width: 100%;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">رابط (URL)</label>
+                <input type="url" id="memUrl" class="form-input" style="width: 100%;" placeholder="https://example.com/article">
+            </div>
+        </div>
+
         <button class="btn btn-success"><i class="fas fa-plus"></i> إضافة للذاكرة</button>
     </form>
 
@@ -79,20 +94,42 @@
 <script>
 async function addMemory(e) {
     e.preventDefault();
-    const data = {
-        title: document.getElementById('memTitle').value,
-        category: document.getElementById('memCategory').value,
-        content: document.getElementById('memContent').value
-    };
+
+    const formData = new FormData();
+    formData.append('title', document.getElementById('memTitle').value);
+    formData.append('category', document.getElementById('memCategory').value);
+    formData.append('content', document.getElementById('memContent').value || "محتوى مرفق");
+
+    const fileInput = document.getElementById('memFile');
+    if (fileInput.files[0]) {
+        formData.append('attachment', fileInput.files[0]);
+    }
+
+    const urlInput = document.getElementById('memUrl').value;
+    if (urlInput) {
+        formData.append('url', urlInput);
+    }
 
     try {
         const res = await fetch('/canteen/api/school_memory/', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('baza_school_csrf_v2')},
-            body: JSON.stringify(data)
+            headers: {
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
+                // No Content-Type for FormData
+            },
+            body: formData
         });
-        if(res.ok) window.location.reload();
-    } catch(e) { alert("Error"); }
+
+        if(res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json();
+            alert("خطأ: " + JSON.stringify(err));
+        }
+    } catch(e) {
+        console.error(e);
+        alert("خطأ في الاتصال");
+    }
 }
 
 async function deleteMemory(id) {
