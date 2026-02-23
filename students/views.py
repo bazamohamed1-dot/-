@@ -316,6 +316,14 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
 
         update = self.get_object()
         try:
+            # Create notification
+            if update.user:
+                SystemMessage.objects.create(
+                    recipient=update.user,
+                    message=f"تم قبول التحديث الخاص بـ {update.model_name} (ID: {update.data.get('id')})",
+                    active=True
+                )
+
             self._apply_update(update)
             return Response({'message': 'Approved'})
         except Exception as e:
@@ -331,6 +339,12 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
         errors = []
         for update in updates:
              try:
+                if update.user:
+                    SystemMessage.objects.create(
+                        recipient=update.user,
+                        message=f"تم قبول التحديث الخاص بـ {update.model_name} (ID: {update.data.get('id')})",
+                        active=True
+                    )
                 self._apply_update(update)
                 count += 1
              except Exception as e:
@@ -343,7 +357,16 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
         if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
              return Response({'error': 'Unauthorized'}, status=403)
 
-        self.get_queryset().delete()
+        updates = self.get_queryset()
+        for update in updates:
+            if update.user:
+                SystemMessage.objects.create(
+                    recipient=update.user,
+                    message=f"تم رفض التحديث الخاص بـ {update.model_name} (ID: {update.data.get('id')})",
+                    active=True
+                )
+
+        updates.delete()
         return Response({'message': 'Rejected All'})
 
     @action(detail=False, methods=['get'])
