@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
 from .models import Task, TeacherObservation, SchoolMemory
 from .serializers import TaskSerializer, TeacherObservationSerializer, SchoolMemorySerializer
 from .ai_utils import AIService
@@ -15,10 +16,14 @@ class TaskViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if hasattr(user, 'profile') and user.profile.role == 'director':
             return Task.objects.all()
+
         # Users see tasks assigned to them OR their role
-        role = user.profile.role if hasattr(user, 'profile') else None
-        # Logic needs to handle UserRole relation, for now simplistic match
-        return Task.objects.filter(assigned_user=user)
+        role_name = user.profile.role if hasattr(user, 'profile') else None
+
+        return Task.objects.filter(
+            Q(assigned_user=user) |
+            Q(assigned_role__name=role_name)
+        )
 
     @action(detail=True, methods=['post'])
     def explain(self, request, pk=None):
