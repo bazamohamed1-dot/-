@@ -187,3 +187,7 @@ else:
 if DEBUG:
     CACHE_MIDDLEWARE_SECONDS = 0
     WHITENOISE_MAX_AGE = 0
+
+# Increase Data Upload Limits to 10MB to handle large Base64 photo payloads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
