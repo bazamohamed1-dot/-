@@ -36,14 +36,6 @@ class Student(models.Model):
         if self.pk:
             try:
                 old = Student.objects.get(pk=self.pk)
-                # If there is an old photo AND it's different from the new one (or new one is being set)
-                # Note: When uploading a new file, self.photo is the InMemoryUploadedFile/ContentFile,
-                # while old.photo is the FieldFile pointing to storage.
-                # If they are different objects, we should check if we need to clean up.
-
-                # Specifically for Base64 updates where we reuse the filename ID.jpg:
-                # The file path logic tries to reuse the name.
-                # We explicitly delete the old file to ensure overwrite instead of rename (e.g. ID_1.jpg).
                 if old.photo and self.photo and old.photo != self.photo:
                     if os.path.isfile(old.photo.path):
                         os.remove(old.photo.path)
@@ -105,6 +97,10 @@ class SchoolSettings(models.Model):
     # Store days as comma-separated integers (0=Mon, 6=Sun).
     canteen_days = models.CharField(max_length=50, default="0,2,3,6", null=True, blank=True, verbose_name="أيام عمل المطعم")
 
+    # AI Tone Settings
+    ai_tone = models.CharField(max_length=50, default="professional", verbose_name="نبرة الذكاء الاصطناعي")
+    ai_focus = models.CharField(max_length=50, default="academic", verbose_name="تركيز الذكاء الاصطناعي")
+
     class Meta:
         verbose_name = "إعدادات المؤسسة"
         verbose_name_plural = "إعدادات المؤسسة"
@@ -143,7 +139,6 @@ class ArchiveDocument(models.Model):
 
 class EmployeeProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name="المستخدم")
-    # Removed strict choices to allow custom role names
     role = models.CharField(max_length=100, verbose_name="الدور")
     failed_login_attempts = models.IntegerField(default=0, verbose_name="محاولات الدخول الفاشلة")
     is_locked = models.BooleanField(default=False, verbose_name="الحساب مقفل")
@@ -151,7 +146,6 @@ class EmployeeProfile(models.Model):
     device_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="معرف الجهاز")
     permissions = models.JSONField(default=list, blank=True, verbose_name="الصلاحيات")
 
-    # 2FA Fields
     totp_secret = models.CharField(max_length=100, null=True, blank=True, verbose_name="مفتاح المصادقة الثنائية")
     totp_enabled = models.BooleanField(default=False, verbose_name="تفعيل المصادقة الثنائية")
     must_change_password = models.BooleanField(default=False, verbose_name="يجب تغيير كلمة المرور")
@@ -167,10 +161,10 @@ class EmployeeProfile(models.Model):
 class PendingUpdate(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="المستخدم")
     model_name = models.CharField(max_length=50, verbose_name="النموذج")
-    action = models.CharField(max_length=20, verbose_name="الإجراء") # create, update, delete
+    action = models.CharField(max_length=20, verbose_name="الإجراء")
     data = models.JSONField(verbose_name="البيانات")
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="التوقيت")
-    status = models.CharField(max_length=20, default='pending', verbose_name="الحالة") # pending, approved, rejected
+    status = models.CharField(max_length=20, default='pending', verbose_name="الحالة")
 
     class Meta:
         verbose_name = "تحديث معلق"
@@ -178,7 +172,7 @@ class PendingUpdate(models.Model):
         ordering = ['-timestamp']
 
 class SystemMessage(models.Model):
-    recipient = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name="المستلم") # Null = All users
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name="المستلم")
     message = models.TextField(verbose_name="الرسالة")
     active = models.BooleanField(default=True, verbose_name="نشطة")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
@@ -202,7 +196,7 @@ class UserRole(models.Model):
 
 class Employee(models.Model):
     full_name = models.CharField(max_length=200, verbose_name="الاسم الكامل")
-    role = models.CharField(max_length=100, verbose_name="الوظيفة") # Teacher, Admin, Worker
+    role = models.CharField(max_length=100, verbose_name="الوظيفة")
     phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم الهاتف")
     date_of_birth = models.DateField(null=True, blank=True, verbose_name="تاريخ الميلاد")
     notes = models.TextField(null=True, blank=True, verbose_name="ملاحظات")
@@ -217,8 +211,8 @@ class Employee(models.Model):
 class Survey(models.Model):
     title = models.CharField(max_length=200, verbose_name="العنوان")
     description = models.TextField(verbose_name="الوصف")
-    target_audience = models.CharField(max_length=100, verbose_name="الجمهور المستهدف") # Students, Parents, Staff
-    link = models.URLField(null=True, blank=True, verbose_name="رابط الاستبيان") # External (Google Forms) or internal
+    target_audience = models.CharField(max_length=100, verbose_name="الجمهور المستهدف")
+    link = models.URLField(null=True, blank=True, verbose_name="رابط الاستبيان")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ الإنشاء")
 
     class Meta:
@@ -235,7 +229,7 @@ class AttendanceRecord(models.Model):
     ]
     student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ", related_name='attendance_records')
     date = models.DateField(default=date.today, verbose_name="التاريخ")
-    time = models.TimeField(null=True, blank=True, verbose_name="وقت الوصول") # For lateness
+    time = models.TimeField(null=True, blank=True, verbose_name="وقت الوصول")
     type = models.CharField(max_length=20, choices=ATTENDANCE_TYPES, verbose_name="النوع")
     reason = models.TextField(null=True, blank=True, verbose_name="السبب")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ التسجيل")
@@ -268,3 +262,60 @@ class Communication(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.title}"
+
+# --- AI & Task System Models ---
+
+class Task(models.Model):
+    title = models.CharField(max_length=200, verbose_name="عنوان المهمة")
+    description = models.TextField(verbose_name="الوصف التقني")
+    assigned_role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="الدور المسند")
+    assigned_user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name="المستخدم المسند")
+    manager_instructions = models.TextField(verbose_name="سياق المدير (AI Context)", blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    due_date = models.DateTimeField(null=True, blank=True, verbose_name="تاريخ الاستحقاق")
+    is_completed = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "مهمة"
+        verbose_name_plural = "المهام"
+
+class TeacherObservation(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'قيد الانتظار'),
+        ('ai_suggested', 'مقترح AI'),
+        ('teacher_approved', 'موافقة الأستاذ'),
+        ('admin_review', 'مراجعة المدير'),
+        ('delivered', 'تم التسليم'),
+        ('rejected', 'مرفوض')
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='observations_created', verbose_name="الأستاذ")
+    content = models.TextField(verbose_name="ملاحظة الأستاذ")
+    ai_suggestion = models.TextField(verbose_name="مقترح الذكاء الاصطناعي", blank=True, null=True)
+    final_content = models.TextField(verbose_name="المحتوى النهائي", blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    admin_feedback = models.TextField(verbose_name="رد الإدارة", blank=True, null=True)
+
+    class Meta:
+        verbose_name = "ملاحظة تربوية"
+        verbose_name_plural = "الملاحظات التربوية"
+
+class SchoolMemory(models.Model):
+    CATEGORY_CHOICES = [
+        ('rule', 'قانون داخلي'),
+        ('curriculum', 'منهاج دراسي'),
+        ('solution', 'حل سابق'),
+        ('general', 'عام')
+    ]
+    title = models.CharField(max_length=200, verbose_name="العنوان")
+    content = models.TextField(verbose_name="المحتوى")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='general')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # In a real vector DB scenario, we would store vector embeddings here or in a separate table.
+    # For this implementation, we will rely on text search (simple RAG).
+
+    class Meta:
+        verbose_name = "ذاكرة المؤسسة"
+        verbose_name_plural = "ذاكرة المؤسسة"

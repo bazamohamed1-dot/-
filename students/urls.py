@@ -3,6 +3,8 @@ from . import views
 from . import ui_views
 from . import auth_views
 from . import qr_views
+from . import ai_views
+from . import reminder_views
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
@@ -12,6 +14,11 @@ router.register(r'archive/docs', views.ArchiveDocumentViewSet, basename='archive
 router.register(r'students', views.StudentViewSet)
 router.register(r'system_messages', views.SystemMessageViewSet, basename='system_messages')
 router.register(r'pending_updates', views.PendingUpdateViewSet, basename='pending_updates')
+
+# AI & Tasks
+router.register(r'tasks', ai_views.TaskViewSet, basename='tasks')
+router.register(r'observations', ai_views.TeacherObservationViewSet, basename='observations')
+router.register(r'school_memory', ai_views.SchoolMemoryViewSet, basename='school_memory')
 
 urlpatterns = [
     # Landing
@@ -74,4 +81,12 @@ urlpatterns = [
     path('hr/<int:pk>/delete/', ui_views.hr_delete, name='hr_delete'),
     path('parents/', ui_views.parents_home, name='parents_home'),
     path('guidance/', ui_views.guidance_home, name='guidance_home'),
+
+    # AI & Task UI
+    path('tasks/', ui_views.tasks_view, name='tasks_view'),
+    path('ai/control/', ui_views.ai_control_panel, name='ai_control_panel'),
+    path('ai/observations/', ui_views.observations_view, name='observations_view'),
+
+    # Reminders
+    path('api/reminders/', reminder_views.check_reminders, name='check_reminders'),
 ]

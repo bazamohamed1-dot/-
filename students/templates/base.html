@@ -312,7 +312,24 @@
                     <span id="navUpdateBadge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; display: none;">0</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{% url 'ai_control_panel' %}" class="nav-link {% if 'ai/control' in request.path %}active{% endif %}">
+                    <i class="fas fa-brain"></i> التحكم في AI
+                </a>
+            </li>
             {% endif %}
+
+            <!-- Shared Links for Tasks/Observations -->
+            <li class="nav-item">
+                <a href="{% url 'tasks_view' %}" class="nav-link {% if 'tasks' in request.path %}active{% endif %}">
+                    <i class="fas fa-list-check"></i> المهام
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'observations_view' %}" class="nav-link {% if 'observations' in request.path %}active{% endif %}">
+                    <i class="fas fa-comments"></i> الملاحظات والوساطة
+                </a>
+            </li>
         </ul>
     </aside>
 
