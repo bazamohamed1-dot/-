@@ -83,18 +83,28 @@ async function loadUpdates() {
             if (typeof payload !== 'object' || payload === null) payload = {};
 
             if (u.model_name === 'Student') {
-                const name = `${payload.last_name || ''} ${payload.first_name || ''}`;
+                // Ensure we have name details. For update/delete, it might be partial.
+                // But for display, we want to show who is being affected.
+                // If it's an update, payload usually has 'id' and changed fields.
+                // We might rely on the original fetch or just show what's available.
+                // Ideally, 'pending_update.data' should contain snapshot info or we rely on 'name' field if we stored it.
+                // Let's use what we have.
+                const name = `${payload.last_name || ''} ${payload.first_name || ''}`.trim() || (payload.name || 'غير محدد');
+                const studentClass = payload.class_name || payload.academic_year || '';
 
-                if (u.action === 'create') desc = `إضافة تلميذ جديد: <strong>${name}</strong>`;
-                else if (u.action === 'update') desc = `تعديل بيانات تلميذ: <strong>${name}</strong>`;
-                else if (u.action === 'delete') desc = `حذف تلميذ: <strong>${payload.name || payload.id || 'محدد'}</strong>`;
+                let detailText = `<strong>${name}</strong>`;
+                if(studentClass) detailText += ` (${studentClass})`;
+
+                if (u.action === 'create') desc = `إضافة تلميذ جديد: ${detailText}`;
+                else if (u.action === 'update') desc = `تعديل بيانات تلميذ: ${detailText}`;
+                else if (u.action === 'delete') desc = `حذف تلميذ: ${detailText}`;
 
                 // Show changed fields for update
                 if(u.action === 'update') {
-                    const changedKeys = Object.keys(payload).filter(k => k!=='id' && k!=='photo' && k!=='photo_path');
+                    const changedKeys = Object.keys(payload).filter(k => k!=='id' && k!=='photo' && k!=='photo_path' && k!=='name');
                     if (changedKeys.length > 0) {
                         content += `<div style="font-size:0.85rem; color:#475569; margin-top:5px; background:#f1f5f9; padding:5px; border-radius:4px;">
-                            تعديلات على: ${changedKeys.join(', ')}
+                            تعديلات على: <strong>${changedKeys.join(', ')}</strong>
                         </div>`;
                     }
                 }
