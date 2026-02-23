@@ -195,18 +195,54 @@ class UserRole(models.Model):
         return self.name
 
 class Employee(models.Model):
-    full_name = models.CharField(max_length=200, verbose_name="الاسم الكامل")
-    role = models.CharField(max_length=100, verbose_name="الوظيفة")
+    RANK_CHOICES = [
+        ('teacher', 'أستاذ'),
+        ('worker', 'عامل مهني'),
+        ('admin', 'إداري'),
+    ]
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='employee_hr', verbose_name="حساب المستخدم")
+    employee_code = models.CharField(max_length=50, unique=True, null=True, blank=True, verbose_name="الرمز الوظيفي")
+    last_name = models.CharField(max_length=100, verbose_name="اللقب", default="")
+    first_name = models.CharField(max_length=100, verbose_name="الاسم", default="")
+    date_of_birth = models.DateField(null=True, blank=True, verbose_name="تاريخ الازدياد")
+    rank = models.CharField(max_length=20, choices=RANK_CHOICES, default='worker', verbose_name="الرتبة")
+    subject = models.CharField(max_length=100, null=True, blank=True, verbose_name="المادة") # Only for teachers
+    grade = models.CharField(max_length=50, null=True, blank=True, verbose_name="الدرجة")
+    effective_date = models.DateField(null=True, blank=True, verbose_name="تاريخ السريان")
     phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم الهاتف")
-    date_of_birth = models.DateField(null=True, blank=True, verbose_name="تاريخ الميلاد")
+    email = models.EmailField(null=True, blank=True, verbose_name="البريد الإلكتروني")
+    photo = models.ImageField(upload_to='employee_photos/', null=True, blank=True, verbose_name="الصورة")
     notes = models.TextField(null=True, blank=True, verbose_name="ملاحظات")
+
+    # Legacy Fields (Kept for migration safety, can be deprecated)
+    full_name = models.CharField(max_length=200, null=True, blank=True, verbose_name="الاسم الكامل (قديم)")
+    role = models.CharField(max_length=100, null=True, blank=True, verbose_name="الوظيفة (قديم)")
 
     class Meta:
         verbose_name = "موظف"
         verbose_name_plural = "الموارد البشرية"
 
+    def save(self, *args, **kwargs):
+        if not self.last_name and self.full_name:
+            parts = self.full_name.split(' ', 1)
+            self.last_name = parts[0]
+            if len(parts) > 1:
+                self.first_name = parts[1]
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return self.full_name
+        return f"{self.last_name} {self.first_name}"
+
+class TeacherAssignment(models.Model):
+    teacher = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='assignments', verbose_name="الأستاذ")
+    subject = models.CharField(max_length=100, verbose_name="المادة")
+    classes = models.JSONField(default=list, verbose_name="الأقسام المسندة") # List of class names e.g. ["1M1", "2M2"]
+    original_file = models.FileField(upload_to='assignments/', null=True, blank=True, verbose_name="ملف الإسناد")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "إسناد تربوي"
+        verbose_name_plural = "الإسنادات التربوية"
 
 class Survey(models.Model):
     title = models.CharField(max_length=200, verbose_name="العنوان")

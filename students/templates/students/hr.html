@@ -1,10 +1,160 @@
 {% extends 'base.html' %}
-{% block title %}الموارد البشرية{% endblock %}
+{% load static %}
+
 {% block header_title %}تسيير الموارد البشرية{% endblock %}
+
 {% block content %}
-<div class="card" style="text-align:center; padding:50px;">
-    <i class="fas fa-hard-hat fa-4x" style="color:#f59e0b; margin-bottom:20px;"></i>
-    <h2>هذه الواجهة قيد التطوير</h2>
-    <p style="color:#64748b;">سيتم تفعيل هذه الميزة في التحديث القادم.</p>
+<div class="card mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="btn-group">
+            <a href="?rank=teacher" class="btn {% if current_rank == 'teacher' %}btn-primary{% else %}btn-outline-primary{% endif %}">الأساتذة</a>
+            <a href="?rank=worker" class="btn {% if current_rank == 'worker' %}btn-primary{% else %}btn-outline-primary{% endif %}">العمال المهنيين</a>
+            <a href="?rank=admin" class="btn {% if current_rank == 'admin' %}btn-primary{% else %}btn-outline-primary{% endif %}">الإداريين</a>
+            <a href="{% url 'hr_home' %}" class="btn {% if not current_rank %}btn-primary{% else %}btn-outline-primary{% endif %}">الكل</a>
+        </div>
+        <div class="btn-group">
+             <button class="btn btn-success" onclick="openImportModal()"><i class="fas fa-file-excel"></i> استيراد</button>
+             <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> إضافة موظف</button>
+        </div>
+    </div>
 </div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>الرمز</th>
+                    <th>الاسم واللقب</th>
+                    <th>الرتبة</th>
+                    <th>المادة</th>
+                    <th>رقم الهاتف</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td>{{ emp.employee_code }}</td>
+                    <td>
+                        {% if emp.photo %}
+                        <img src="{{ emp.photo.url }}" style="width: 30px; height: 30px; border-radius: 50%;">
+                        {% else %}
+                        <i class="fas fa-user-circle"></i>
+                        {% endif %}
+                        {{ emp.last_name }} {{ emp.first_name }}
+                    </td>
+                    <td>{{ emp.get_rank_display }}</td>
+                    <td>{{ emp.subject|default:"-" }}</td>
+                    <td>{{ emp.phone }}</td>
+                    <td>
+                        <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
+                        {% if emp.rank == 'teacher' %}
+                        <button class="btn btn-sm btn-info" onclick="openAssignmentModal('{{ emp.id }}', '{{ emp.full_name }}')"><i class="fas fa-upload"></i> إسناد</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center">لا توجد بيانات</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="importModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="modal-content" style="background: white; width: 500px; margin: 100px auto; padding: 20px; border-radius: 8px;">
+        <h3>استيراد الموارد البشرية</h3>
+        <p>يجب أن يكون الملف بصيغة Excel ويحوي الأعمدة: الصورة، الرمز، اللقب، الاسم، تاريخ الازدياد، الرتبة، المادة، الدرجة، تاريخ السريان.</p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="import_file">
+            <input type="file" name="file" class="form-control mb-3" required>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">إلغاء</button>
+                <button type="submit" class="btn btn-primary">استيراد</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div id="addModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="modal-content" style="background: white; width: 600px; margin: 50px auto; padding: 20px; border-radius: 8px; max-height: 90vh; overflow-y: auto;">
+        <h3>إضافة موظف</h3>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_manual">
+            <div class="grid-2">
+                <div>
+                    <label>الرمز الوظيفي</label>
+                    <input type="text" name="employee_code" class="form-control" required>
+                </div>
+                <div>
+                    <label>الرتبة</label>
+                    <select name="rank" class="form-control" onchange="toggleSubject(this.value)">
+                        <option value="worker">عامل مهني</option>
+                        <option value="teacher">أستاذ</option>
+                        <option value="admin">إداري</option>
+                    </select>
+                </div>
+                <div><label>اللقب</label><input type="text" name="last_name" class="form-control" required></div>
+                <div><label>الاسم</label><input type="text" name="first_name" class="form-control" required></div>
+                <div id="subjectField" style="display:none;"><label>المادة</label><input type="text" name="subject" class="form-control"></div>
+                <div><label>الدرجة</label><input type="text" name="grade" class="form-control"></div>
+                <div><label>تاريخ الازدياد</label><input type="date" name="date_of_birth" class="form-control"></div>
+                <div><label>تاريخ السريان</label><input type="date" name="effective_date" class="form-control"></div>
+                <div><label>الهاتف</label><input type="text" name="phone" class="form-control"></div>
+                <div><label>البريد الإلكتروني</label><input type="email" name="email" class="form-control"></div>
+            </div>
+            <div class="mt-3 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="closeAddModal()">إلغاء</button>
+                <button type="submit" class="btn btn-primary">حفظ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Assignment Modal -->
+<div id="assignmentModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="modal-content" style="background: white; width: 500px; margin: 100px auto; padding: 20px; border-radius: 8px;">
+        <h3>إسناد للأستاذ: <span id="assignTeacherName"></span></h3>
+        <p>قم برفع ملف الإسناد (Excel, PDF) ليتم تحليله بالذكاء الاصطناعي.</p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="import_assignment">
+            <input type="hidden" name="teacher_id" id="assignTeacherId">
+            <input type="file" name="assignment_file" class="form-control mb-3" required>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('assignmentModal').style.display='none'">إلغاء</button>
+                <button type="submit" class="btn btn-primary">رفع وتحليل</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openImportModal() { document.getElementById('importModal').style.display = 'block'; }
+function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
+function openAddModal() { document.getElementById('addModal').style.display = 'block'; }
+function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+
+function openAssignmentModal(id, name) {
+    document.getElementById('assignTeacherId').value = id;
+    document.getElementById('assignTeacherName').innerText = name;
+    document.getElementById('assignmentModal').style.display = 'block';
+}
+
+function toggleSubject(rank) {
+    document.getElementById('subjectField').style.display = (rank === 'teacher') ? 'block' : 'none';
+}
+</script>
+
+<style>
+.form-control { width: 100%; padding: 8px; margin-bottom: 5px; border: 1px solid #ddd; border-radius: 4px; }
+.btn-group .btn { margin-left: 5px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+
 {% endblock %}
