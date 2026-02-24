@@ -330,18 +330,28 @@ def hr_home(request):
 
                 count = 0
                 for emp in employees_data:
-                    # Parse Rank
-                    rank_str = emp.get('rank', 'worker')
-                    rank_map = {'أستاذ': 'teacher', 'عامل': 'worker', 'إداري': 'admin', 'مستشار': 'admin', 'مقتصد': 'admin'}
-                    rank = 'worker'
-                    for key, val in rank_map.items():
-                        if key in rank_str:
-                            rank = val
-                            break
+                    # Parse Rank: Use what's in the file, map to system keys
+                    raw_rank = emp.get('rank', '').strip()
+
+                    # Logic: If 'أستاذ' is in rank, it's a teacher.
+                    # If 'عامل مهني' is in rank, it's a worker.
+                    # Everything else (Director, Admin, Steward, Data Entry) is 'admin'.
+
+                    sys_rank = 'admin' # Default to admin for general staff
+
+                    if 'أستاذ' in raw_rank:
+                        sys_rank = 'teacher'
+                    elif 'عامل مهني' in raw_rank:
+                        sys_rank = 'worker'
+
+                    # Validation: Filter out header rows that might have slipped through
+                    # If 'rank' literally contains "الرتبة" or "rank", skip
+                    if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
+                        continue
 
                     # Handle Subject
                     subject = emp.get('subject', '/')
-                    if rank != 'teacher':
+                    if sys_rank != 'teacher':
                         subject = "/"
 
                     # Dates Parsing
@@ -364,13 +374,13 @@ def hr_home(request):
                             'first_name': emp.get('first_name', ''),
                             'full_name': f"{emp.get('last_name', '')} {emp.get('first_name', '')}",
                             'date_of_birth': dob,
-                            'rank': rank,
+                            'rank': sys_rank, # System Category (teacher, worker, admin)
+                            'role': raw_rank, # Store the ACTUAL Excel rank (e.g. عون حفظ بيانات)
                             'subject': subject,
                             'grade': emp.get('grade', ''),
                             'effective_date': eff_date,
                             'phone': emp.get('phone', ''),
                             'email': emp.get('email', ''),
-                            'role': rank
                         }
                     )
                     count += 1
@@ -387,19 +397,26 @@ def hr_home(request):
         elif action == 'add_manual':
             try:
                 edit_id = request.POST.get('edit_id')
+
+                # Determine Rank Category
+                raw_rank = request.POST.get('rank')
+                sys_rank = 'admin'
+                if 'أستاذ' in raw_rank: sys_rank = 'teacher'
+                elif 'عامل مهني' in raw_rank: sys_rank = 'worker'
+
                 data = {
                     'employee_code': request.POST.get('employee_code'),
                     'last_name': request.POST.get('last_name'),
                     'first_name': request.POST.get('first_name'),
                     'full_name': f"{request.POST.get('last_name')} {request.POST.get('first_name')}",
-                    'rank': request.POST.get('rank'),
-                    'subject': request.POST.get('subject') if request.POST.get('rank') == 'teacher' else '/',
+                    'rank': sys_rank,
+                    'role': raw_rank, # Actual Title
+                    'subject': request.POST.get('subject') if sys_rank == 'teacher' else '/',
                     'grade': request.POST.get('grade'),
                     'phone': request.POST.get('phone'),
                     'email': request.POST.get('email'),
                     'date_of_birth': request.POST.get('date_of_birth') or None,
                     'effective_date': request.POST.get('effective_date') or None,
-                    'role': request.POST.get('rank')
                 }
 
                 if edit_id:
@@ -442,9 +459,17 @@ def hr_home(request):
     if rank_filter:
         employees = employees.filter(rank=rank_filter)
 
+    # Counts
+    counts = {
+        'teachers': Employee.objects.filter(rank='teacher').count(),
+        'workers': Employee.objects.filter(rank='worker').count(),
+        'admins': Employee.objects.filter(rank='admin').count()
+    }
+
     context = {
         'employees': employees,
         'current_rank': rank_filter,
+        'counts': counts,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
@@ -540,7 +565,9 @@ def ai_chat_view(request):
 
         ai = AIService()
         # In chat mode, we treat system instruction as generic or manager context depending on mode
-        sys_instr = "أنت مساعد مدير المدرسة."
+        sys_instr = "أنت مساعد مدير المدرسة. دورك هو تقديم استشارات إدارية وتربوية دقيقة. كن رسمياً، مهنياً، ومختصراً."
+        if free_mode:
+            sys_instr += " (وضع حر: لكن حافظ على السياق المدرسي المهني)."
 
         response_text = ai.generate_response(sys_instr, query, rag_enabled=not free_mode, free_mode=free_mode)
         return JsonResponse({'response': response_text})
