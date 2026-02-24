@@ -3,6 +3,7 @@ import json
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Model
 from django.forms.models import model_to_dict
+from django.db.models.fields.files import FieldFile
 
 register = template.Library()
 
@@ -33,13 +34,22 @@ def safe_json(value):
     if isinstance(value, Model):
         # Convert model to dict
         data = model_to_dict(value)
-        # Handle fields that model_to_dict might miss or handle poorly (like ImageField)
+
+        # Handle ImageField/FileField which model_to_dict might leave as objects
+        for key, val in list(data.items()):
+            if isinstance(val, FieldFile):
+                try:
+                    data[key] = val.url
+                except ValueError:
+                    data[key] = ""
+
+        # Also explicitly check for 'photo' attribute if model_to_dict missed it (sometimes exclude editable=False)
         if hasattr(value, 'photo') and value.photo:
-            try:
-                data['photo_url'] = value.photo.url
-            except:
-                data['photo_url'] = ""
-        # Date fields need string conversion handled by DjangoJSONEncoder
+             try:
+                 data['photo_url'] = value.photo.url
+             except:
+                 data['photo_url'] = ""
+
         return json.dumps(data, cls=DjangoJSONEncoder)
 
     return json.dumps(value, cls=DjangoJSONEncoder)

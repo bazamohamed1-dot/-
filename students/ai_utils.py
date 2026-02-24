@@ -2,6 +2,7 @@ from .models import SchoolMemory, SchoolSettings, Employee, TeacherAssignment
 import logging
 import os
 import re
+import random
 from PyPDF2 import PdfReader
 from docx import Document
 from bs4 import BeautifulSoup
@@ -43,18 +44,26 @@ class AIService:
         context = ""
 
         if free_mode:
-            full_prompt = f"""
-            System Role: You are a helpful, creative assistant.
-            Mode: Free Brainstorming (Unrestricted).
-            User Query: {user_query}
-            """
             # Mock Free Response (Simulating dynamic response based on query keywords)
-            if "نصيحة" in user_query or "suggest" in user_query:
-                return f"إليك بعض الأفكار حول '{user_query}': 1. جرب مقاربة جديدة تعتمد على التفاعل. 2. ابحث عن نماذج ناجحة مشابهة. 3. لا تخف من التجريب!"
-            elif "خطة" in user_query or "plan" in user_query:
-                return f"لإعداد خطة حول '{user_query}'، أنصحك بالبدء بتحديد الأهداف بوضوح (SMART)، ثم توزيع الأدوار، وأخيراً تحديد جدول زمن مرن."
+            q_lower = user_query.lower()
+
+            if "نصيحة" in user_query or "suggest" in q_lower or "advice" in q_lower:
+                return f"إليك بعض الأفكار حول '{user_query}': 1. جرب مقاربة جديدة تعتمد على التفاعل. 2. ابحث عن نماذج ناجحة مشابهة. 3. لا تخف من التجريب! التجديد هو سر النجاح."
+            elif "خطة" in user_query or "plan" in q_lower:
+                return f"لإعداد خطة حول '{user_query}'، أنصحك بالبدء بتحديد الأهداف بوضوح (SMART)، ثم توزيع الأدوار، وأخيراً تحديد جدول زمن مرن. لا تنسى التقييم المستمر."
+            elif "تعريف" in user_query or "ما هو" in user_query or "what is" in q_lower:
+                return f"'{user_query}' هو مفهوم واسع، ولكن ببساطة يمكن تعريفه بأنه مجموعة من الممارسات التي تهدف لتحسين الأداء. في سياقنا، يعني التركيز على الجودة والابتكار."
+            elif "مراهقة" in user_query or "adolescen" in q_lower:
+                return "المراهقة مرحلة انتقالية حساسة تتطلب تفهماً عميقاً. أهم ما يحتاجه المراهق هو: 1. الاستماع الفعال. 2. الثقة والاحترام. 3. وضع حدود واضحة بمرونة. التعامل معهم يتطلب صبراً وحكمة لاحتوائهم."
+            elif "عنف" in user_query or "violence" in q_lower:
+                return "العنف المدرسي ظاهرة مقلقة تتطلب تضافر الجهود. الحل يبدأ من التوعية، وتفعيل دور الوساطة المدرسية، وتشجيع الأنشطة اللاصفية التي تفرغ طاقات التلاميذ بشكل إيجابي."
             else:
-                return f"شكراً لسؤالك حول '{user_query}'. هذا موضوع مثير للاهتمام! في الوضع الحر، نركز على الإبداع. ماذا لو نظرنا للأمر من زاوية مختلفة؟"
+                responses = [
+                    f"هذا سؤال مثير للاهتمام حول '{user_query}'. في الوضع الحر، نركز على الإبداع. ماذا لو نظرنا للأمر من زاوية مختلفة؟",
+                    f"حول موضوع '{user_query}'، أعتقد أن الحل يكمن في البساطة. جرب أن تبدأ بخطوات صغيرة وملموسة.",
+                    f"'{user_query}' يتطلب تفكيراً استراتيجياً. هل فكرت في إشراك جميع الأطراف المعنية في الحل؟"
+                ]
+                return random.choice(responses)
 
         if rag_enabled:
             context = self.get_rag_context(user_query)
