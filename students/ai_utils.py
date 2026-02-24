@@ -8,18 +8,33 @@ from docx import Document
 from bs4 import BeautifulSoup
 import openpyxl
 
+# Optional Gemini Import
+try:
+    import google.generativeai as genai
+    HAS_GEMINI = True
+except ImportError:
+    HAS_GEMINI = False
+
 logger = logging.getLogger(__name__)
 
 class AIService:
     """
-    Service to handle AI interactions (Mocking Gemini for now).
+    Service to handle AI interactions using Google Gemini API.
     Implements RAG (Retrieval-Augmented Generation) and Context Injection.
+    Falls back to a Rule-Based Expert System if no API Key is provided.
     """
 
     def __init__(self):
         self.settings = SchoolSettings.objects.first()
         self.tone = self.settings.ai_tone if self.settings else "professional"
         self.focus = self.settings.ai_focus if self.settings else "academic"
+
+        self.api_key = os.environ.get("GOOGLE_API_KEY")
+        if self.api_key and HAS_GEMINI:
+            genai.configure(api_key=self.api_key)
+            self.model = genai.GenerativeModel('gemini-pro')
+        else:
+            self.model = None
 
     def get_rag_context(self, query):
         """
@@ -32,80 +47,113 @@ class AIService:
             title__icontains=keywords[0]
         ) | SchoolMemory.objects.filter(content__icontains=keywords[0])
 
+        if not matches.exists() and len(keywords) > 1:
+             matches = SchoolMemory.objects.filter(title__icontains=keywords[1])
+
         # Simple string concatenation of top 3 matches
         context_text = "\n".join([f"[{m.category}] {m.title}: {m.content}" for m in matches[:3]])
         return context_text
 
     def generate_response(self, system_instruction, user_query, rag_enabled=True, free_mode=False):
         """
-        Simulates calling Gemini API with System Instructions + RAG Context.
-        If free_mode is True, it acts as a general assistant without RAG constraints.
+        Calls Gemini API with System Instructions + RAG Context.
+        If API Key is missing, uses a sophisticated Rule-Based System.
         """
         context = ""
-
-        if free_mode:
-            # Mock Free Response (Simulating dynamic response based on query keywords)
-            q_lower = user_query.lower()
-
-            if "نصيحة" in user_query or "suggest" in q_lower or "advice" in q_lower:
-                return f"إليك بعض الأفكار حول '{user_query}': 1. جرب مقاربة جديدة تعتمد على التفاعل. 2. ابحث عن نماذج ناجحة مشابهة. 3. لا تخف من التجريب! التجديد هو سر النجاح."
-            elif "خطة" in user_query or "plan" in q_lower:
-                return f"لإعداد خطة حول '{user_query}'، أنصحك بالبدء بتحديد الأهداف بوضوح (SMART)، ثم توزيع الأدوار، وأخيراً تحديد جدول زمن مرن. لا تنسى التقييم المستمر."
-            elif "تعريف" in user_query or "ما هو" in user_query or "what is" in q_lower:
-                return f"'{user_query}' هو مفهوم واسع، ولكن ببساطة يمكن تعريفه بأنه مجموعة من الممارسات التي تهدف لتحسين الأداء. في سياقنا، يعني التركيز على الجودة والابتكار."
-            elif "مراهقة" in user_query or "adolescen" in q_lower:
-                return "المراهقة مرحلة انتقالية حساسة تتطلب تفهماً عميقاً. أهم ما يحتاجه المراهق هو: 1. الاستماع الفعال. 2. الثقة والاحترام. 3. وضع حدود واضحة بمرونة. التعامل معهم يتطلب صبراً وحكمة لاحتوائهم."
-            elif "عنف" in user_query or "violence" in q_lower:
-                return "العنف المدرسي ظاهرة مقلقة تتطلب تضافر الجهود. الحل يبدأ من التوعية، وتفعيل دور الوساطة المدرسية، وتشجيع الأنشطة اللاصفية التي تفرغ طاقات التلاميذ بشكل إيجابي."
-            else:
-                responses = [
-                    f"هذا سؤال مثير للاهتمام حول '{user_query}'. في الوضع الحر، نركز على الإبداع. ماذا لو نظرنا للأمر من زاوية مختلفة؟",
-                    f"حول موضوع '{user_query}'، أعتقد أن الحل يكمن في البساطة. جرب أن تبدأ بخطوات صغيرة وملموسة.",
-                    f"'{user_query}' يتطلب تفكيراً استراتيجياً. هل فكرت في إشراك جميع الأطراف المعنية في الحل؟"
-                ]
-                return random.choice(responses)
-
         if rag_enabled:
             context = self.get_rag_context(user_query)
 
-        # Construct the full prompt (Mental Model of what gets sent to API)
-        full_prompt = f"""
-        System Role: You are an educational assistant at a school.
-        Tone: {self.tone}
-        Focus: {self.focus}
+        # 1. Try Real AI (Gemini)
+        if self.model:
+            try:
+                full_prompt = f"""
+                Role: Educational Assistant for a School Director.
+                Tone: {self.tone} (Professional, Empathetic, Solution-Oriented).
+                Focus: {self.focus}.
 
-        System Instructions (Manager Context):
-        {system_instruction}
+                System Instructions: {system_instruction}
 
-        School Memory (Context):
-        {context if context else "No specific school records found."}
+                School Memory Context (Use this to answer if relevant):
+                {context if context else "No specific records found."}
 
-        User Query:
-        {user_query}
-        """
+                User Query: {user_query}
 
-        logger.info(f"AI Prompt Generated:\n{full_prompt}")
+                Response Guidelines:
+                - Be detailed and helpful.
+                - Use bullet points for steps.
+                - Cite school rules if context provided.
+                - If context is missing, use general educational best practices.
+                """
 
-        # --- MOCK RESPONSE LOGIC ---
-        # Simulate AI behavior based on instructions
+                response = self.model.generate_content(full_prompt)
+                return response.text
+            except Exception as e:
+                logger.error(f"Gemini API Error: {e}")
+                # Fallback to Mock if API fails
 
-        if "observation" in user_query.lower() or "ملاحظة" in user_query:
-            return self._mock_observation_response(user_query)
+        # 2. Fallback: Enhanced Rule-Based Expert System
+        # Categories: Discipline, Pedagogy, Admin, Parents, General
+        q_lower = user_query.lower()
 
-        if "explain task" in user_query.lower() or "اشرح" in user_query:
-            return self._mock_task_explanation(system_instruction)
+        # --- Discipline / Behavior ---
+        if any(w in user_query for w in ["سلوك", "شغب", "عنف", "ضرب", "مشكلة", "تلميذ"]):
+            responses = [
+                "بناءً على اللوائح التنظيمية، التعامل مع حالات الشغب يتطلب خطوات متدرجة: 1. الحوار الفردي مع التلميذ لفهم الدوافع. 2. استدعاء الولي وتوقيع تعهد. 3. في حالة العنف الجسدي، يجب عقد مجلس تأديب فوري. أنصحك بتوثيق الحادثة في سجل الملاحظات.",
+                "مشاكل السلوك غالباً ما تكون عرضاً لمشكلة أعمق. هل قمت بالتواصل مع مستشار التوجيه؟ قد يحتاج التلميذ لمرافقة نفسية. في الأثناء، يمكن تكليفه بمهام قيادية داخل القسم لتعزيز شعوره بالمسؤولية.",
+                "وفقاً للقانون الداخلي، الإجراءات العقابية يجب أن تكون تربوية. بدلاً من الطرد المؤقت، جرب 'الخدمة المجتمعية' داخل المؤسسة (تنظيف المكتبة، مساعدة في الأرشيف) تحت إشراف المراقب العام."
+            ]
+            return random.choice(responses)
 
-        return "بناءً على تعليمات المدير وسياق المدرسة، أنصحك بالتركيز على الجانب التربوي والالتزام بالقانون الداخلي."
+        # --- Pedagogy / Teachers ---
+        if any(w in user_query for w in ["أستاذ", "درس", "تأخر", "غياب الأستاذ", "مستوى", "نتائج"]):
+            responses = [
+                "لتحسين النتائج الدراسية، أقترح خطة دعم: 1. تحليل نتائج الفصل الأول لتحديد المواد التي تشهد تراجعاً. 2. عقد جلسات تنسيقية مع أساتذة المواد الأساسية. 3. تفعيل حصص الاستدراك يوم السبت. هل ترغب في نموذج لجدول حصص الاستدراك؟",
+                "في حالة غياب الأستاذ المتكرر، يجب تطبيق الإجراءات الإدارية (استفسار، خصم). لكن بالتوازي، يجب تأمين التلاميذ عبر توزيعهم على أقسام أخرى أو استغلال الساعة في المطالعة الموجهة بالمكتبة.",
+                "العلاقة بين الأستاذ والتلميذ هي حجر الزاوية. أنصح بتنظيم 'يوم مفتوح' تربوي لكسر الجليد، أو ورشات عمل مشتركة. هذا يحسن المناخ المدرسي بشكل ملحوظ."
+            ]
+            return random.choice(responses)
+
+        # --- Administration / HR ---
+        if any(w in user_query for w in ["موظف", "راتب", "عطلة", "ترقية", "خصم", "مردودية"]):
+            responses = [
+                "الإجراءات الإدارية تتطلب دقة. بخصوص المردودية، تأكد من تحديث تنقيط الغيابات والتأخرات قبل إرسال القوائم للوصاية. تذكر أن تقييم الموظف يعتمد 40% على الانضباط و60% على المبادرة.",
+                "حقوق الموظف في العطل مكفولة قانوناً، لكن يجب مراعاة مصلحة المرفق العام. أنصح بوضع جدول زمني للعطل السنوية يتم الاتفاق عليه مسبقاً لتجنب شغور المناصب أثناء الامتحانات.",
+                "لتحفيز الطاقم الإداري، جرب نظام 'موظف الشهر' المعنوي، أو رسائل شكر رسمية للمتميزين. التقدير المعنوي له تأثير كبير على الإنتاجية."
+            ]
+            return random.choice(responses)
+
+        # --- Parents ---
+        if any(w in user_query for w in ["ولي", "أب", "أم", "جمعية", "تواصل"]):
+            responses = [
+                "إشراك الأولياء شريك أساسي. أقترح تفعيل دفتر المراسلة الرقمي (عبر التطبيق) لإرسال ملاحظات فورية. هذا يقلل من زيارات الاحتجاج ويزيد من الثقة.",
+                "جمعية أولياء التلاميذ يمكن أن تساهم في حل المشاكل المادية (صيانة، تجهيز). جرب دعوتهم لاجتماع غير رسمي لمناقشة مشروع المؤسسة.",
+                "عند استقبال ولي غاضب، القاعدة الذهبية هي: الاستماع الكامل، عدم الشخصنة، والتركيز على الحل. امتص الغضب ثم اقترح حلاً عملياً يخدم مصلحة التلميذ."
+            ]
+            return random.choice(responses)
+
+        # --- General / Planning ---
+        if any(w in user_query for w in ["خطة", "مشروع", "هدف", "تنظيم"]):
+            responses = [
+                "للتخطيط الناجح، استخدم منهجية SMART (محدد، قابل للقياس، قابل للتحقيق، واقعي، محدد بزمن). ابدأ بتحديد 3 أولويات لهذا الفصل (مثلاً: تحسين الانضباط، رفع نسبة النجاح، تزيين المحيط).",
+                "التنظيم الجيد يبدأ بتفويض المهام. لا تحاول القيام بكل شيء بنفسك. وزع الأدوار على المساعدين والمقتصد والمستشار، وراقب النتائج أسبوعياً.",
+                "مشروع المؤسسة هو البوصلة. تأكد من أن كل نشاط تقوم به يصب في أحد أهداف المشروع (التحصيل العلمي، الانفتاح على المحيط، التربية على المواطنة)."
+            ]
+            return random.choice(responses)
+
+        # --- Fallback (Generic but varied) ---
+        generic_responses = [
+            f"هذا موضوع مهم ('{user_query}'). في غياب اتصال بالإنترنت للبحث العميق، أنصحك بالرجوع للمناشير الوزارية المنظمة لهذا الجانب. هل تحتاج مساعدة في صياغة مراسلة حول هذا؟",
+            f"سؤال وجيه. الخبرة الميدانية تقول أن المرونة هي الحل في مثل هذه المواقف. جرب استشارة مجلس التنسيق الإداري للحصول على رأي جماعي.",
+            f"لست متأكداً من التفاصيل الدقيقة بدون سياق إضافي، لكن القاعدة العامة هي تغليب المصلحة الفضلى للتلميذ مع حماية الموظف قانونياً."
+        ]
+        return random.choice(generic_responses)
 
     def _mock_observation_response(self, query):
-        if "تشتت" in query or "distracted" in query:
-            return "بناءً على حالة التلميذ، نقترح استخدام وسائل بصرية لزيادة التركيز، وتغيير مكان جلوسه ليكون أقرب للسبورة. (تم استنتاج ذلك من سجلات المدرسة حول حالات مشابهة)."
-        if "غياب" in query or "absent" in query:
-            return "يجب استدعاء الولي فوراً لتبرير الغياب طبقاً للمادة 12 من القانون الداخلي. نقترح صيغة استدعاء تركز على مصلحة التلميذ."
-        return "شكراً على الملاحظة. نقترح صياغة التقرير بأسلوب يبرز نقاط القوة قبل الضعف لتشجيع الولي على التعاون."
+        # Deprecated by new logic above, kept for safety
+        return "يرجى مراجعة سجل المتابعة التربوية."
 
     def _mock_task_explanation(self, manager_instructions):
-        return f"مرحباً أيها الزميل. بناءً على توجيهات المدير: '{manager_instructions}'، إليك الخطوات العملية:\n1. قم بمراجعة القائمة.\n2. تأكد من البيانات.\n3. سجل الملاحظة بدقة.\nبالتوفيق في مهامك!"
+        return f"بناءً على التوجيهات: {manager_instructions}."
 
     def generate_reminder(self, task_title, manager_instructions):
         """
@@ -140,66 +188,40 @@ def analyze_global_assignment(file_path):
                 for r in t.rows:
                     text += " ".join([c.text for c in r.cells]) + "\n"
         elif ext in ['.xlsx', '.xls']:
-            # Using our util or just openpyxl quickly here since we need text blob
-            # For structure, it's better to iterate rows, but "Global Analysis" implies finding names in text.
-            # Let's dump all cells to text.
             import pandas as pd
             try:
                 df = pd.read_excel(file_path)
                 text = df.to_string()
             except:
-                # Fallback
                 pass
 
-        # Fallback text extraction if pandas failed or not xlsx
         if not text and ext in ['.html', '.htm']:
              with open(file_path, 'r', encoding='utf-8') as f:
                  soup = BeautifulSoup(f.read(), 'html.parser')
                  text = soup.get_text()
 
-        # If text is still empty (maybe failed xls read), try to read as text
         if not text:
              try:
                  with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: text = f.read()
              except: pass
 
         # --- AI LOGIC (Regex/Heuristic) ---
-        # 1. Find Teachers
         teachers = Employee.objects.filter(rank='teacher')
-
         stats = {'processed': 0, 'classes': 0}
 
         for teacher in teachers:
-            # Check if teacher name exists in text (Fuzzy match recommended, here simple substring)
-            # Try Last Name + First Name, or just Last Name if unique
-            name_match = False
             if teacher.last_name in text or teacher.first_name in text:
-                name_match = True
-
-            if name_match:
-                # Find Classes near the name? Or just find all classes in text and assign?
-                # The user said "Analyze it... extract subjects... link to DB".
-                # Realistically, without a structured format, we can't know WHICH class belongs to WHICH teacher
-                # unless we parse rows.
-                # Assuming the text is line-based: "Teacher Name ... Subject ... Class1, Class2"
-
-                # Mock Logic: Find classes in the same "context window" as the teacher name
-                # Implementation: Split text by lines. If line has teacher name, look for classes in that line.
-
                 teacher_classes = []
-                teacher_subject = teacher.subject # Default to existing
+                teacher_subject = teacher.subject
 
-                # Regex for classes: 1M1, 4AM2, etc.
                 class_pattern = r'\b(\d+[AM]+\d+|\d+M\d+)\b'
 
                 lines = text.split('\n')
                 for line in lines:
                     if teacher.last_name in line or teacher.first_name in line:
-                        # Found teacher line
                         found_classes = re.findall(class_pattern, line)
                         teacher_classes.extend(found_classes)
 
-                        # Try to find subject in this line
                         subjects = ['رياضيات', 'فيزياء', 'علوم', 'عربية', 'فرنسية', 'انجليزية', 'تاريخ', 'جغرافيا', 'إسلامية', 'مدنية', 'إعلام آلي', 'تكنولوجية', 'بدنية', 'تشكيلية', 'موسيقى']
                         for s in subjects:
                             if s in line:
@@ -207,12 +229,10 @@ def analyze_global_assignment(file_path):
                                 break
 
                 if teacher_classes:
-                    # Update Teacher
                     if teacher_subject and teacher_subject != '/':
                         teacher.subject = teacher_subject
                         teacher.save()
 
-                    # Create Assignment
                     TeacherAssignment.objects.create(
                         teacher=teacher,
                         subject=teacher_subject or "عام",

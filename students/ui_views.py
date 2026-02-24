@@ -316,26 +316,22 @@ def hr_home(request):
 
         if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
+            # Save strictly to disk for processing
+            temp_path = None
             try:
-                from .import_utils import extract_rows_from_file
-                rows_generator = extract_rows_from_file(file)
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
+                    for chunk in file.chunks():
+                        tmp.write(chunk)
+                    temp_path = tmp.name
+
+                from .import_utils import parse_hr_file
+                employees_data = parse_hr_file(temp_path)
 
                 count = 0
-                for i, row in enumerate(rows_generator):
-                    # Skip first 4 rows (0,1,2,3), data starts at 4 (5th row)
-                    if i < 4: continue
-                    if not row or len(row) < 4: continue
-
-                    # Column Mapping (0-based)
-                    # 1: Code, 2: Surname, 3: Name, 4: DOB, 5: Rank, 6: Subject, 7: Grade, 8: Effective Date
-
-                    code = str(row[1]).strip() if len(row) > 1 and row[1] else None
-                    surname = str(row[2]).strip() if len(row) > 2 and row[2] else ""
-                    name = str(row[3]).strip() if len(row) > 3 and row[3] else ""
-
-                    if not code or not surname: continue
-
-                    rank_str = str(row[5]).strip() if len(row) > 5 and row[5] else "worker"
+                for emp in employees_data:
+                    # Parse Rank
+                    rank_str = emp.get('rank', 'worker')
                     rank_map = {'أستاذ': 'teacher', 'عامل': 'worker', 'إداري': 'admin', 'مستشار': 'admin', 'مقتصد': 'admin'}
                     rank = 'worker'
                     for key, val in rank_map.items():
@@ -344,52 +340,48 @@ def hr_home(request):
                             break
 
                     # Handle Subject
-                    subject = str(row[6]).strip() if len(row) > 6 and row[6] else "/"
+                    subject = emp.get('subject', '/')
                     if rank != 'teacher':
                         subject = "/"
-                    elif not subject or subject == "None":
-                        subject = "/"
 
-                    # Dates
+                    # Dates Parsing
                     def parse_d(val):
                         if not val: return None
                         if isinstance(val, (date, datetime)): return val
-                        if isinstance(val, float):
-                             try: return date.fromordinal(date(1900, 1, 1).toordinal() + int(val) - 2)
-                             except: pass
                         try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
                         except: pass
                         try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
                         except: pass
                         return None
 
-                    dob = parse_d(row[4]) if len(row)>4 else None
-                    eff_date = parse_d(row[8]) if len(row)>8 else None
-
-                    # Phone/Email (Add logic to pick if exist, else empty)
-                    phone = str(row[9]).strip() if len(row) > 9 and row[9] else ""
-                    email = str(row[10]).strip() if len(row) > 10 and row[10] else ""
+                    dob = parse_d(emp.get('date_of_birth'))
+                    eff_date = parse_d(emp.get('effective_date'))
 
                     Employee.objects.update_or_create(
-                        employee_code=code,
+                        employee_code=emp.get('employee_code'),
                         defaults={
-                            'last_name': surname,
-                            'first_name': name,
-                            'full_name': f"{surname} {name}",
+                            'last_name': emp.get('last_name', ''),
+                            'first_name': emp.get('first_name', ''),
+                            'full_name': f"{emp.get('last_name', '')} {emp.get('first_name', '')}",
                             'date_of_birth': dob,
                             'rank': rank,
                             'subject': subject,
-                            'grade': str(row[7]).strip() if len(row) > 7 and row[7] else "",
+                            'grade': emp.get('grade', ''),
                             'effective_date': eff_date,
-                            'phone': phone,
-                            'email': email,
+                            'phone': emp.get('phone', ''),
+                            'email': emp.get('email', ''),
                             'role': rank
                         }
                     )
                     count += 1
+
                 messages.success(request, f"تم استيراد/تحديث {count} موظف.")
             except Exception as e:
                 messages.error(request, f"خطأ في الملف: {e}")
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try: os.remove(temp_path)
+                    except: pass
             return redirect('hr_home')
 
         elif action == 'add_manual':

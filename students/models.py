@@ -2,6 +2,7 @@ from django.db import models
 from datetime import date
 from django.contrib.auth.models import User
 import os
+from django.conf import settings
 
 def student_photo_path(instance, filename):
     # Extract extension or default to .jpg
@@ -31,14 +32,39 @@ class Student(models.Model):
     photo = models.ImageField(upload_to=student_photo_path, null=True, blank=True, verbose_name="الصورة")
 
     def save(self, *args, **kwargs):
-        # Handle Force Photo Replacement
-        # If we have a PK, this is an update.
+        # Handle Force Photo Replacement and Renaming
         if self.pk:
             try:
                 old = Student.objects.get(pk=self.pk)
+
+                # Case 1: Photo Replacement (Delete old file)
                 if old.photo and self.photo and old.photo != self.photo:
                     if os.path.isfile(old.photo.path):
-                        os.remove(old.photo.path)
+                        try: os.remove(old.photo.path)
+                        except: pass
+
+                # Case 2: ID Change (Rename old file to match new ID)
+                if old.student_id_number != self.student_id_number and self.photo:
+                    # Rename only if the photo file itself hasn't changed (or if it has, upload_to handles it)
+                    # This logic primarily handles keeping the file sync if we just change ID.
+                    if old.photo == self.photo and os.path.isfile(old.photo.path):
+                        old_path = old.photo.path
+                        root, ext = os.path.splitext(old_path)
+
+                        # New name logic: students_photos/{new_id}{ext}
+                        new_name = f'students_photos/{self.student_id_number}{ext}'
+                        new_full_path = os.path.join(settings.MEDIA_ROOT, new_name)
+
+                        try:
+                            # Ensure directory exists
+                            os.makedirs(os.path.dirname(new_full_path), exist_ok=True)
+
+                            os.rename(old_path, new_full_path)
+                            # Update the field to point to the new name relative to MEDIA_ROOT
+                            self.photo.name = new_name
+                        except OSError as e:
+                            print(f"Error renaming photo: {e}")
+
             except Student.DoesNotExist:
                 pass
 
