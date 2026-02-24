@@ -417,7 +417,6 @@ def hr_home(request):
             if file:
                 try:
                     # Save temporary file for analysis
-                    import os, tempfile
                     from .ai_utils import analyze_global_assignment
 
                     with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:

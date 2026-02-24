@@ -814,7 +814,10 @@ async function applyPendingUpdates() {
     if(Array.isArray(local)) {
         local.forEach(u => {
             let body = u.body;
-            if (typeof body === 'string') try { body = JSON.parse(body); } catch(e){}
+            if (typeof body === 'string') {
+                try { body = JSON.parse(body); }
+                catch(e){ console.warn("Failed to parse local update body:", e, u); }
+            }
 
             const url = u.url || "";
             const method = u.method || "GET";
