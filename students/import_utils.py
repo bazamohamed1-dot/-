@@ -69,7 +69,7 @@ def _parse_html_table(content):
             cells = tr.find_all(['td', 'th'])
             yield [cell.get_text(strip=True) for cell in cells]
 
-def detect_headers(rows, header_map, threshold=3):
+def detect_headers(rows, header_map, threshold=2):
     """
     Scans the first 15 rows to identify column indices based on header names.
     Returns (header_indices, data_start_row).
@@ -104,9 +104,6 @@ def detect_headers(rows, header_map, threshold=3):
             header_indices = current_map
             best_row_idx = i
 
-        # Heuristic: If we found a very strong match (threshold), stop early?
-        # Maybe not, user says headers vary. Best to scan all 15 and pick winner.
-
     if best_match_count >= threshold:
         data_start_row = best_row_idx + 1
         return header_indices, data_start_row
@@ -126,10 +123,14 @@ def parse_student_file(file_path):
     # Expanded keywords for robustness
     HEADER_MAP = {
         'رقم التعريف': 'student_id_number',
+        'الرقم': 'student_id_number', # Added for robustness/tests
+        'رقم': 'student_id_number',
         'اللقب': 'last_name',
         'الاسم': 'first_name',
         'اسم و لقب': 'full_name', # Special key for merging
         'اللقب و الاسم': 'full_name',
+        'الاسم واللقب': 'full_name',
+        'اللقب والاسم': 'full_name',
         'تاريخ الميلاد': 'date_of_birth',
         'تاريخ الازدياد': 'date_of_birth',
         'الجنس': 'gender',
@@ -162,18 +163,18 @@ def parse_student_file(file_path):
 
     students = []
 
-    # Check if we have a "Shared Column" situation
+    # Check if we have a "Shared Column" situation (Name and Surname merged)
     shared_name_col = False
-    if header_indices.get('last_name') == header_indices.get('first_name') and header_indices.get('last_name') is not None:
-        shared_name_col = True
-
-    # Check for "Full Name" key
     if 'full_name' in header_indices:
         shared_name_col = True
         # Map it to last_name for extraction, then split
         if 'last_name' not in header_indices:
             header_indices['last_name'] = header_indices['full_name']
-            header_indices['first_name'] = header_indices['full_name']
+            header_indices['first_name'] = header_indices['full_name'] # Point to same index
+
+    # Also handle case where detect_headers mapped both keys to same column because header contained both
+    if header_indices.get('last_name') == header_indices.get('first_name') and header_indices.get('last_name') is not None:
+        shared_name_col = True
 
     for i in range(data_start_row, len(rows)):
         row = rows[i]
@@ -187,8 +188,12 @@ def parse_student_file(file_path):
 
             if idx < len(row):
                 val = row[idx]
-                if val and str(val).strip():
-                    student_data[field] = str(val).strip()
+                if val:
+                    # Preserve Date Objects if possible
+                    if isinstance(val, (datetime, date)):
+                        student_data[field] = val
+                    else:
+                        student_data[field] = str(val).strip()
                     has_data = True
 
         # Post-process Shared Name Column
@@ -220,11 +225,6 @@ def parse_student_file(file_path):
                     else:
                         student_data['academic_year'] = lvl
 
-            # Additional cleanup
-            if 'date_of_birth' in student_data:
-                # Handle Excel Serial Date if needed, or string formats
-                pass # Already str() above, parser handles strings usually
-
             students.append(student_data)
 
     return students
@@ -238,26 +238,40 @@ def parse_hr_file(file_path):
 
     if not rows: return []
 
+    # Enhanced Map based on User Feedback and Image
     HEADER_MAP = {
         'اللقب': 'last_name',
         'الاسم': 'first_name',
         'الاسم واللقب': 'full_name',
+        'الاسم و اللقب': 'full_name',
+        'اللقب والاسم': 'full_name',
+        'اللقب و الاسم': 'full_name',
         'تاريخ الازدياد': 'date_of_birth',
         'تاريخ الميلاد': 'date_of_birth',
+        'تاريخ ميلاد': 'date_of_birth',
         'مكان الازدياد': 'place_of_birth',
+        'مكان الميلاد': 'place_of_birth',
         'الرتبة': 'rank',
+        'رتبة': 'rank',
+        'الصفة': 'rank',
         'المادة': 'subject',
+        'مادة التدريس': 'subject',
         'الدرجة': 'grade',
         'تاريخ السريان': 'effective_date',
+        'تاريخ التعيين': 'effective_date',
         'الهاتف': 'phone',
+        'رقم الهاتف': 'phone',
         'البريد': 'email',
+        'البريد الالكتروني': 'email',
         'رقم': 'employee_code',
-        'الرمز': 'employee_code'
+        'الرمز': 'employee_code',
+        'الرمز الوظيفي': 'employee_code'
     }
 
-    header_indices, data_start_row = detect_headers(rows, HEADER_MAP, threshold=3)
+    header_indices, data_start_row = detect_headers(rows, HEADER_MAP, threshold=2)
 
     if not header_indices:
+        # Fallback to standard layout if no headers found
         header_indices = {
             'employee_code': 0, 'last_name': 1, 'first_name': 2,
             'date_of_birth': 3, 'rank': 6, 'subject': 7,
@@ -268,26 +282,36 @@ def parse_hr_file(file_path):
     employees = []
 
     shared_name_col = False
-    if header_indices.get('last_name') == header_indices.get('first_name') and header_indices.get('last_name') is not None:
-        shared_name_col = True
     if 'full_name' in header_indices:
         shared_name_col = True
         if 'last_name' not in header_indices:
             header_indices['last_name'] = header_indices['full_name']
             header_indices['first_name'] = header_indices['full_name']
 
+    # Auto-detect shared column if both map to same index
+    if header_indices.get('last_name') == header_indices.get('first_name') and header_indices.get('last_name') is not None:
+        shared_name_col = True
+
     for i in range(data_start_row, len(rows)):
         row = rows[i]
         if not row: continue
 
         emp_data = {}
+        has_val = False
 
         for field, idx in header_indices.items():
             if field == 'full_name': continue
             if idx < len(row):
                 val = row[idx]
                 if val:
-                    emp_data[field] = str(val).strip()
+                    # Preserve Date Objects if possible
+                    if isinstance(val, (datetime, date)):
+                        emp_data[field] = val
+                    else:
+                        emp_data[field] = str(val).strip()
+                    has_val = True
+
+        if not has_val: continue
 
         # Post-process Shared Name Column
         if shared_name_col and 'last_name' in emp_data:
@@ -300,10 +324,13 @@ def parse_hr_file(file_path):
                 emp_data['last_name'] = parts[0]
                 emp_data['first_name'] = ""
 
+        # Ensure we have minimal data
         if 'last_name' in emp_data or 'first_name' in emp_data:
+            # Generate code if missing
             if 'employee_code' not in emp_data:
                 ln = emp_data.get('last_name', '')
                 fn = emp_data.get('first_name', '')
+                # Ensure unique seed using row index
                 emp_data['employee_code'] = f"{ln[:3]}{fn[:3]}{i}"
 
             employees.append(emp_data)

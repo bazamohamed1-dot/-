@@ -1,5 +1,5 @@
 from django.test import TestCase
-from students.import_utils import parse_student_file, parse_xlsx
+from students.import_utils import parse_student_file # parse_xlsx removed
 from students.models import Student
 import openpyxl
 import io
@@ -51,7 +51,7 @@ class RobustImportTest(TestCase):
             # So here: level is None. class_code is "1AM 1".
             # It should infer "1AM".
 
-            self.assertEqual(s['academic_year'], '1AM')
+            self.assertEqual(s['academic_year'], '1 متوسط') # Logic converts 1AM to Arabic
             self.assertEqual(s['class_name'], '1AM 1')
 
         finally:
@@ -85,9 +85,9 @@ class RobustImportTest(TestCase):
             data = parse_student_file(fpath)
             self.assertEqual(len(data), 1)
             s = data[0]
-            # "JustClass" -> parts[0] is "JustClass". So it infers "JustClass" as level?
-            # The logic is: level = parts[0]
-            self.assertEqual(s['academic_year'], 'JustClass')
+            # New logic is strict: only infers level if digits found (e.g. 1AM).
+            # "JustClass" has no digit, so no inference.
+            self.assertNotIn('academic_year', s)
         finally:
              if os.path.exists(fpath):
                 os.remove(fpath)
