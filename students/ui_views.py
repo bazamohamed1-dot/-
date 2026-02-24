@@ -317,28 +317,52 @@ def hr_home(request):
         if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
             try:
-                # Try handling as standard XLSX (openpyxl)
                 rows_generator = []
+                headers = []
+
+                # Try standard XLSX (openpyxl)
                 try:
                     wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
                     ws = wb.active
-                    rows_generator = ws.iter_rows(min_row=2, values_only=True)
+                    # Row 4 is header, data starts at 5
+                    rows_generator = ws.iter_rows(min_row=5, values_only=True)
+                    # Check if empty
                 except Exception:
-                    # Fallback: Try reading as legacy XLS using xlrd
+                    file.seek(0)
+                    content = file.read()
+
+                    # Try Legacy XLS (xlrd)
                     try:
                         import xlrd
-                        file.seek(0)
-                        wb = xlrd.open_workbook(file_contents=file.read())
+                        wb = xlrd.open_workbook(file_contents=content)
                         sheet = wb.sheet_by_index(0)
-                        rows_generator = (sheet.row_values(r) for r in range(1, sheet.nrows))
-                    except Exception as e2:
-                        raise Exception(f"File format not supported. Please upload .xlsx or .xls. Error: {e2}")
+                        # Data starts at row 4 (index 4 in 0-based if header is row 4? User said row 4 has headers)
+                        # Assuming header is index 3 (4th row), data starts index 4 (5th row)
+                        rows_generator = (sheet.row_values(r) for r in range(4, sheet.nrows))
+                    except Exception:
+                         # Try HTML Table (BeautifulSoup)
+                         try:
+                             from bs4 import BeautifulSoup
+                             soup = BeautifulSoup(content, 'html.parser')
+                             table = soup.find('table')
+                             if table:
+                                 rows = table.find_all('tr')
+                                 # Skip first 4 rows (header is 4th, data starts 5th)
+                                 rows_generator = []
+                                 for tr in rows[4:]:
+                                     cells = tr.find_all(['td', 'th'])
+                                     rows_generator.append([cell.get_text(strip=True) for cell in cells])
+                             else:
+                                 raise Exception("No table found in HTML")
+                         except Exception as e3:
+                             raise Exception(f"Format not supported. Errors: {e3}")
 
                 count = 0
-                # Expecting: Photo, Code, Surname, Name, DOB, Rank, Subject, Grade, Effective Date
                 for row in rows_generator:
-                    # Robust check: need at least Code, Surname, Name
                     if not row or len(row) < 4: continue
+
+                    # Column Mapping based on standard Algerian Ministerial Export format:
+                    # 0: ID/Count, 1: Code, 2: Surname, 3: Name, 4: DOB, 5: Rank, 6: Subject, 7: Grade, 8: Effective Date
 
                     code = str(row[1]).strip() if row[1] else None
                     surname = str(row[2]).strip() if row[2] else ""
@@ -346,38 +370,34 @@ def hr_home(request):
 
                     if not code or not surname: continue
 
-                    # Map Rank
                     rank_str = str(row[5]).strip() if len(row) > 5 and row[5] else "worker"
-                    rank_map = {'أستاذ': 'teacher', 'عامل': 'worker', 'إداري': 'admin'}
-                    rank = rank_map.get(rank_str, 'worker') # Default to worker
+                    rank_map = {'أستاذ': 'teacher', 'عامل': 'worker', 'إداري': 'admin', 'مستشار': 'admin', 'مقتصد': 'admin'}
+                    rank = 'worker'
+                    for key, val in rank_map.items():
+                        if key in rank_str:
+                            rank = val
+                            break
 
-                    # Parse Date
-                    dob = None
-                    if len(row) > 4 and row[4]:
-                        val = row[4]
-                        if isinstance(val, (date, datetime)):
-                             dob = val
-                        elif isinstance(val, float): # Excel Serial Date
-                             try:
-                                 dob = date.fromordinal(date(1900, 1, 1).toordinal() + int(val) - 2)
+                    # Dates
+                    def parse_d(val):
+                        if not val: return None
+                        if isinstance(val, (date, datetime)): return val
+                        if isinstance(val, float):
+                             try: return date.fromordinal(date(1900, 1, 1).toordinal() + int(val) - 2)
                              except: pass
-                        else:
-                             try: dob = datetime.strptime(str(val), '%Y-%m-%d').date()
-                             except: pass
+                        try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
+                        except: pass
+                        try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
+                        except: pass
+                        return None
 
-                    # Parse Effective Date
-                    eff_date = None
-                    if len(row) > 8 and row[8]:
-                        val = row[8]
-                        if isinstance(val, (date, datetime)):
-                             eff_date = val
-                        elif isinstance(val, float):
-                             try:
-                                 eff_date = date.fromordinal(date(1900, 1, 1).toordinal() + int(val) - 2)
-                             except: pass
-                        else:
-                             try: eff_date = datetime.strptime(str(val), '%Y-%m-%d').date()
-                             except: pass
+                    dob = parse_d(row[4]) if len(row)>4 else None
+                    eff_date = parse_d(row[8]) if len(row)>8 else None
+
+                    # Phone/Email are likely not in the file based on typical exports,
+                    # but if user added them, let's assume they are at the end: 9 and 10
+                    phone = str(row[9]).strip() if len(row) > 9 and row[9] else ""
+                    email = str(row[10]).strip() if len(row) > 10 and row[10] else ""
 
                     Employee.objects.update_or_create(
                         employee_code=code,
@@ -390,7 +410,9 @@ def hr_home(request):
                             'subject': str(row[6]).strip() if len(row) > 6 and row[6] else "",
                             'grade': str(row[7]).strip() if len(row) > 7 and row[7] else "",
                             'effective_date': eff_date,
-                            'role': rank # Sync legacy role
+                            'phone': phone,
+                            'email': email,
+                            'role': rank
                         }
                     )
                     count += 1
@@ -520,6 +542,13 @@ def guidance_home(request):
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
     return render(request, 'students/guidance.html', context)
+
+def ai_manual_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
+        return redirect('dashboard')
+
+    return render(request, 'students/ai_manual.html')
 
 # --- AI & Task UI Views ---
 

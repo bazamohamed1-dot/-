@@ -347,6 +347,11 @@
                     <i class="fas fa-brain"></i> التحكم في AI
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="{% url 'ai_manual_view' %}" class="nav-link {% if 'ai/manual' in request.path %}active{% endif %}" style="color: #fbbf24;">
+                    <i class="fas fa-info-circle"></i> شرح الذكاء الاصطناعي
+                </a>
+            </li>
             {% endif %}
         </ul>
     </aside>

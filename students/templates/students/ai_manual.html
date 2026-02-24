@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}دليل الذكاء الاصطناعي{% endblock %}
+{% block header_title %}دليل استخدام أدوات الذكاء الاصطناعي{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <h2 style="color: var(--primary);"><i class="fas fa-brain"></i> كيف يعمل الذكاء الاصطناعي في نظام تسيير المتوسطة؟</h2>
+    <p style="font-size: 1.1rem; line-height: 1.8; color: #475569;">
+        يحتوي النظام على مساعد ذكي يعتمد على تقنية <strong>RAG (Retrieval-Augmented Generation)</strong>، مما يعني أنه لا يكتفي بالمعلومات العامة، بل يعتمد على "ذاكرة المؤسسة" (القانون الداخلي، المناهج، الأرشيف) التي تقوم أنت بتغذيتها.
+    </p>
+</div>
+
+<div class="grid-2">
+    <!-- AI Control Panel -->
+    <div class="card">
+        <h3 style="color: #0f172a;"><i class="fas fa-memory"></i> 1. واجهة التحكم في AI (ذاكرة المدرسة)</h3>
+        <p style="color: #64748b;">هذا هو "مخ" النظام. كل ملف ترفعه هنا يصبح جزءاً من معرفة المساعد الذكي.</p>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>مثال:</strong> رفع ملف PDF للقانون الداخلي للمؤسسة.</li>
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>الفائدة:</strong> عندما يسأل أستاذ عن إجراء تأديبي، سيجيبه النظام بناءً على المادة القانونية الموجودة في الملف الذي رفعته.</li>
+        </ul>
+    </div>
+
+    <!-- HR Assignment -->
+    <div class="card">
+        <h3 style="color: #0f172a;"><i class="fas fa-users-cog"></i> 2. تحليل إسناد الأساتذة</h3>
+        <p style="color: #64748b;">استخراج آلي للأقسام والمواد من وثائق الإسناد.</p>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>كيف يعمل:</strong> ترفع صورة أو ملف Excel لجدول توقيت الأستاذ.</li>
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>النتيجة:</strong> يقرأ النظام (مثل: 1M1, 4AM2) ويربط هذه الأقسام بحساب الأستاذ تلقائياً، لتظهر له قوائم التلاميذ مباشرة.</li>
+        </ul>
+    </div>
+
+    <!-- Guidance -->
+    <div class="card">
+        <h3 style="color: #0f172a;"><i class="fas fa-compass"></i> 3. مساعد الإرشاد والتوجيه</h3>
+        <p style="color: #64748b;">تصميم استبيانات ومخططات توجيهية.</p>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>مثال:</strong> تكتب الموضوع "العنف المدرسي".</li>
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>النتيجة:</strong> يقترح عليك النظام 10 أسئلة دقيقة موجهة للتلاميذ، ومحاور للنقاش مع الأولياء.</li>
+        </ul>
+    </div>
+
+    <!-- Tasks -->
+    <div class="card">
+        <h3 style="color: #0f172a;"><i class="fas fa-tasks"></i> 4. نظام المهام الذكي</h3>
+        <p style="color: #64748b;">تحويل التعليمات الإدارية إلى خطوات تنفيذية.</p>
+        <ul style="list-style: none; padding: 0;">
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>المدير يكتب:</strong> "مراجعة ملفات المنحة".</li>
+            <li style="margin-bottom: 10px;"><i class="fas fa-check-circle" style="color: green;"></i> <strong>الموظف يرى:</strong> خطوات مفصلة: "1. التأكد من كشف الراتب. 2. مراجعة الحالة العائلية..." (بناءً على ما تعلمه النظام من الوثائق السابقة).</li>
+        </ul>
+    </div>
+</div>
+
+<div class="card mt-4" style="background: #eff6ff; border: 1px solid #bfdbfe;">
+    <h3><i class="fas fa-lightbulb"></i> نصيحة للمدير</h3>
+    <p>كلما قمت بإثراء "ذاكرة المدرسة" بملفات وتقارير سابقة، زادت دقة وذكاء النظام في مساعدة طاقمك.</p>
+</div>
+{% endblock %}
