@@ -85,6 +85,7 @@ urlpatterns = [
     # AI & Task UI
     path('tasks/', ui_views.tasks_view, name='tasks_view'),
     path('ai/control/', ui_views.ai_control_panel, name='ai_control_panel'),
+    path('ai/chat/', ui_views.ai_chat_view, name='ai_chat_view'),
     path('ai/observations/', ui_views.observations_view, name='observations_view'),
     path('ai/manual/', ui_views.ai_manual_view, name='ai_manual_view'),
 

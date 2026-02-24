@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}محادثة الذكاء الاصطناعي{% endblock %}
+{% block header_title %}محادثة الذكاء الاصطناعي{% endblock %}
+
+{% block content %}
+<div class="card mb-4" style="height: 80vh; display: flex; flex-direction: column;">
+    <!-- Chat Header / Toggle -->
+    <div style="padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-radius: 12px 12px 0 0;">
+        <h3 style="margin: 0; color: #334155;"><i class="fas fa-comments"></i> المساعد الذكي</h3>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-weight: bold; color: #64748b;">الوضع:</span>
+            <label class="switch" style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                <span id="modeLabel" style="color: var(--primary);">سياق المدرسة (RAG)</span>
+                <input type="checkbox" id="modeToggle" onchange="toggleMode()" style="width: 20px; height: 20px;">
+            </label>
+        </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div id="chatArea" style="flex: 1; overflow-y: auto; padding: 20px; background: white;">
+        <div class="chat-message ai">
+            <div class="avatar"><i class="fas fa-robot"></i></div>
+            <div class="bubble">مرحباً بك أيها المدير. أنا هنا لمساعدتك. في الوضع الافتراضي أعتمد على وثائق المدرسة. يمكنك تفعيل "الوضع الحر" للنقاش العام.</div>
+        </div>
+    </div>
+
+    <!-- Input Area -->
+    <div style="padding: 15px; border-top: 1px solid #e2e8f0; background: #f8fafc; border-radius: 0 0 12px 12px; display: flex; gap: 10px;">
+        <input type="text" id="userQuery" class="form-control" placeholder="اكتب سؤالك هنا..." style="flex: 1; padding: 12px; border-radius: 20px; border: 1px solid #cbd5e1;" onkeypress="if(event.key === 'Enter') sendQuery()">
+        <button onclick="sendQuery()" class="btn btn-primary" style="border-radius: 50%; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center;"><i class="fas fa-paper-plane"></i></button>
+    </div>
+</div>
+
+<style>
+    .chat-message { display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start; }
+    .chat-message.user { flex-direction: row-reverse; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; display: flex; justify-content: center; align-items: center; color: #64748b; font-size: 1.2rem; }
+    .chat-message.ai .avatar { background: #e0f2fe; color: #0369a1; }
+    .chat-message.user .avatar { background: #dcfce7; color: #166534; }
+
+    .bubble { max-width: 70%; padding: 12px 18px; border-radius: 18px; line-height: 1.5; font-size: 1rem; position: relative; }
+    .chat-message.ai .bubble { background: #f1f5f9; color: #334155; border-top-right-radius: 0; }
+    .chat-message.user .bubble { background: var(--primary); color: white; border-top-left-radius: 0; }
+</style>
+
+<script>
+    let isFreeMode = false;
+
+    function toggleMode() {
+        isFreeMode = document.getElementById('modeToggle').checked;
+        const label = document.getElementById('modeLabel');
+        if (isFreeMode) {
+            label.innerText = "بحث حر (Free)";
+            label.style.color = "#d97706";
+        } else {
+            label.innerText = "سياق المدرسة (RAG)";
+            label.style.color = "var(--primary)";
+        }
+    }
+
+    async function sendQuery() {
+        const input = document.getElementById('userQuery');
+        const text = input.value.trim();
+        if (!text) return;
+
+        // Add User Message
+        addMessage(text, 'user');
+        input.value = '';
+
+        // Add Loading
+        const loadingId = addMessage('جاري التفكير...', 'ai', true);
+
+        try {
+            const formData = new FormData();
+            formData.append('query', text);
+            formData.append('free_mode', isFreeMode);
+
+            const res = await fetch("{% url 'ai_chat_view' %}", {
+                method: 'POST',
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                body: formData
+            });
+
+            const data = await res.json();
+
+            // Remove Loading
+            document.getElementById(loadingId).remove();
+
+            // Add AI Response
+            addMessage(data.response, 'ai');
+
+        } catch (e) {
+            document.getElementById(loadingId).innerText = "حدث خطأ في الاتصال.";
+        }
+    }
+
+    function addMessage(text, sender, isLoading=false) {
+        const area = document.getElementById('chatArea');
+        const div = document.createElement('div');
+        div.className = `chat-message ${sender}`;
+        div.id = isLoading ? 'loadingMsg' : `msg-${Date.now()}`;
+
+        div.innerHTML = `
+            <div class="avatar"><i class="fas fa-${sender === 'user' ? 'user' : 'robot'}"></i></div>
+            <div class="bubble">${text}</div>
+        `;
+
+        area.appendChild(div);
+        area.scrollTop = area.scrollHeight;
+        return div.id;
+    }
+</script>
+{% endblock %}

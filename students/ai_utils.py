@@ -32,11 +32,22 @@ class AIService:
         context_text = "\n".join([f"[{m.category}] {m.title}: {m.content}" for m in matches[:3]])
         return context_text
 
-    def generate_response(self, system_instruction, user_query, rag_enabled=True):
+    def generate_response(self, system_instruction, user_query, rag_enabled=True, free_mode=False):
         """
         Simulates calling Gemini API with System Instructions + RAG Context.
+        If free_mode is True, it acts as a general assistant without RAG constraints.
         """
         context = ""
+
+        if free_mode:
+            full_prompt = f"""
+            System Role: You are a helpful, creative assistant.
+            Mode: Free Brainstorming (Unrestricted).
+            User Query: {user_query}
+            """
+            # Mock Free Response
+            return f"في الوضع الحر، يمكنني اقتراح أفكار إبداعية خارج الصندوق حول '{user_query}' دون التقيد الحرفي بلوائح المدرسة، مثلاً: تنظيم ورش عمل تفاعلية، استضافة متحدثين، أو استخدام التلعيب (Gamification)."
+
         if rag_enabled:
             context = self.get_rag_context(user_query)
 

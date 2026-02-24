@@ -550,6 +550,27 @@ def ai_manual_view(request):
 
     return render(request, 'students/ai_manual.html')
 
+def ai_chat_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        from .ai_utils import AIService
+        from django.http import JsonResponse
+
+        query = request.POST.get('query')
+        free_mode = request.POST.get('free_mode') == 'true'
+
+        ai = AIService()
+        # In chat mode, we treat system instruction as generic or manager context depending on mode
+        sys_instr = "أنت مساعد مدير المدرسة."
+
+        response_text = ai.generate_response(sys_instr, query, rag_enabled=not free_mode, free_mode=free_mode)
+        return JsonResponse({'response': response_text})
+
+    return render(request, 'students/ai_chat.html')
+
 # --- AI & Task UI Views ---
 
 def tasks_view(request):
