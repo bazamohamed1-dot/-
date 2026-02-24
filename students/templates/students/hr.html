@@ -100,16 +100,22 @@
                     <label>الرمز الوظيفي</label>
                     <input type="text" name="employee_code" id="f_code" class="form-control" required>
                 </div>
+
+                <!-- System Category (Classification) -->
                 <div>
-                    <label>الرتبة (التصنيف)</label>
+                    <label>الفئة (التصنيف النظامي)</label>
                     <select name="rank" id="f_rank" class="form-control" onchange="toggleSubject(this.value)">
                         <option value="worker">عامل مهني</option>
                         <option value="teacher">أستاذ</option>
                         <option value="admin">إداري (مدير، مقتصد، عون، ...)</option>
                     </select>
                 </div>
-                <!-- Hidden helper to store exact role title if manual -->
-                <input type="hidden" name="role" id="f_role_hidden">
+
+                <!-- Actual Role Title from File (Editable) -->
+                <div style="grid-column: span 2;">
+                    <label>الرتبة / المنصب (كما ورد في الملف)</label>
+                    <input type="text" name="role" id="f_role" class="form-control" placeholder="مثال: عامل مهني من المستوى الأول، أستاذ التعليم المتوسط...">
+                </div>
 
                 <div><label>اللقب</label><input type="text" name="last_name" id="f_last" class="form-control" required></div>
                 <div><label>الاسم</label><input type="text" name="first_name" id="f_first" class="form-control" required></div>
@@ -159,6 +165,7 @@ function openAddModal(id = null, data = null) {
         document.getElementById('f_last').value = data.last_name;
         document.getElementById('f_first').value = data.first_name;
         document.getElementById('f_rank').value = data.rank; // System rank
+        document.getElementById('f_role').value = data.role || ""; // Actual Title
 
         document.getElementById('f_subject').value = data.subject;
         document.getElementById('f_grade').value = data.grade;

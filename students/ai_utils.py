@@ -76,24 +76,41 @@ class AIService:
         # 1. Try Real AI (Gemini)
         if self.model:
             try:
-                full_prompt = f"""
-                Role: Educational Assistant for a School Director.
-                Tone: {self.tone} (Professional, Empathetic, Solution-Oriented).
-                Focus: {self.focus}.
+                if free_mode:
+                    # Relaxed Prompt for Free Mode (Gemini-like behavior)
+                    full_prompt = f"""
+                    Role: You are a helpful, intelligent, and comprehensive AI assistant for a School Director.
+                    Goal: Provide detailed, deep, and valuable answers similar to Gemini/ChatGPT.
+                    Context: {system_instruction} (Use as general guidance, but do not restrict length or depth).
 
-                System Instructions: {system_instruction}
+                    User Query: {user_query}
 
-                School Memory Context (Use this to answer if relevant):
-                {context if context else "No specific records found."}
+                    Guidelines:
+                    - Be comprehensive and thorough.
+                    - Use Markdown for structure (headings, lists).
+                    - Do not be overly concise unless asked.
+                    - Offer examples, strategies, and deep insights.
+                    """
+                else:
+                    # Standard RAG/Professional Mode
+                    full_prompt = f"""
+                    Role: Educational Assistant for a School Director.
+                    Tone: {self.tone} (Professional, Empathetic, Solution-Oriented).
+                    Focus: {self.focus}.
 
-                User Query: {user_query}
+                    System Instructions: {system_instruction}
 
-                Response Guidelines:
-                - Be detailed and helpful.
-                - Use bullet points for steps.
-                - Cite school rules if context provided.
-                - If context is missing, use general educational best practices.
-                """
+                    School Memory Context (Use this to answer if relevant):
+                    {context if context else "No specific records found."}
+
+                    User Query: {user_query}
+
+                    Response Guidelines:
+                    - Be detailed and helpful.
+                    - Use bullet points for steps.
+                    - Cite school rules if context provided.
+                    - If context is missing, use general educational best practices.
+                    """
 
                 response = self.model.generate_content(full_prompt)
                 return response.text
