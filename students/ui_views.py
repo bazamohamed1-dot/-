@@ -339,10 +339,12 @@ def hr_home(request):
 
                     sys_rank = 'admin' # Default to admin for general staff
 
+                    # Strict Check to avoid misclassification
                     if 'أستاذ' in raw_rank:
                         sys_rank = 'teacher'
-                    elif 'عامل مهني' in raw_rank:
-                        sys_rank = 'worker'
+                    elif 'عامل مهني' in raw_rank or 'عون' in raw_rank or 'خدمة' in raw_rank:
+                         # Includes "عون خدمة" or "عامل مهني"
+                         sys_rank = 'worker'
 
                     # Validation: Filter out header rows that might have slipped through
                     # If 'rank' literally contains "الرتبة" or "rank", skip
@@ -367,22 +369,48 @@ def hr_home(request):
                     dob = parse_d(emp.get('date_of_birth'))
                     eff_date = parse_d(emp.get('effective_date'))
 
-                    Employee.objects.update_or_create(
-                        employee_code=emp.get('employee_code'),
-                        defaults={
-                            'last_name': emp.get('last_name', ''),
-                            'first_name': emp.get('first_name', ''),
-                            'full_name': f"{emp.get('last_name', '')} {emp.get('first_name', '')}",
-                            'date_of_birth': dob,
-                            'rank': sys_rank, # System Category (teacher, worker, admin)
-                            'role': raw_rank, # Store the ACTUAL Excel rank (e.g. عون حفظ بيانات)
-                            'subject': subject,
-                            'grade': emp.get('grade', ''),
-                            'effective_date': eff_date,
-                            'phone': emp.get('phone', ''),
-                            'email': emp.get('email', ''),
-                        }
-                    )
+                    # Duplicate Prevention Logic:
+                    # 1. Try to find by unique Employee Code if present
+                    # 2. Try to find by Name + DOB if Code is generic/missing
+
+                    emp_code = emp.get('employee_code')
+                    ln = emp.get('last_name', '')
+                    fn = emp.get('first_name', '')
+
+                    # Search for existing
+                    existing = None
+                    if emp_code:
+                        existing = Employee.objects.filter(employee_code=emp_code).first()
+
+                    if not existing and ln and fn:
+                        existing = Employee.objects.filter(
+                            last_name=ln,
+                            first_name=fn,
+                            date_of_birth=dob
+                        ).first()
+
+                    # Data dict
+                    defaults={
+                        'last_name': ln,
+                        'first_name': fn,
+                        'full_name': f"{ln} {fn}",
+                        'date_of_birth': dob,
+                        'rank': sys_rank,
+                        'role': raw_rank,
+                        'subject': subject,
+                        'grade': emp.get('grade', ''),
+                        'effective_date': eff_date,
+                        'phone': emp.get('phone', ''),
+                        'email': emp.get('email', ''),
+                    }
+
+                    if existing:
+                        for key, value in defaults.items():
+                            setattr(existing, key, value)
+                        existing.save()
+                    else:
+                        Employee.objects.create(employee_code=emp_code, **defaults)
+
                     count += 1
 
                 messages.success(request, f"تم استيراد/تحديث {count} موظف.")
@@ -435,6 +463,9 @@ def hr_home(request):
                 try:
                     # Save temporary file for analysis
                     from .ai_utils import analyze_global_assignment
+
+                    # Ensure tempfile is available (global import might be shadowed or we want to be safe)
+                    import tempfile
 
                     with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
                         for chunk in file.chunks():
