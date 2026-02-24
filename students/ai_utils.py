@@ -1,8 +1,11 @@
-from .models import SchoolMemory, SchoolSettings
+from .models import SchoolMemory, SchoolSettings, Employee, TeacherAssignment
 import logging
 import os
 import re
 from PyPDF2 import PdfReader
+from docx import Document
+from bs4 import BeautifulSoup
+import openpyxl
 
 logger = logging.getLogger(__name__)
 
@@ -99,69 +102,113 @@ class AIService:
 
 def analyze_assignment_document(assignment):
     """
-    Extracts Subject and Classes from an uploaded assignment document.
-    Supports PDF and Excel (basic text scan).
-    Updates the TeacherAssignment object.
+    Deprecated. Used for single teacher assignment.
     """
-    file_path = assignment.original_file.path
-    ext = os.path.splitext(file_path)[1].lower()
+    pass
+
+def analyze_global_assignment(file_path):
+    """
+    Analyzes a global assignment file (Schedule) to link Teachers to Subjects and Classes.
+    Supports Excel, Word, PDF, HTML.
+    Returns summary stats.
+    """
     text = ""
+    ext = os.path.splitext(file_path)[1].lower()
 
     try:
         if ext == '.pdf':
             reader = PdfReader(file_path)
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
+            for page in reader.pages: text += page.extract_text() + "\n"
+        elif ext == '.docx':
+            doc = Document(file_path)
+            for p in doc.paragraphs: text += p.text + "\n"
+            for t in doc.tables:
+                for r in t.rows:
+                    text += " ".join([c.text for c in r.cells]) + "\n"
         elif ext in ['.xlsx', '.xls']:
-            import openpyxl
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            for sheet in wb.sheetnames:
-                ws = wb[sheet]
-                for row in ws.iter_rows(values_only=True):
-                    row_str = " ".join([str(c) for c in row if c])
-                    text += row_str + "\n"
-        # Images/Word requires more libs, assume text for now
+            # Using our util or just openpyxl quickly here since we need text blob
+            # For structure, it's better to iterate rows, but "Global Analysis" implies finding names in text.
+            # Let's dump all cells to text.
+            import pandas as pd
+            try:
+                df = pd.read_excel(file_path)
+                text = df.to_string()
+            except:
+                # Fallback
+                pass
 
-        # Regex to find Classes (e.g. 1M1, 2M3, 4AM2)
-        # Matches typical class names in Algerian schools: 1M1, 2M1, 3AM4
-        class_pattern = r'\b(\d+[AM]+\d+)\b' # Matches 1AM1, 4AM2 etc.
-        # Also simple ones like 1M1
-        class_pattern_simple = r'\b(\d+M\d+)\b'
+        # Fallback text extraction if pandas failed or not xlsx
+        if not text and ext in ['.html', '.htm']:
+             with open(file_path, 'r', encoding='utf-8') as f:
+                 soup = BeautifulSoup(f.read(), 'html.parser')
+                 text = soup.get_text()
 
-        classes_found = set()
-        classes_found.update(re.findall(class_pattern, text))
-        classes_found.update(re.findall(class_pattern_simple, text))
+        # If text is still empty (maybe failed xls read), try to read as text
+        if not text:
+             try:
+                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: text = f.read()
+             except: pass
 
-        # Arabic Class Names (أولى 1, الثانية 3)
-        # Check against existing class names in DB to be safe
-        from .models import Student
-        all_classes = set(Student.objects.values_list('class_name', flat=True).distinct())
+        # --- AI LOGIC (Regex/Heuristic) ---
+        # 1. Find Teachers
+        teachers = Employee.objects.filter(rank='teacher')
 
-        valid_classes = []
-        for c in classes_found:
-            if c in all_classes:
-                valid_classes.append(c)
+        stats = {'processed': 0, 'classes': 0}
 
-        # Also try to match exact class names from DB in text
-        for db_class in all_classes:
-            if db_class and db_class in text:
-                valid_classes.append(db_class)
+        for teacher in teachers:
+            # Check if teacher name exists in text (Fuzzy match recommended, here simple substring)
+            # Try Last Name + First Name, or just Last Name if unique
+            name_match = False
+            if teacher.last_name in text or teacher.first_name in text:
+                name_match = True
 
-        assignment.classes = list(set(valid_classes))
+            if name_match:
+                # Find Classes near the name? Or just find all classes in text and assign?
+                # The user said "Analyze it... extract subjects... link to DB".
+                # Realistically, without a structured format, we can't know WHICH class belongs to WHICH teacher
+                # unless we parse rows.
+                # Assuming the text is line-based: "Teacher Name ... Subject ... Class1, Class2"
 
-        # Try to find Subject
-        subjects = ['رياضيات', 'فيزياء', 'علوم', 'عربية', 'فرنسية', 'انجليزية', 'تاريخ', 'جغرافيا', 'إسلامية', 'مدنية', 'إعلام آلي', 'تكنولوجية', 'بدنية', 'تشكيلية', 'موسيقى']
+                # Mock Logic: Find classes in the same "context window" as the teacher name
+                # Implementation: Split text by lines. If line has teacher name, look for classes in that line.
 
-        for subj in subjects:
-            if subj in text:
-                assignment.subject = subj
-                # Also update teacher profile subject if empty
-                if not assignment.teacher.subject:
-                    assignment.teacher.subject = subj
-                    assignment.teacher.save()
-                break
+                teacher_classes = []
+                teacher_subject = teacher.subject # Default to existing
 
-        assignment.save()
+                # Regex for classes: 1M1, 4AM2, etc.
+                class_pattern = r'\b(\d+[AM]+\d+|\d+M\d+)\b'
+
+                lines = text.split('\n')
+                for line in lines:
+                    if teacher.last_name in line or teacher.first_name in line:
+                        # Found teacher line
+                        found_classes = re.findall(class_pattern, line)
+                        teacher_classes.extend(found_classes)
+
+                        # Try to find subject in this line
+                        subjects = ['رياضيات', 'فيزياء', 'علوم', 'عربية', 'فرنسية', 'انجليزية', 'تاريخ', 'جغرافيا', 'إسلامية', 'مدنية', 'إعلام آلي', 'تكنولوجية', 'بدنية', 'تشكيلية', 'موسيقى']
+                        for s in subjects:
+                            if s in line:
+                                teacher_subject = s
+                                break
+
+                if teacher_classes:
+                    # Update Teacher
+                    if teacher_subject and teacher_subject != '/':
+                        teacher.subject = teacher_subject
+                        teacher.save()
+
+                    # Create Assignment
+                    TeacherAssignment.objects.create(
+                        teacher=teacher,
+                        subject=teacher_subject or "عام",
+                        classes=list(set(teacher_classes))
+                    )
+                    stats['processed'] += 1
+                    stats['classes'] += len(set(teacher_classes))
+
+        return stats
 
     except Exception as e:
-        print(f"Error analyzing document: {e}")
+        logger.error(f"Global Analysis Failed: {e}")
+        raise e
