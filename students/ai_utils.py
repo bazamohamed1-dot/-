@@ -48,8 +48,13 @@ class AIService:
             Mode: Free Brainstorming (Unrestricted).
             User Query: {user_query}
             """
-            # Mock Free Response
-            return f"في الوضع الحر، يمكنني اقتراح أفكار إبداعية خارج الصندوق حول '{user_query}' دون التقيد الحرفي بلوائح المدرسة، مثلاً: تنظيم ورش عمل تفاعلية، استضافة متحدثين، أو استخدام التلعيب (Gamification)."
+            # Mock Free Response (Simulating dynamic response based on query keywords)
+            if "نصيحة" in user_query or "suggest" in user_query:
+                return f"إليك بعض الأفكار حول '{user_query}': 1. جرب مقاربة جديدة تعتمد على التفاعل. 2. ابحث عن نماذج ناجحة مشابهة. 3. لا تخف من التجريب!"
+            elif "خطة" in user_query or "plan" in user_query:
+                return f"لإعداد خطة حول '{user_query}'، أنصحك بالبدء بتحديد الأهداف بوضوح (SMART)، ثم توزيع الأدوار، وأخيراً تحديد جدول زمن مرن."
+            else:
+                return f"شكراً لسؤالك حول '{user_query}'. هذا موضوع مثير للاهتمام! في الوضع الحر، نركز على الإبداع. ماذا لو نظرنا للأمر من زاوية مختلفة؟"
 
         if rag_enabled:
             context = self.get_rag_context(user_query)

@@ -1,4 +1,8 @@
 from django import template
+import json
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Model
+from django.forms.models import model_to_dict
 
 register = template.Library()
 
@@ -20,3 +24,22 @@ def has_perm(user_or_profile, perm_name):
         return user_or_profile.has_perm(perm_name)
 
     return False
+
+@register.filter
+def safe_json(value):
+    """
+    Safely serializes a value (model or dict) to JSON string for use in JS.
+    """
+    if isinstance(value, Model):
+        # Convert model to dict
+        data = model_to_dict(value)
+        # Handle fields that model_to_dict might miss or handle poorly (like ImageField)
+        if hasattr(value, 'photo') and value.photo:
+            try:
+                data['photo_url'] = value.photo.url
+            except:
+                data['photo_url'] = ""
+        # Date fields need string conversion handled by DjangoJSONEncoder
+        return json.dumps(data, cls=DjangoJSONEncoder)
+
+    return json.dumps(value, cls=DjangoJSONEncoder)
