@@ -64,20 +64,36 @@ class AIService:
                 return True
         return False
 
-    def generate_response(self, system_instruction, user_query, rag_enabled=True, free_mode=False):
+    def generate_response(self, system_instruction, user_query, rag_enabled=True, mode='rag'):
         """
         Calls Gemini API with System Instructions + RAG Context.
         If API Key is missing, uses a sophisticated Rule-Based System.
+
+        mode: 'rag', 'free', 'gemini_full'
         """
         context = ""
-        if rag_enabled:
+        if rag_enabled and mode == 'rag':
             context = self.get_rag_context(user_query)
 
         # 1. Try Real AI (Gemini)
         if self.model:
             try:
-                if free_mode:
-                    # Relaxed Prompt for Free Mode (Gemini-like behavior)
+                if mode == 'gemini_full':
+                     # Completely Unrestricted Gemini
+                     full_prompt = f"""
+                     Role: You are an advanced AI model (Gemini Pro) acting as a comprehensive assistant.
+                     Context: The user is a school director/educator, so prioritize educational/administrative relevance if ambiguous.
+
+                     User Query: {user_query}
+
+                     Guidelines:
+                     - Provide exhaustive, deep, and highly detailed answers.
+                     - Use complex Markdown formatting (tables, lists, headers).
+                     - Do not limit yourself to "administrative assistant" role unless useful.
+                     - Act as a senior consultant, educator, and technical expert combined.
+                     """
+                elif mode == 'free':
+                    # Relaxed Prompt for Free Mode (School Context but flexible)
                     full_prompt = f"""
                     Role: You are a helpful, intelligent, and comprehensive AI assistant for a School Director.
                     Goal: Provide detailed, deep, and valuable answers similar to Gemini/ChatGPT.

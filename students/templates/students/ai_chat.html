@@ -11,10 +11,11 @@
 
         <div style="display: flex; align-items: center; gap: 10px;">
             <span style="font-weight: bold; color: #64748b;">الوضع:</span>
-            <label class="switch" style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
-                <span id="modeLabel" style="color: var(--primary);">سياق المدرسة (RAG)</span>
-                <input type="checkbox" id="modeToggle" onchange="toggleMode()" style="width: 20px; height: 20px;">
-            </label>
+            <select id="chatMode" class="form-select" onchange="updateMode()" style="padding: 5px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <option value="rag">سياق المدرسة (RAG)</option>
+                <option value="free">بحث حر (Free Mode)</option>
+                <option value="gemini_full">الوضع الشامل (Gemini Pro)</option>
+            </select>
         </div>
     </div>
 
@@ -46,18 +47,10 @@
 </style>
 
 <script>
-    let isFreeMode = false;
+    let currentMode = 'rag';
 
-    function toggleMode() {
-        isFreeMode = document.getElementById('modeToggle').checked;
-        const label = document.getElementById('modeLabel');
-        if (isFreeMode) {
-            label.innerText = "بحث حر (Free)";
-            label.style.color = "#d97706";
-        } else {
-            label.innerText = "سياق المدرسة (RAG)";
-            label.style.color = "var(--primary)";
-        }
+    function updateMode() {
+        currentMode = document.getElementById('chatMode').value;
     }
 
     async function sendQuery() {
@@ -75,7 +68,7 @@
         try {
             const formData = new FormData();
             formData.append('query', text);
-            formData.append('free_mode', isFreeMode);
+            formData.append('mode', currentMode);
 
             const res = await fetch("{% url 'ai_chat_view' %}", {
                 method: 'POST',
