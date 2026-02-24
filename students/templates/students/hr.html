@@ -8,9 +8,15 @@
 <div class="card mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="btn-group">
-            <a href="?rank=teacher" class="btn {% if current_rank == 'teacher' %}btn-primary{% else %}btn-outline-primary{% endif %}">الأساتذة</a>
-            <a href="?rank=worker" class="btn {% if current_rank == 'worker' %}btn-primary{% else %}btn-outline-primary{% endif %}">العمال المهنيين</a>
-            <a href="?rank=admin" class="btn {% if current_rank == 'admin' %}btn-primary{% else %}btn-outline-primary{% endif %}">الإداريين</a>
+            <a href="?rank=teacher" class="btn {% if current_rank == 'teacher' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                الأساتذة <span class="badge bg-light text-dark">{{ counts.teachers }}</span>
+            </a>
+            <a href="?rank=worker" class="btn {% if current_rank == 'worker' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                العمال المهنيين <span class="badge bg-light text-dark">{{ counts.workers }}</span>
+            </a>
+            <a href="?rank=admin" class="btn {% if current_rank == 'admin' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                الإداريين <span class="badge bg-light text-dark">{{ counts.admins }}</span>
+            </a>
             <a href="{% url 'hr_home' %}" class="btn {% if not current_rank %}btn-primary{% else %}btn-outline-primary{% endif %}">الكل</a>
         </div>
         <div class="btn-group">
@@ -46,11 +52,13 @@
                         {% endif %}
                         {{ emp.last_name }} {{ emp.first_name }}
                     </td>
-                    <td>{{ emp.get_rank_display }}</td>
+                    <td>
+                        {{ emp.role|default:emp.get_rank_display }}
+                    </td>
                     <td>{{ emp.subject|default:"-" }}</td>
                     <td>{{ emp.phone }}</td>
                     <td>
-                        <button class="btn btn-sm btn-info" onclick='openAddModal({{ emp.id }}, {{ emp|safe_json }})'><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})'><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
                     </td>
                 </tr>
@@ -93,13 +101,16 @@
                     <input type="text" name="employee_code" id="f_code" class="form-control" required>
                 </div>
                 <div>
-                    <label>الرتبة</label>
+                    <label>الرتبة (التصنيف)</label>
                     <select name="rank" id="f_rank" class="form-control" onchange="toggleSubject(this.value)">
                         <option value="worker">عامل مهني</option>
                         <option value="teacher">أستاذ</option>
-                        <option value="admin">إداري</option>
+                        <option value="admin">إداري (مدير، مقتصد، عون، ...)</option>
                     </select>
                 </div>
+                <!-- Hidden helper to store exact role title if manual -->
+                <input type="hidden" name="role" id="f_role_hidden">
+
                 <div><label>اللقب</label><input type="text" name="last_name" id="f_last" class="form-control" required></div>
                 <div><label>الاسم</label><input type="text" name="first_name" id="f_first" class="form-control" required></div>
                 <div id="subjectField" style="display:none;"><label>المادة</label><input type="text" name="subject" id="f_subject" class="form-control"></div>
@@ -138,14 +149,17 @@
 function openImportModal() { document.getElementById('importModal').style.display = 'block'; }
 function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
 function openAddModal(id = null, data = null) {
-    document.getElementById('addModal').style.display = 'block';
+    const modal = document.getElementById('addModal');
+    modal.style.display = 'block';
+
     if(id && data) {
         document.getElementById('modalTitle').innerText = "تعديل موظف";
         document.getElementById('editId').value = id;
         document.getElementById('f_code').value = data.employee_code;
         document.getElementById('f_last').value = data.last_name;
         document.getElementById('f_first').value = data.first_name;
-        document.getElementById('f_rank').value = data.rank;
+        document.getElementById('f_rank').value = data.rank; // System rank
+
         document.getElementById('f_subject').value = data.subject;
         document.getElementById('f_grade').value = data.grade;
         document.getElementById('f_phone').value = data.phone;
@@ -157,6 +171,7 @@ function openAddModal(id = null, data = null) {
         document.getElementById('modalTitle').innerText = "إضافة موظف";
         document.getElementById('addForm').reset();
         document.getElementById('editId').value = "";
+        toggleSubject('worker'); // default
     }
 }
 function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
@@ -166,7 +181,13 @@ function openAssignmentModal() {
 }
 
 function toggleSubject(rank) {
-    document.getElementById('subjectField').style.display = (rank === 'teacher') ? 'block' : 'none';
+    const subjField = document.getElementById('subjectField');
+    if (rank === 'teacher') {
+        subjField.style.display = 'block';
+    } else {
+        subjField.style.display = 'none';
+        document.getElementById('f_subject').value = '/';
+    }
 }
 </script>
 
