@@ -426,11 +426,9 @@ def hr_home(request):
             try:
                 edit_id = request.POST.get('edit_id')
 
-                # Determine Rank Category
-                raw_rank = request.POST.get('rank')
-                sys_rank = 'admin'
-                if 'أستاذ' in raw_rank: sys_rank = 'teacher'
-                elif 'عامل مهني' in raw_rank: sys_rank = 'worker'
+                # Manual entry allows direct setting of both System Rank and Role Title
+                sys_rank = request.POST.get('rank') # Comes from the dropdown (teacher, worker, admin)
+                role_title = request.POST.get('role') # Comes from the text input (e.g., "Professional Worker Lvl 1")
 
                 data = {
                     'employee_code': request.POST.get('employee_code'),
@@ -438,7 +436,7 @@ def hr_home(request):
                     'first_name': request.POST.get('first_name'),
                     'full_name': f"{request.POST.get('last_name')} {request.POST.get('first_name')}",
                     'rank': sys_rank,
-                    'role': raw_rank, # Actual Title
+                    'role': role_title, # Explicit manual title
                     'subject': request.POST.get('subject') if sys_rank == 'teacher' else '/',
                     'grade': request.POST.get('grade'),
                     'phone': request.POST.get('phone'),
