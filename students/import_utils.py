@@ -1,309 +1,65 @@
 import openpyxl
 import xlrd
 from bs4 import BeautifulSoup
+from docx import Document
+from PyPDF2 import PdfReader
+import re
 from datetime import datetime, date
-import logging
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
-# Column Headers Mapping (Arabic, French, English)
-HEADER_MAP = {
-    'student_id_number': ['رقم التعريف', 'id', 'student_id', 'matricule', 'رقم التسجيل', 'رقم'],
-    'last_name': ['اللقب', 'last_name', 'nom', 'surname', 'family_name'],
-    'first_name': ['الاسم', 'first_name', 'prenom', 'given_name'],
-    'gender': ['الجنس', 'gender', 'sexe', 'sex'],
-    'date_of_birth': ['تاريخ الميلاد', 'date_of_birth', 'dob', 'date_naissance', 'tarihk_milad', 'تاريخ الازدياد'],
-    'place_of_birth': ['مكان الميلاد', 'place_of_birth', 'pob', 'lieu_naissance', 'makan_milad', 'مكان الازدياد'],
-    'academic_year': ['المستوى', 'academic_year', 'level', 'niveau', 'annee_scolaire', 'السنة الدراسية', 'السنة', 'الصف', 'annee'],
-    'class_name': ['القسم', 'class_name', 'class', 'classe', 'fawj', 'الفوج التربوي', 'الفوج'],
-    'attendance_system': ['نظام التمدرس', 'attendance_system', 'system', 'regime', 'nizam', 'النظام'],
-    'enrollment_number': ['رقم القيد', 'enrollment_number', 'enroll_num', 'numero_inscription', 'raqm_kaid'],
-    'enrollment_date': ['تاريخ التسجيل', 'enrollment_date', 'date_inscription', 'tarihk_tasjil', 'تاريخ الدخول'],
-    'guardian_name': ['اسم الولي', 'guardian_name', 'tuteur', 'wali', 'الولي'],
-    'mother_name': ['اسم الأم', 'mother_name', 'mere', 'oum', 'لقب واسم الأم'],
-    'address': ['العنوان', 'address', 'adresse', 'sakan', 'مقر السكن'],
-    'guardian_phone': ['رقم الهاتف', 'phone', 'telephone', 'mobile', 'hatif', 'رقم الولي']
-}
-
-def parse_student_file(file_path):
+def extract_rows_from_file(file):
     """
-    Parses a student file (HTML, XLS, or XLSX) and returns a list of dictionaries
-    ready for import via django-import-export.
+    Extracts rows from any supported file type (Excel, Word, HTML, PDF).
+    Returns a generator of lists.
     """
-    logger.info(f"Starting parsing for file: {file_path}")
+    file.seek(0)
+    filename = file.name.lower()
 
-    # 1. Try HTML (bs4)
-    try:
-        data = parse_html(file_path)
-        if data:
-            logger.info(f"Successfully parsed as HTML with {len(data)} records.")
-            return data
-    except Exception as e:
-        logger.warning(f"HTML parsing failed: {e}")
+    if filename.endswith('.xlsx'):
+        try:
+            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+            ws = wb.active
+            for row in ws.iter_rows(values_only=True):
+                yield list(row)
+        except:
+            # Fallback for HTML disguised as XLSX
+            file.seek(0)
+            content = file.read()
+            yield from _parse_html_table(content)
 
-    # 2. Try Excel .xls (xlrd)
-    try:
-        data = parse_xls(file_path)
-        if data:
-            logger.info(f"Successfully parsed as XLS with {len(data)} records.")
-            return data
-    except Exception as e:
-        logger.warning(f"XLS parsing failed: {e}")
+    elif filename.endswith('.xls'):
+        try:
+            content = file.read()
+            wb = xlrd.open_workbook(file_contents=content)
+            sheet = wb.sheet_by_index(0)
+            for r in range(sheet.nrows):
+                yield sheet.row_values(r)
+        except:
+             # Fallback for HTML disguised as XLS
+            yield from _parse_html_table(content)
 
-    # 3. Try Excel .xlsx (openpyxl)
-    try:
-        data = parse_xlsx(file_path)
-        if data:
-            logger.info(f"Successfully parsed as XLSX with {len(data)} records.")
-            return data
-    except Exception as e:
-        logger.warning(f"XLSX parsing failed: {e}")
+    elif filename.endswith('.docx'):
+        doc = Document(file)
+        for table in doc.tables:
+            for row in table.rows:
+                yield [cell.text.strip() for cell in row.cells]
 
-    logger.error("All parsing methods failed or returned no data.")
-    return []
+    elif filename.endswith('.pdf'):
+        # PDF is hard to get "rows", return parsing results as pseudo-rows
+        # This is a best-effort for simple tables
+        reader = PdfReader(file)
+        for page in reader.pages:
+            text = page.extract_text()
+            for line in text.split('\n'):
+                yield line.split() # Naive split
 
-def parse_html(file_path):
-    content = ""
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-            content = f.read()
-    except Exception:
-        return None
+    elif filename.endswith('.html') or filename.endswith('.htm'):
+        content = file.read()
+        yield from _parse_html_table(content)
 
-    if "<html" not in content.lower() and "<table" not in content.lower():
-            return None
-
+def _parse_html_table(content):
     soup = BeautifulSoup(content, 'html.parser')
-    rows = soup.find_all('tr')
-    return process_rows(rows, 'html')
-
-def parse_xlsx(file_path):
-    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-    ws = wb.active
-    return process_rows(ws.iter_rows(values_only=True), 'xlsx')
-
-def parse_xls(file_path):
-    wb = xlrd.open_workbook(file_path, formatting_info=False)
-    ws = wb.sheet_by_index(0)
-    rows = []
-    for row_idx in range(ws.nrows):
-        row = ws.row(row_idx)
-        cols = []
-        for c in row:
-            if c.ctype == xlrd.XL_CELL_DATE:
-                try:
-                    val = xlrd.xldate.xldate_as_datetime(c.value, wb.datemode).strftime('%Y-%m-%d')
-                except:
-                    val = str(c.value)
-            elif c.ctype == xlrd.XL_CELL_NUMBER:
-                    val = str(int(c.value)) if c.value == int(c.value) else str(c.value)
-            else:
-                val = str(c.value).strip()
-            cols.append(val)
-        rows.append(cols)
-    return process_rows(rows, 'xls')
-
-def normalize_header(header):
-    if not header: return ""
-    return str(header).strip().lower().replace('_', ' ').replace('-', ' ')
-
-def detect_columns(header_row):
-    """
-    Returns a dict mapping field_name -> column_index
-    Prioritizes 'السنة' for academic_year if found.
-    """
-    col_map = {}
-    used_indices = set()
-
-    # Pre-scan for 'السنة' specifically for academic_year to override 'المستوى'
-    year_idx = -1
-    for idx, col in enumerate(header_row):
-        val = normalize_header(col)
-        if 'السنة' in val:
-            year_idx = idx
-            break
-
-    for idx, col in enumerate(header_row):
-        val = normalize_header(col)
-        if not val: continue
-
-        # Check against HEADER_MAP
-        for field, keywords in HEADER_MAP.items():
-            if field in col_map: continue # Already found
-
-            # Special case for academic_year
-            if field == 'academic_year' and year_idx != -1:
-                col_map['academic_year'] = year_idx
-                used_indices.add(year_idx)
-                continue
-
-            # Exact or fuzzy match
-            for kw in keywords:
-                if kw in val:
-                    col_map[field] = idx
-                    used_indices.add(idx)
-                    break
-
-    return col_map
-
-def process_rows(rows, mode):
-    processed_data = []
-    processed_ids = set()
-
-    # Identify Headers
-    header_row = None
-    col_map = {}
-    data_rows = []
-
-    # Iterate to find header row (first row with enough string columns)
-    iterator = iter(rows)
-
-    for row in iterator:
-        # Convert row to list of strings
-        if mode == 'html':
-            cells = row.find_all(['td', 'th'])
-            cols = [c.get_text(strip=True) for c in cells]
-        else:
-            cols = [str(c).strip() if c is not None else '' for c in row]
-
-        # Check if this is a potential header row
-        # Heuristic: Contains "Name" or "ID" or "Nom" or "Matricule"
-        is_header = False
-        temp_map = detect_columns(cols)
-
-        # If we found at least 3 recognizable columns (ID, Name, DOB usually), assume it's a header
-        if len(temp_map) >= 3:
-            col_map = temp_map
-            is_header = True
-            # Consume rest of iterator into data_rows
-            break
-
-        # If not header, maybe data? Wait, we need headers first.
-        # But for files without headers (legacy support), we might fallback.
-        # Let's collect rows just in case we default to fixed index.
-        data_rows.append(cols)
-
-    # Continue iterator for data
-    for row in iterator:
-        if mode == 'html':
-            cells = row.find_all(['td', 'th'])
-            cols = [c.get_text(strip=True) for c in cells]
-        else:
-            cols = [str(c).strip() if c is not None else '' for c in row]
-        data_rows.append(cols)
-
-    # Fallback for Fixed Indices (Legacy Support) if header detection failed
-    if not col_map:
-        # Default mapping based on previous hardcoded indices
-        col_map = {
-            'student_id_number': 0,
-            'last_name': 1,
-            'first_name': 2,
-            'gender': 3,
-            'date_of_birth': 4,
-            'place_of_birth': 9,
-            'academic_year': 10,
-            'class_name': 11,
-            'attendance_system': 12,
-            'enrollment_number': 13,
-            'enrollment_date': 14
-        }
-        logger.warning("Header detection failed. Using default column indices.")
-
-    row_count = 0
-    for cols in data_rows:
-        row_count += 1
-        try:
-            if not cols: continue
-
-            # Get ID
-            idx_id = col_map.get('student_id_number', 0)
-            if idx_id >= len(cols): continue
-
-            sid = cols[idx_id]
-            if not sid.isdigit(): continue # Skip empty or invalid lines
-
-            if sid in processed_ids: continue
-            processed_ids.add(sid)
-
-            # Helper to safely get value
-            def get_val(field, default=""):
-                idx = col_map.get(field)
-                if idx is not None and idx < len(cols):
-                    return cols[idx]
-                return default
-
-            # Extract Data
-            last_name = get_val('last_name')
-            first_name = get_val('first_name')
-            gender = get_val('gender')
-            dob = parse_date(get_val('date_of_birth'))
-            pob = get_val('place_of_birth')
-
-            level = get_val('academic_year')
-            class_code = get_val('class_name')
-
-            # Fallback: If level is missing, try to extract from class_code
-            if not level and class_code:
-                 parts = str(class_code).split()
-                 if parts:
-                     level = parts[0] # Use first part as level (e.g. "1AM 1" -> "1AM")
-
-            # Smart Class Name Construction
-            full_class = ""
-            if class_code:
-                if level and str(level) in str(class_code):
-                    full_class = class_code
-                elif level:
-                     full_class = f"{level} {class_code}".strip()
-                else:
-                    full_class = class_code
-
-            attendance_sys = get_val('attendance_system', "نصف داخلي")
-            enroll_num = get_val('enrollment_number')
-            enroll_date = parse_date(get_val('enrollment_date', datetime.now().date()))
-
-            student_data = {
-                'student_id_number': sid,
-                'last_name': last_name,
-                'first_name': first_name,
-                'gender': gender,
-                'date_of_birth': dob,
-                'place_of_birth': pob,
-                'academic_year': level,
-                'class_name': full_class,
-                'attendance_system': attendance_sys,
-                'enrollment_number': enroll_num,
-                'enrollment_date': enroll_date,
-            }
-            processed_data.append(student_data)
-
-        except Exception as e:
-            logger.error(f"Error processing row {row_count}: {e}")
-            continue
-
-    return processed_data
-
-def parse_date(date_str):
-    if not date_str or str(date_str).lower() in ['none', 'nan', '']:
-            return datetime(1900, 1, 1).date()
-
-    if isinstance(date_str, datetime) or isinstance(date_str, date):
-        return date_str
-
-    # Handle Excel Serial Date
-    if str(date_str).replace('.', '', 1).isdigit():
-            try:
-                val = float(date_str)
-                if val > 10000:
-                    return datetime.fromordinal(datetime(1900, 1, 1).toordinal() + int(val) - 2).date()
-            except: pass
-
-    date_str = str(date_str).strip().split(' ')[0] # Remove time
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d', '%d.%m.%Y', '%Y.%m.%d'):
-        try:
-            return datetime.strptime(date_str, fmt).date()
-        except ValueError:
-            continue
-    return datetime(1900, 1, 1).date()
+    table = soup.find('table')
+    if table:
+        for tr in table.find_all('tr'):
+            cells = tr.find_all(['td', 'th'])
+            yield [cell.get_text(strip=True) for cell in cells]

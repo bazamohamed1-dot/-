@@ -317,56 +317,21 @@ def hr_home(request):
         if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
             try:
-                rows_generator = []
-                headers = []
-
-                # Try standard XLSX (openpyxl)
-                try:
-                    wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
-                    ws = wb.active
-                    # Row 4 is header, data starts at 5
-                    rows_generator = ws.iter_rows(min_row=5, values_only=True)
-                    # Check if empty
-                except Exception:
-                    file.seek(0)
-                    content = file.read()
-
-                    # Try Legacy XLS (xlrd)
-                    try:
-                        import xlrd
-                        wb = xlrd.open_workbook(file_contents=content)
-                        sheet = wb.sheet_by_index(0)
-                        # Data starts at row 4 (index 4 in 0-based if header is row 4? User said row 4 has headers)
-                        # Assuming header is index 3 (4th row), data starts index 4 (5th row)
-                        rows_generator = (sheet.row_values(r) for r in range(4, sheet.nrows))
-                    except Exception:
-                         # Try HTML Table (BeautifulSoup)
-                         try:
-                             from bs4 import BeautifulSoup
-                             soup = BeautifulSoup(content, 'html.parser')
-                             table = soup.find('table')
-                             if table:
-                                 rows = table.find_all('tr')
-                                 # Skip first 4 rows (header is 4th, data starts 5th)
-                                 rows_generator = []
-                                 for tr in rows[4:]:
-                                     cells = tr.find_all(['td', 'th'])
-                                     rows_generator.append([cell.get_text(strip=True) for cell in cells])
-                             else:
-                                 raise Exception("No table found in HTML")
-                         except Exception as e3:
-                             raise Exception(f"Format not supported. Errors: {e3}")
+                from .import_utils import extract_rows_from_file
+                rows_generator = extract_rows_from_file(file)
 
                 count = 0
-                for row in rows_generator:
+                for i, row in enumerate(rows_generator):
+                    # Skip first 4 rows (0,1,2,3), data starts at 4 (5th row)
+                    if i < 4: continue
                     if not row or len(row) < 4: continue
 
-                    # Column Mapping based on standard Algerian Ministerial Export format:
-                    # 0: ID/Count, 1: Code, 2: Surname, 3: Name, 4: DOB, 5: Rank, 6: Subject, 7: Grade, 8: Effective Date
+                    # Column Mapping (0-based)
+                    # 1: Code, 2: Surname, 3: Name, 4: DOB, 5: Rank, 6: Subject, 7: Grade, 8: Effective Date
 
-                    code = str(row[1]).strip() if row[1] else None
-                    surname = str(row[2]).strip() if row[2] else ""
-                    name = str(row[3]).strip() if row[3] else ""
+                    code = str(row[1]).strip() if len(row) > 1 and row[1] else None
+                    surname = str(row[2]).strip() if len(row) > 2 and row[2] else ""
+                    name = str(row[3]).strip() if len(row) > 3 and row[3] else ""
 
                     if not code or not surname: continue
 
@@ -377,6 +342,13 @@ def hr_home(request):
                         if key in rank_str:
                             rank = val
                             break
+
+                    # Handle Subject
+                    subject = str(row[6]).strip() if len(row) > 6 and row[6] else "/"
+                    if rank != 'teacher':
+                        subject = "/"
+                    elif not subject or subject == "None":
+                        subject = "/"
 
                     # Dates
                     def parse_d(val):
@@ -394,8 +366,7 @@ def hr_home(request):
                     dob = parse_d(row[4]) if len(row)>4 else None
                     eff_date = parse_d(row[8]) if len(row)>8 else None
 
-                    # Phone/Email are likely not in the file based on typical exports,
-                    # but if user added them, let's assume they are at the end: 9 and 10
+                    # Phone/Email (Add logic to pick if exist, else empty)
                     phone = str(row[9]).strip() if len(row) > 9 and row[9] else ""
                     email = str(row[10]).strip() if len(row) > 10 and row[10] else ""
 
@@ -407,7 +378,7 @@ def hr_home(request):
                             'full_name': f"{surname} {name}",
                             'date_of_birth': dob,
                             'rank': rank,
-                            'subject': str(row[6]).strip() if len(row) > 6 and row[6] else "",
+                            'subject': subject,
                             'grade': str(row[7]).strip() if len(row) > 7 and row[7] else "",
                             'effective_date': eff_date,
                             'phone': phone,
@@ -423,41 +394,55 @@ def hr_home(request):
 
         elif action == 'add_manual':
             try:
-                Employee.objects.create(
-                    employee_code=request.POST.get('employee_code'),
-                    last_name=request.POST.get('last_name'),
-                    first_name=request.POST.get('first_name'),
-                    full_name=f"{request.POST.get('last_name')} {request.POST.get('first_name')}",
-                    rank=request.POST.get('rank'),
-                    subject=request.POST.get('subject'),
-                    grade=request.POST.get('grade'),
-                    phone=request.POST.get('phone'),
-                    email=request.POST.get('email'),
-                    date_of_birth=request.POST.get('date_of_birth') or None,
-                    effective_date=request.POST.get('effective_date') or None,
-                    role=request.POST.get('rank')
-                )
-                messages.success(request, "تمت إضافة الموظف بنجاح.")
+                edit_id = request.POST.get('edit_id')
+                data = {
+                    'employee_code': request.POST.get('employee_code'),
+                    'last_name': request.POST.get('last_name'),
+                    'first_name': request.POST.get('first_name'),
+                    'full_name': f"{request.POST.get('last_name')} {request.POST.get('first_name')}",
+                    'rank': request.POST.get('rank'),
+                    'subject': request.POST.get('subject') if request.POST.get('rank') == 'teacher' else '/',
+                    'grade': request.POST.get('grade'),
+                    'phone': request.POST.get('phone'),
+                    'email': request.POST.get('email'),
+                    'date_of_birth': request.POST.get('date_of_birth') or None,
+                    'effective_date': request.POST.get('effective_date') or None,
+                    'role': request.POST.get('rank')
+                }
+
+                if edit_id:
+                    Employee.objects.filter(id=edit_id).update(**data)
+                    messages.success(request, "تم تعديل الموظف بنجاح.")
+                else:
+                    Employee.objects.create(**data)
+                    messages.success(request, "تمت إضافة الموظف بنجاح.")
             except Exception as e:
-                messages.error(request, f"خطأ في الإضافة: {e}")
+                messages.error(request, f"خطأ: {e}")
             return redirect('hr_home')
 
-        elif action == 'import_assignment':
-            teacher_id = request.POST.get('teacher_id')
+        elif action == 'import_assignment_global':
             file = request.FILES.get('assignment_file')
-            if teacher_id and file:
+            if file:
                 try:
-                    teacher = Employee.objects.get(id=teacher_id)
-                    assignment = TeacherAssignment.objects.create(
-                        teacher=teacher,
-                        original_file=file,
-                        subject=teacher.subject or "مادة غير محددة"
-                    )
-                    # Call AI Analysis (Mock/Regex)
-                    analyze_assignment_document(assignment)
-                    messages.success(request, "تم رفع الإسناد وجاري تحليله بالذكاء الاصطناعي.")
+                    # Save temporary file for analysis
+                    import os, tempfile
+                    from .ai_utils import analyze_global_assignment
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
+                        for chunk in file.chunks():
+                            tmp.write(chunk)
+                        tmp_path = tmp.name
+
+                    results = analyze_global_assignment(tmp_path)
+
+                    if results['processed'] > 0:
+                        messages.success(request, f"تم تحليل الإسناد: تم تحديث {results['processed']} أستاذ (تم العثور على {results['classes']} قسم).")
+                    else:
+                        messages.warning(request, "لم يتم العثور على بيانات مطابقة. تأكد من أن أسماء الأساتذة في الملف تطابق قاعدة البيانات.")
+
+                    os.remove(tmp_path)
                 except Exception as e:
-                    messages.error(request, f"خطأ: {e}")
+                    messages.error(request, f"خطأ في التحليل: {e}")
             return redirect('hr_home')
 
     # Filtering
