@@ -254,6 +254,8 @@ def parse_hr_file(file_path):
         'الرتبة': 'rank',
         'رتبة': 'rank',
         'الصفة': 'rank',
+        'الوظيفة': 'rank', # Added based on feedback
+        'المهنة': 'rank', # Added based on feedback
         'المادة': 'subject',
         'مادة التدريس': 'subject',
         'الدرجة': 'grade',

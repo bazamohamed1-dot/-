@@ -548,8 +548,33 @@ def guidance_home(request):
             target = request.POST.get('target_audience')
             from .ai_utils import AIService
             ai = AIService()
-            prompt = f"اقترح خطوات ومحاور لاستبيان حول الموضوع: {topic}. الجمهور المستهدف: {target}. قدم إجابة مهيكلة في شكل خطوات."
-            ai_suggestion = ai.generate_response("أنت مستشار توجيه مدرسي خبير.", prompt, rag_enabled=False)
+
+            # Rich context prompt based on user's feedback
+            prompt = f"""
+            أنت خبير في القياس والتقويم التربوي وعلم النفس المدرسي.
+            المطلوب: تصميم هيكل استبيان احترافي وعميق حول الموضوع: "{topic}".
+            الفئة المستهدفة: {target}.
+
+            يجب أن تتبع المنهجية العلمية التالية في إجابتك:
+            1. **تحديد الأهداف:** ماذا نريد أن نقيس بدقة؟
+            2. **صياغة المقدمة:** فقرة تشرح الهدف وتطمئن المشارك (سرية البيانات).
+            3. **محاور الاستبيان:** اقترح 3-4 محاور رئيسية تغطي الموضوع.
+            4. **نماذج الأسئلة:**
+               - أسئلة مغلقة (نعم/لا) أو متعددة الاختيارات.
+               - أسئلة مقياس ليكرت (موافق بشدة - موافق - محايد - غير موافق...).
+               - سؤال مفتوح في النهاية للمقترحات.
+            5. **نصائح للتوزيع والتحليل:** كيف يتم نشر الاستبيان وتحليل نتائجه لهذه الفئة تحديداً.
+
+            تنبيه هام:
+            - إذا كان الجمهور "تلاميذ صغار": استخدم لغة بسيطة جداً ومباشرة.
+            - إذا كان "أولياء": استخدم لغة رسمية محترمة وواضحة.
+            - إذا كان "أساتذة": استخدم مصطلحات تربوية مهنية.
+
+            قدم الإجابة بتنسيق Markdown منظم (عناوين، نقاط، جداول إن أمكن).
+            """
+
+            # Use 'gemini_full' mode to ensure depth and prevent "admin assistant" constraints
+            ai_suggestion = ai.generate_response("أنت خبير تربوي ومستشار توجيه.", prompt, rag_enabled=False, mode='gemini_full')
 
         elif action == 'create_survey':
             try:
@@ -590,15 +615,17 @@ def ai_chat_view(request):
         from django.http import JsonResponse
 
         query = request.POST.get('query')
-        free_mode = request.POST.get('free_mode') == 'true'
+        # Mode: 'rag', 'free', 'gemini_full'
+        mode = request.POST.get('mode', 'rag')
 
         ai = AIService()
-        # In chat mode, we treat system instruction as generic or manager context depending on mode
-        sys_instr = "أنت مساعد مدير المدرسة. دورك هو تقديم استشارات إدارية وتربوية دقيقة. كن رسمياً، مهنياً، ومختصراً."
-        if free_mode:
-            sys_instr += " (وضع حر: لكن حافظ على السياق المدرسي المهني)."
 
-        response_text = ai.generate_response(sys_instr, query, rag_enabled=not free_mode, free_mode=free_mode)
+        # System instructions vary by mode
+        sys_instr = "أنت مساعد مدير المدرسة. دورك هو تقديم استشارات إدارية وتربوية دقيقة. كن رسمياً، مهنياً."
+
+        rag_enabled = (mode == 'rag')
+
+        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=mode)
         return JsonResponse({'response': response_text})
 
     return render(request, 'students/ai_chat.html')
