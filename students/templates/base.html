@@ -348,6 +348,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a href="{% url 'ai_chat_view' %}" class="nav-link {% if 'ai/chat' in request.path %}active{% endif %}">
+                    <i class="fas fa-comments"></i> محادثة AI
+                </a>
+            </li>
+            <li class="nav-item">
                 <a href="{% url 'ai_manual_view' %}" class="nav-link {% if 'ai/manual' in request.path %}active{% endif %}" style="color: #fbbf24;">
                     <i class="fas fa-info-circle"></i> شرح الذكاء الاصطناعي
                 </a>
