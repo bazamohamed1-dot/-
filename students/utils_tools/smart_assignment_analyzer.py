@@ -6,35 +6,25 @@ from docx import Document
 
 logger = logging.getLogger(__name__)
 
-# Arabized-French Class Mapping
-# 1M1 -> 1AM1, 4\u06451 -> 4AM1
-CLASS_REGEX = r'(\d+)\s*[\u0600-\u06FFa-zA-Z]+\s*(\d+)'
+# Pattern to detect any variation of class name:
+# e.g., "1 م 1", "1M1", "1 AM 1", "4متوسط3"
+# Broad pattern: Digit + (optional text) + Digit
+CLASS_REGEX = r'\b(\d+)\s*[\u0600-\u06FFa-zA-Z]*\s*(\d+)\b'
 
 def normalize_class_name(raw_name):
     """
-    Normalizes class names like '4M1', '4 م 1', '4AM1' to standard '4AM1'.
+    Returns the raw name cleaned up but NOT forced to '1AM1' format unless absolutely necessary.
+    The user wants to keep the original Arabic format if present.
+    Example: "1 م 1" -> "1 م 1"
     """
     if not isinstance(raw_name, str):
         return None
 
-    # Remove non-alphanumeric (except space) to clean up
-    clean = re.sub(r'[^\w\s]', '', raw_name).strip()
+    clean = raw_name.strip()
+    # If it's just spaces, return None
+    if not clean: return None
 
-    # Match pattern: Number + (Text) + Number
-    match = re.search(CLASS_REGEX, clean)
-    if match:
-        year = match.group(1)
-        index = match.group(2)
-        return f"{year}AM{index}"
-
-    # Fallback for simple '1AM1' or '1M1' without spaces
-    clean = clean.upper().replace(' ', '')
-    if 'AM' in clean:
-        return clean
-    if 'M' in clean:
-        return clean.replace('M', 'AM')
-
-    return None
+    return clean
 
 def normalize_subject(subject):
     """
@@ -143,28 +133,30 @@ def _extract_candidate_from_text(text):
     subject = normalize_subject(text)
 
     # 2. Identify Classes
-    # Pattern: 1M1, 4AM2, 4 م 3, etc.
+    # Pattern: 1M1, 4AM2, 4 م 3, 1 م 1
     # We look for digit + (optional chars) + digit
 
-    # Standard patterns
+    # New Regex to catch "1 م 1" specifically along with "1M1"
+    # Matches: "1" then spaces then "م" or "M" or "AM" then spaces then "1"
     raw_classes = re.findall(r'\b\d+\s*(?:M|AM|م|متوسط)\s*\d+\b', text, re.IGNORECASE)
 
-    normalized_classes = []
+    found_classes = []
     for rc in raw_classes:
-        nc = normalize_class_name(rc)
-        if nc:
-            normalized_classes.append(nc)
+        # Keep it essentially as is, just clean spaces
+        # But user wants consistency? "1 م 2" vs "1م2"
+        # Let's clean extra internal spaces
+        clean_c = re.sub(r'\s+', ' ', rc).strip()
+        found_classes.append(clean_c)
 
     # If no subject and no classes, unlikely to be a schedule row
-    if not subject and not normalized_classes:
+    if not subject and not found_classes:
         return None
 
     # 3. Identify Teacher Name
     # Remove subject and classes from text to find the name
     clean_text = text
     if subject:
-        # Remove the word that triggered the subject match?
-        # Hard to know exactly which word, but let's remove common subject keywords
+        # Remove common subject keywords
         for key in ['رياضيات', 'علوم', 'فيزياء', 'عربية', 'فرنسية', 'انجليزية', 'تاريخ', 'جغرافيا', 'إسلامية', 'مدنية', 'تكنولوجيا', 'إعلام', 'بدنية', 'موسيقى', 'تشكيلية']:
              clean_text = clean_text.replace(key, '')
 
@@ -185,27 +177,24 @@ def _extract_candidate_from_text(text):
     if len(name) < 3:
         return None # Name too short
 
-    if not normalized_classes:
+    if not found_classes:
         return None # No classes assigned?
 
     return {
         'name': name,
         'subject': subject if subject else '/',
-        'classes': list(set(normalized_classes))
+        'classes': list(set(found_classes))
     }
 
 def _merge_candidate(candidates, new_cand):
     """
-    Merges duplicate entries (e.g. same teacher found in multiple rows).
+    Merges duplicate entries.
     """
     for c in candidates:
-        # Simple name matching (could be improved with fuzzy logic)
         if c['name'] == new_cand['name']:
-            # Update Subject if missing
             if c['subject'] == '/' and new_cand['subject'] != '/':
                 c['subject'] = new_cand['subject']
 
-            # Merge Classes
             c['classes'].extend(new_cand['classes'])
             c['classes'] = list(set(c['classes']))
             return

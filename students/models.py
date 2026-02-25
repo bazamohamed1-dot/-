@@ -3,6 +3,7 @@ from datetime import date
 from django.contrib.auth.models import User
 import os
 from django.conf import settings
+from .models_mapping import ClassAlias
 
 def student_photo_path(instance, filename):
     # Extract extension or default to .jpg

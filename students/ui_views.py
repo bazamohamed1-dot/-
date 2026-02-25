@@ -397,7 +397,7 @@ def print_student_cards(request):
 
 # --- New Modules ---
 
-from .models import TeacherAssignment
+from .models import TeacherAssignment, ClassAlias, Student
 from .ai_utils import analyze_assignment_document, analyze_global_assignment_content
 import difflib
 
@@ -413,6 +413,44 @@ def assignment_matching_view(request):
 
         try:
             candidates = analyze_global_assignment_content(temp_path)
+
+            # --- MAPPING & VERIFICATION STEP ---
+            # 1. Collect all extracted classes from candidates
+            all_extracted_classes = set()
+            for c in candidates:
+                for cl in c['classes']:
+                    all_extracted_classes.add(cl)
+
+            # 2. Check against DB
+            db_classes = set(Student.objects.values_list('class_name', flat=True).distinct())
+            aliases = dict(ClassAlias.objects.values_list('alias', 'canonical_class'))
+
+            unknown_classes = []
+
+            # 3. Resolve Aliases
+            for c in candidates:
+                resolved_classes = []
+                for cl in c['classes']:
+                    if cl in db_classes:
+                        resolved_classes.append(cl)
+                    elif cl in aliases:
+                        resolved_classes.append(aliases[cl])
+                    else:
+                        # Keep raw but mark as unknown globally if not already
+                        resolved_classes.append(cl)
+                        if cl not in unknown_classes:
+                            unknown_classes.append(cl)
+
+                # Update candidate with resolved list
+                c['classes'] = list(set(resolved_classes))
+
+            # 4. If unknowns exist, redirect to Mapping View (with warning)
+            if unknown_classes and db_classes: # Only if DB has classes to map to
+                 messages.warning(request, f"تم العثور على أقسام غير معروفة: {', '.join(unknown_classes[:5])}... يرجى ربطها أولاً.")
+                 return redirect('class_mapping_view')
+
+            # --- END MAPPING STEP ---
+
             all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
 
             # Improved Fuzzy Matching
@@ -747,10 +785,15 @@ def hr_home(request):
         'total': Employee.objects.count()
     }
 
+    # Get All Classes for Dropdown
+    all_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
+    all_classes.sort()
+
     context = {
         'employees': employees,
         'current_rank': rank_filter,
         'counts': counts,
+        'all_classes': all_classes,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
@@ -799,7 +842,7 @@ def guidance_home(request):
             topic = request.POST.get('topic')
             target = request.POST.get('target_audience')
             from .ai_utils import AIService
-            ai = AIService()
+            ai = AIService(user=request.user)
 
             # Rich context prompt based on user's feedback
             prompt = f"""
@@ -869,6 +912,11 @@ def ai_chat_view(request):
         query = request.POST.get('query')
         # Mode requested by UI (will be checked against permissions inside AIService)
         requested_mode = request.POST.get('mode', None)
+
+        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous
+        if (hasattr(request.user, 'profile') and request.user.profile.role == 'director') or request.user.is_superuser:
+            if not requested_mode or requested_mode == 'rag':
+                 requested_mode = 'gemini_full'
 
         # Pass current user for permission check
         ai = AIService(user=request.user)

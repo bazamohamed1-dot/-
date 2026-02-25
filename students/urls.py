@@ -5,6 +5,7 @@ from . import auth_views
 from . import qr_views
 from . import ai_views
 from . import reminder_views
+from . import mapping_views # New
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
@@ -80,6 +81,7 @@ urlpatterns = [
     # New Interfaces
     path('hr/', ui_views.hr_home, name='hr_home'),
     path('hr/assignment_match/', ui_views.assignment_matching_view, name='assignment_matching_view'),
+    path('hr/mapping/', mapping_views.class_mapping_view, name='class_mapping_view'),
     path('hr/<int:pk>/delete/', ui_views.hr_delete, name='hr_delete'),
     path('parents/', ui_views.parents_home, name='parents_home'),
     path('guidance/', ui_views.guidance_home, name='guidance_home'),
