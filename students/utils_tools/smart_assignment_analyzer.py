@@ -188,15 +188,32 @@ def _extract_candidate_from_text(text):
 
 def _merge_candidate(candidates, new_cand):
     """
-    Merges duplicate entries.
+    Merges entries only if Name AND Subject match.
+    If Name matches but Subject is different, treats as separate assignment (e.g. Teacher X - Math vs Teacher X - Physics).
     """
     for c in candidates:
+        # Strict matching on Name AND Subject to support multi-subject teachers
         if c['name'] == new_cand['name']:
+
+            # If subjects are identical, merge classes
+            if c['subject'] == new_cand['subject']:
+                c['classes'].extend(new_cand['classes'])
+                c['classes'] = list(set(c['classes']))
+                return
+
+            # If existing has no subject ('/'), take the new subject and merge
+            # This handles cases where one row has subject, another doesn't for same teacher
             if c['subject'] == '/' and new_cand['subject'] != '/':
                 c['subject'] = new_cand['subject']
+                c['classes'].extend(new_cand['classes'])
+                c['classes'] = list(set(c['classes']))
+                return
 
-            c['classes'].extend(new_cand['classes'])
-            c['classes'] = list(set(c['classes']))
-            return
+            # If new has no subject, merge into existing
+            if new_cand['subject'] == '/':
+                c['classes'].extend(new_cand['classes'])
+                c['classes'] = list(set(c['classes']))
+                return
 
+    # If no match found (different name OR different subject), append as new
     candidates.append(new_cand)

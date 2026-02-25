@@ -463,34 +463,33 @@ def assignment_matching_view(request):
                 best_match = None
                 c_norm = c['name'].strip()
 
+                # AUTOMATIC MATCHING LOGIC
                 for t in all_teachers:
-                    # Construct full names
                     t_full = f"{t.last_name} {t.first_name}"
-                    t_rev = f"{t.first_name} {t.last_name}" # Handle reversed order
+                    t_rev = f"{t.first_name} {t.last_name}"
 
-                    # 1. Direct Containment (Highest Confidence)
                     if t.last_name in c_norm and t.first_name in c_norm:
                         score = 1.0
-
-                    # 2. Last Name Only (High Confidence if uncommon)
                     elif t.last_name in c_norm and len(t.last_name) > 3:
                         score = 0.8
-
-                    # 3. Fuzzy Ratio on Full String
                     else:
                         score = max(
                             get_similarity(c_norm, t_full),
                             get_similarity(c_norm, t_rev),
-                            get_similarity(c_norm, t.last_name) # Fallback to surname similarity
+                            get_similarity(c_norm, t.last_name)
                         )
 
                     if score > best_score:
                         best_score = score
                         best_match = t
 
-                # Threshold: 0.6 is usually good for fuzzy names with typos
                 if best_score >= 0.6 and best_match:
                     c['suggested_id'] = best_match.id
+                    # Pre-select ACTION as existing ID
+                    c['auto_action'] = str(best_match.id)
+                else:
+                    # Pre-select ACTION as create new
+                    c['auto_action'] = 'create_new'
 
                 import json
                 c['classes_json'] = json.dumps(c['classes'])
@@ -741,13 +740,19 @@ def hr_home(request):
                     teacher.subject = subject
                     teacher.save()
 
-                # Update or Create Assignment
-                assign, created = TeacherAssignment.objects.get_or_create(teacher=teacher)
-                assign.subject = subject or teacher.subject or "عام"
+                # Update or Create Assignment (Multi-Subject Support)
+                final_subject = subject or teacher.subject or "عام"
+
+                # Try to find existing assignment for this subject
+                assign, created = TeacherAssignment.objects.get_or_create(
+                    teacher=teacher,
+                    subject=final_subject
+                )
+
                 assign.classes = classes_list
                 assign.save()
 
-                messages.success(request, f"تم تحديث الإسناد للأستاذ {teacher.last_name}")
+                messages.success(request, f"تم تحديث الإسناد للأستاذ {teacher.last_name} (مادة: {final_subject})")
             except Exception as e:
                 messages.error(request, f"خطأ: {e}")
             return redirect('hr_home')

@@ -34,7 +34,7 @@
                     <td>
                         <select name="match_{{ forloop.counter0 }}" class="form-control select2">
                             <option value="ignore">-- تجاهل --</option>
-                            <option value="create_new">++ إنشاء جديد ++</option>
+                            <option value="create_new" {% if item.auto_action == 'create_new' %}selected{% endif %}>++ إنشاء جديد ++</option>
                             {% for teacher in all_teachers %}
                             <option value="{{ teacher.id }}" {% if teacher.id == item.suggested_id %}selected{% endif %}>
                                 {{ teacher.last_name }} {{ teacher.first_name }} ({{ teacher.subject|default:"-" }})
