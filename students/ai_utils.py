@@ -71,31 +71,32 @@ class AIService:
     def generate_response(self, system_instruction, user_query, rag_enabled=True, mode=None):
         """
         Calls Gemini API with System Instructions + RAG Context.
-
-        Logic:
-        1. If 'mode' is explicitly passed (e.g. from specific tool view), check if user has permission for it.
-        2. If 'mode' is None, fallback to user's assigned 'ai_mode' in profile.
-        3. Enforce permissions:
-           - 'restricted_rag' users CANNOT access 'free' or 'gemini_full'.
-           - 'educational_free' users CANNOT access 'gemini_full'.
         """
 
         # Determine effective mode based on User Profile
         user_ai_level = 'restricted_rag'
         if self.user and hasattr(self.user, 'profile'):
             user_ai_level = self.user.profile.ai_mode
+
+            # HARD OVERRIDE: Directors ALWAYS get full access
+            if self.user.profile.role == 'director':
+                user_ai_level = 'full_comprehensive'
+
         elif self.user and self.user.is_superuser:
             user_ai_level = 'full_comprehensive'
 
         # If no explicit mode requested, use user's default level
         effective_mode = mode if mode else 'rag'
 
+        # Auto-upgrade Director to 'gemini_full' if they request 'rag' (default chat)
+        if user_ai_level == 'full_comprehensive' and effective_mode == 'rag':
+             effective_mode = 'gemini_full'
+
         # Enforce Permissions (Downgrade if necessary)
         # RELAXED LOGIC: If user_ai_level is 'full_comprehensive', they get gemini_full.
-        # We removed the 'superuser' check earlier, relying solely on the profile setting.
 
         if effective_mode == 'gemini_full' and user_ai_level != 'full_comprehensive':
-             # Only downgrade if they truly lack the profile setting
+             # Only downgrade if they truly lack the profile setting (and are not director)
              effective_mode = 'free' if user_ai_level == 'educational_free' else 'rag'
 
         if effective_mode == 'free' and user_ai_level == 'restricted_rag':
@@ -142,7 +143,6 @@ class AIService:
                      return response.text
 
                 elif effective_mode == 'free':
-                    # Educational/Free Mode (Pedagogical Assistant)
                     full_prompt = f"""
                     Role: You are a helpful, intelligent, and comprehensive Pedagogical AI Assistant.
                     Goal: Provide detailed, deep, and valuable answers similar to Gemini/ChatGPT but focused on education.
@@ -156,7 +156,6 @@ class AIService:
                     - Offer educational strategies, psychological insights, and teaching methodologies.
                     """
                 else:
-                    # Standard RAG/Professional Mode (Administrative Assistant - Restricted)
                     full_prompt = f"""
                     Role: Administrative Assistant for a School Director (Restricted Scope).
                     Tone: {self.tone} (Professional, Empathetic, Solution-Oriented).
@@ -180,14 +179,9 @@ class AIService:
                 return response.text
             except Exception as e:
                 logger.error(f"Gemini API Error: {e}")
-                # Fallback to Mock if API fails
 
         # 2. Fallback: Enhanced Rule-Based Expert System
-        # Categories: Discipline, Pedagogy, Admin, Parents, General
-
-        # --- Definition / School Info ---
         if self._contains_any(user_query, ["عرف", "تعريف", "مدرسة", "مؤسسة", "متوسطة", "ثانوية"]):
-            # Avoid triggering if it's just a casual mention, but "Define the school" is specific.
             if "عرف" in user_query or "ما هي" in user_query:
                 responses = [
                     "المدرسة هي مؤسسة تربوية تعليمية تهدف إلى تنشئة الأجيال وتزويدهم بالمعارف والمهارات والقيم. هي المحيط الذي يتفاعل فيه التلميذ مع المعلم لبناء شخصيته.",
@@ -196,7 +190,6 @@ class AIService:
                 ]
                 return random.choice(responses)
 
-        # --- Discipline / Behavior ---
         if self._contains_any(user_query, ["سلوك", "شغب", "عنف", "ضرب", "مشكلة", "تلميذ", "عقوبة"]):
             responses = [
                 "بناءً على اللوائح التنظيمية، التعامل مع حالات الشغب يتطلب خطوات متدرجة: 1. الحوار الفردي مع التلميذ لفهم الدوافع. 2. استدعاء الولي وتوقيع تعهد. 3. في حالة العنف الجسدي، يجب عقد مجلس تأديب فوري. أنصحك بتوثيق الحادثة في سجل الملاحظات.",
@@ -205,8 +198,6 @@ class AIService:
             ]
             return random.choice(responses)
 
-        # --- Pedagogy / Teachers ---
-        # Note: Exclude 'درس' if 'مدرسة' is present to avoid confusion
         is_school_context = "مدرسة" in user_query
         pedagogy_keywords = ["أستاذ", "معلم", "تأخر", "غياب الأستاذ", "مستوى", "نتائج", "فروض", "امتحانات"]
         if not is_school_context:
@@ -220,7 +211,6 @@ class AIService:
             ]
             return random.choice(responses)
 
-        # --- Administration / HR ---
         if self._contains_any(user_query, ["موظف", "راتب", "عطلة", "ترقية", "خصم", "مردودية", "غياب"]):
             responses = [
                 "الإجراءات الإدارية تتطلب دقة. بخصوص المردودية، تأكد من تحديث تنقيط الغيابات والتأخرات قبل إرسال القوائم للوصاية. تذكر أن تقييم الموظف يعتمد 40% على الانضباط و60% على المبادرة.",
@@ -229,7 +219,6 @@ class AIService:
             ]
             return random.choice(responses)
 
-        # --- Parents ---
         if self._contains_any(user_query, ["ولي", "أب", "أم", "جمعية", "تواصل", "استدعاء"]):
             responses = [
                 "إشراك الأولياء شريك أساسي. أقترح تفعيل دفتر المراسلة الرقمي (عبر التطبيق) لإرسال ملاحظات فورية. هذا يقلل من زيارات الاحتجاج ويزيد من الثقة.",
@@ -238,7 +227,6 @@ class AIService:
             ]
             return random.choice(responses)
 
-        # --- General / Planning ---
         if self._contains_any(user_query, ["خطة", "مشروع", "هدف", "تنظيم", "برنامج"]):
             responses = [
                 "للتخطيط الناجح، استخدم منهجية SMART (محدد، قابل للقياس، قابل للتحقيق، واقعي، محدد بزمن). ابدأ بتحديد 3 أولويات لهذا الفصل (مثلاً: تحسين الانضباط، رفع نسبة النجاح، تزيين المحيط).",
@@ -247,7 +235,6 @@ class AIService:
             ]
             return random.choice(responses)
 
-        # --- Greeting / Small Talk (But Professional) ---
         if self._contains_any(user_query, ["مرحبا", "السلام", "أهلا", "صباح", "مساء"]):
             responses = [
                 "أهلاً بك سيدي المدير. أنا مساعدك الرقمي، جاهز لمعاونتك في المهام الإدارية والتربوية. كيف يمكنني خدمتك اليوم؟",
@@ -256,7 +243,6 @@ class AIService:
             ]
             return random.choice(responses)
 
-        # --- Fallback (Generic but varied) ---
         generic_responses = [
             f"مرحباً بك. لتقديم أفضل مساعدة، يرجى تحديد سياق السؤال أكثر (مثلاً: هل يتعلق الأمر بإجراء إداري، مشكلة تربوية، أو تخطيط؟).",
             f"سؤالك '{user_query}' مهم. بصفتي مساعداً إدارياً، أنصحك دائماً بالعودة للنصوص التشريعية في الحالات الشائكة. هل تريد مني البحث عن مرجع قانوني؟",
@@ -266,28 +252,21 @@ class AIService:
         return random.choice(generic_responses)
 
     def _mock_observation_response(self, query):
-        # Deprecated by new logic above, kept for safety
         return "يرجى مراجعة سجل المتابعة التربوية."
 
     def _mock_task_explanation(self, manager_instructions):
         return f"بناءً على التوجيهات: {manager_instructions}."
 
     def generate_reminder(self, task_title, manager_instructions):
-        """
-        Generates a creative reminder message.
-        """
         return f"تذكير ودي: لا تنس {task_title}. {manager_instructions[:50]}... إنجازك لهذا العمل يساهم في سير المؤسسة بامتياز!"
 
 
 def analyze_assignment_document(assignment):
-    """
-    Deprecated. Used for single teacher assignment.
-    """
     pass
 
 def analyze_global_assignment_content(file_path):
     """
-    Analyzes a global assignment file (Schedule) to extract potential candidates (Name, Subject, Classes).
+    Analyzes a global assignment file (Schedule) to extract potential candidates.
     Returns a list of dicts: [{'name': '...', 'subject': '...', 'classes': [...]}, ...]
     Does NOT save to DB.
     """
@@ -296,57 +275,58 @@ def analyze_global_assignment_content(file_path):
 
     try:
         if ext == '.pdf':
-            # PDF Table Extraction (More Robust Logic for PyPDF2)
             reader = PdfReader(file_path)
             full_text = ""
             for page in reader.pages:
                 text = page.extract_text()
                 if text:
-                    # Fix Arabic Reversal if present (PyPDF2 sometimes reverses Arabic)
-                    # Simple heuristic: Split by lines
                     full_text += text + "\n"
-
-            # Process text line by line using "Columns" logic
-            # The image shows: | Classes | Subject | Rank | Teacher Name | No |
-            # We look for lines containing a teacher name (usually at end of line in Arabic visual, start in logical)
-            # Strategy: Find lines with Subject keywords + Classes patterns
             candidates = _process_text_for_assignment(full_text)
 
         elif ext == '.docx':
-            doc = Document(file_path)
-            # Iterate tables directly (much more reliable for Word)
-            for table in doc.tables:
-                for row in table.rows:
-                    row_text = [cell.text.strip() for cell in row.cells]
-                    # Filter empty cells
-                    row_text = [t for t in row_text if t]
-                    # Convert to string for regex
-                    line = " ".join(row_text)
-                    extracted = _extract_from_line(line)
-                    if extracted:
-                        _merge_candidate(candidates, extracted)
-
-            # Also check paragraphs for non-table data
-            full_text = "\n".join([p.text for p in doc.paragraphs])
-            candidates.extend(_process_text_for_assignment(full_text))
+            try:
+                from students.utils_tools.smart_assignment_analyzer import extract_from_word
+                smart_candidates = extract_from_word(file_path)
+                if smart_candidates:
+                    candidates.extend(smart_candidates)
+                else:
+                    raise ValueError("Smart extraction returned nothing")
+            except Exception:
+                # Fallback
+                doc = Document(file_path)
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = [cell.text.strip() for cell in row.cells]
+                        line = " ".join([t for t in row_text if t])
+                        extracted = _extract_from_line(line)
+                        if extracted:
+                            _merge_candidate(candidates, extracted)
+                full_text = "\n".join([p.text for p in doc.paragraphs])
+                candidates.extend(_process_text_for_assignment(full_text))
 
         elif ext in ['.xlsx', '.xls']:
-            import pandas as pd
             try:
-                df = pd.read_excel(file_path)
-                # Convert whole DF to string lines or iterate rows
-                for index, row in df.iterrows():
-                    line = " ".join([str(x) for x in row.values if str(x) != 'nan'])
-                    extracted = _extract_from_line(line)
-                    if extracted:
-                        _merge_candidate(candidates, extracted)
-            except:
-                pass
+                from students.utils_tools.smart_assignment_analyzer import extract_from_excel
+                smart_candidates = extract_from_excel(file_path)
+                if smart_candidates:
+                    candidates.extend(smart_candidates)
+                else:
+                    raise ValueError("Smart extraction returned nothing")
+            except Exception:
+                import pandas as pd
+                try:
+                    df = pd.read_excel(file_path)
+                    for index, row in df.iterrows():
+                        line = " ".join([str(x) for x in row.values if str(x) != 'nan'])
+                        extracted = _extract_from_line(line)
+                        if extracted:
+                            _merge_candidate(candidates, extracted)
+                except:
+                    pass
 
         elif ext in ['.html', '.htm']:
              with open(file_path, 'r', encoding='utf-8') as f:
                  soup = BeautifulSoup(f.read(), 'html.parser')
-                 # Parse TRs
                  for tr in soup.find_all('tr'):
                      line = " ".join([td.get_text() for td in tr.find_all(['td', 'th'])])
                      extracted = _extract_from_line(line)
@@ -369,7 +349,6 @@ def _process_text_for_assignment(text):
     return candidates
 
 def _merge_candidate(candidates, new_cand):
-    # Check if name already exists
     for c in candidates:
         if c['name'] == new_cand['name']:
             c['classes'].extend(new_cand['classes'])
@@ -380,13 +359,9 @@ def _merge_candidate(candidates, new_cand):
     candidates.append(new_cand)
 
 def _extract_from_line(line):
-    """
-    Core logic to extract Name, Subject, Classes from a single line string.
-    """
     line = line.strip()
     if not line or len(line) < 5: return None
 
-    # 1. Subject Detection
     subjects_map = {
         'رياضيات': 'رياضيات', 'فيزياء': 'فيزياء', 'علوم': 'علوم طبيعية',
         'عربية': 'لغة عربية', 'فرنسية': 'لغة فرنسية', 'انجليزية': 'لغة إنجليزية',
@@ -403,48 +378,29 @@ def _extract_from_line(line):
             found_subject = val
             break
 
-    # 2. Class Detection (Improved Regex)
-    # Matches: 1AM1, 4M3, 1م1, 4م3, 1 م 1
     class_pattern = r'\b(\d+\s*(?:AM|M|م|متوسط)\s*\d*)\b'
     found_classes = re.findall(class_pattern, line, re.IGNORECASE)
 
-    # Normalize Classes
     normalized_classes = []
     for c in found_classes:
-        # Standardize: Remove spaces, replace 'م' with 'M' (or keep consistent)
         c_clean = c.replace(' ', '').replace('م', 'M').replace('متوسط', 'M')
-        # Ensure format "1M1"
-        # If it's "1M", append nothing? No, usually class has number.
-        # But if the file says "1م4", it becomes "1M4".
         normalized_classes.append(c_clean)
 
-    # If no classes and no subject, probably a header or noise
     if not normalized_classes and found_subject == '/': return None
 
-    # 3. Name Extraction
-    # Strategy: Remove detected classes, subject keywords, and other noise.
-    # What remains is likely the name.
-
     temp_line = line
-    # Remove classes
     temp_line = re.sub(class_pattern, '', temp_line, flags=re.IGNORECASE)
-    # Remove subject keys
     for key in subjects_map.keys():
         temp_line = temp_line.replace(key, '')
 
-    # Remove numeric noise (hours, coefficients)
     temp_line = re.sub(r'\b\d+\b', '', temp_line)
 
-    # Remove Keywords
     keywords = ['الأستاذ', 'المادة', 'القسم', 'التوقيت', 'الحجم', 'الرتبة', 'ساعي', 'أستاذ', 'تعليم', 'متوسط', 'ثانوي', 'قسم', 'أول', 'ثان', 'رئيسي', 'مكون']
     for k in keywords:
         temp_line = temp_line.replace(k, '')
 
-    # Clean up punctuation and spaces
     name_candidate = re.sub(r'[^\w\s]', '', temp_line).strip()
 
-    # Validate Name
-    # Must be at least 3 chars (e.g. "علي")
     if len(name_candidate) < 3: return None
 
     return {
@@ -454,81 +410,5 @@ def _extract_from_line(line):
     }
 
 def analyze_global_assignment(file_path):
-    """
-    Deprecated in favor of interactive matching.
-    Analyzes a global assignment file (Schedule) to link Teachers to Subjects and Classes.
-    Supports Excel, Word, PDF, HTML.
-    Returns summary stats.
-    """
-    text = ""
-    ext = os.path.splitext(file_path)[1].lower()
-
-    try:
-        if ext == '.pdf':
-            reader = PdfReader(file_path)
-            for page in reader.pages: text += page.extract_text() + "\n"
-        elif ext == '.docx':
-            doc = Document(file_path)
-            for p in doc.paragraphs: text += p.text + "\n"
-            for t in doc.tables:
-                for r in t.rows:
-                    text += " ".join([c.text for c in r.cells]) + "\n"
-        elif ext in ['.xlsx', '.xls']:
-            import pandas as pd
-            try:
-                df = pd.read_excel(file_path)
-                text = df.to_string()
-            except:
-                pass
-
-        if not text and ext in ['.html', '.htm']:
-             with open(file_path, 'r', encoding='utf-8') as f:
-                 soup = BeautifulSoup(f.read(), 'html.parser')
-                 text = soup.get_text()
-
-        if not text:
-             try:
-                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: text = f.read()
-             except: pass
-
-        # --- AI LOGIC (Regex/Heuristic) ---
-        teachers = Employee.objects.filter(rank='teacher')
-        stats = {'processed': 0, 'classes': 0}
-
-        for teacher in teachers:
-            if teacher.last_name in text or teacher.first_name in text:
-                teacher_classes = []
-                teacher_subject = teacher.subject
-
-                class_pattern = r'\b(\d+[AM]+\d+|\d+M\d+)\b'
-
-                lines = text.split('\n')
-                for line in lines:
-                    if teacher.last_name in line or teacher.first_name in line:
-                        found_classes = re.findall(class_pattern, line)
-                        teacher_classes.extend(found_classes)
-
-                        subjects = ['رياضيات', 'فيزياء', 'علوم', 'عربية', 'فرنسية', 'انجليزية', 'تاريخ', 'جغرافيا', 'إسلامية', 'مدنية', 'إعلام آلي', 'تكنولوجية', 'بدنية', 'تشكيلية', 'موسيقى']
-                        for s in subjects:
-                            if s in line:
-                                teacher_subject = s
-                                break
-
-                if teacher_classes:
-                    if teacher_subject and teacher_subject != '/':
-                        teacher.subject = teacher_subject
-                        teacher.save()
-
-                    TeacherAssignment.objects.create(
-                        teacher=teacher,
-                        subject=teacher_subject or "عام",
-                        classes=list(set(teacher_classes))
-                    )
-                    stats['processed'] += 1
-                    stats['classes'] += len(set(teacher_classes))
-
-        return stats
-
-    except Exception as e:
-        logger.error(f"Global Analysis Failed: {e}")
-        raise e
+    # Deprecated stub
+    pass
