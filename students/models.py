@@ -172,6 +172,14 @@ class EmployeeProfile(models.Model):
     device_id = models.CharField(max_length=100, null=True, blank=True, verbose_name="معرف الجهاز")
     permissions = models.JSONField(default=list, blank=True, verbose_name="الصلاحيات")
 
+    # AI Access Control (Director sets this for each user)
+    AI_MODE_CHOICES = [
+        ('restricted_rag', 'وضع مقيد (RAG) - مساعد إداري'),
+        ('educational_free', 'وضع حر (تربوي)'),
+        ('full_comprehensive', 'وضع شامل (Gemini Pro Full)'),
+    ]
+    ai_mode = models.CharField(max_length=30, choices=AI_MODE_CHOICES, default='restricted_rag', verbose_name="صلاحيات الذكاء الاصطناعي")
+
     totp_secret = models.CharField(max_length=100, null=True, blank=True, verbose_name="مفتاح المصادقة الثنائية")
     totp_enabled = models.BooleanField(default=False, verbose_name="تفعيل المصادقة الثنائية")
     must_change_password = models.BooleanField(default=False, verbose_name="يجب تغيير كلمة المرور")
@@ -237,6 +245,7 @@ class Employee(models.Model):
     effective_date = models.DateField(null=True, blank=True, verbose_name="تاريخ السريان")
     phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم الهاتف")
     email = models.EmailField(null=True, blank=True, verbose_name="البريد الإلكتروني")
+    social_media_link = models.URLField(null=True, blank=True, verbose_name="رابط التواصل الاجتماعي")
     photo = models.ImageField(upload_to='employee_photos/', null=True, blank=True, verbose_name="الصورة")
     notes = models.TextField(null=True, blank=True, verbose_name="ملاحظات")
 

@@ -304,7 +304,119 @@ def print_student_cards(request):
 # --- New Modules ---
 
 from .models import TeacherAssignment
-from .ai_utils import analyze_assignment_document
+from .ai_utils import analyze_assignment_document, analyze_global_assignment_content
+
+# Import the new view logic (kept in separate block to avoid file clutter, or merged here)
+# For simplicity, I'll inline the logic I wrote in assignment_views.py into ui_views.py now
+# to avoid circular imports or missing references.
+
+def assignment_matching_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    # 1. Processing Uploaded File (GET)
+    if request.method == 'GET':
+        temp_path = request.session.get('assignment_temp_path')
+        if not temp_path or not os.path.exists(temp_path):
+            messages.error(request, "انتهت صلاحية الجلسة أو الملف غير موجود.")
+            return redirect('hr_home')
+
+        try:
+            candidates = analyze_global_assignment_content(temp_path)
+            all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
+
+            # Auto-suggest matches
+            for c in candidates:
+                # Fuzzy match logic
+                best_score = 0
+                best_match = None
+
+                for t in all_teachers:
+                    score = 0
+                    if t.last_name and t.last_name in c['name']: score += 50
+                    if t.first_name and t.first_name in c['name']: score += 30
+
+                    if score > best_score:
+                        best_score = score
+                        best_match = t
+
+                if best_score >= 50 and best_match:
+                    c['suggested_id'] = best_match.id
+
+                import json
+                c['classes_json'] = json.dumps(c['classes'])
+
+            context = {
+                'candidates': candidates,
+                'all_teachers': all_teachers,
+                'temp_file_path': temp_path,
+                'unmatched_count': len(candidates)
+            }
+            return render(request, 'students/assignment_match.html', context)
+
+        except Exception as e:
+            messages.error(request, f"Error processing file: {e}")
+            return redirect('hr_home')
+
+    # 2. Saving Matches (POST)
+    elif request.method == 'POST':
+        try:
+            import json
+            count = 0
+
+            # Iterate through form fields
+            for key, value in request.POST.items():
+                if key.startswith('match_'):
+                    idx = key.split('_')[1]
+                    action = value # 'ignore', 'create_new', or ID
+
+                    if action == 'ignore': continue
+
+                    name = request.POST.get(f'name_{idx}')
+                    subject = request.POST.get(f'subject_{idx}')
+                    classes_json = request.POST.get(f'classes_{idx}')
+                    classes = json.loads(classes_json) if classes_json else []
+
+                    teacher = None
+                    if action == 'create_new':
+                        # Create minimal teacher record
+                        parts = name.split()
+                        ln = parts[0] if parts else "Unknown"
+                        fn = " ".join(parts[1:]) if len(parts) > 1 else ""
+                        teacher = Employee.objects.create(
+                            last_name=ln, first_name=fn,
+                            full_name=name, rank='teacher', subject=subject
+                        )
+                    else:
+                        # Existing ID
+                        teacher = Employee.objects.get(id=action)
+                        if subject and subject != '/':
+                            teacher.subject = subject
+                            teacher.save()
+
+                    # Save Assignment
+                    TeacherAssignment.objects.create(
+                        teacher=teacher,
+                        subject=subject or teacher.subject or "عام",
+                        classes=classes
+                    )
+                    count += 1
+
+            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ.")
+
+            # Clean up temp file
+            temp_path = request.POST.get('file_path')
+            if temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+
+            # Clear session
+            if 'assignment_temp_path' in request.session:
+                del request.session['assignment_temp_path']
+
+        except Exception as e:
+            messages.error(request, f"خطأ في الحفظ: {e}")
+
+        return redirect('hr_home')
 
 def hr_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
@@ -339,12 +451,20 @@ def hr_home(request):
 
                     sys_rank = 'admin' # Default to admin for general staff
 
-                    # Strict Check to avoid misclassification
+                    # Improved Classification Logic based on User Feedback
                     if 'أستاذ' in raw_rank:
                         sys_rank = 'teacher'
-                    elif 'عامل مهني' in raw_rank or 'عون' in raw_rank or 'خدمة' in raw_rank:
-                         # Includes "عون خدمة" or "عامل مهني"
+                    elif 'عامل مهني' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
+                         # "Service Agent", "Prevention Agent", "Worker", "Cleaner", "Guard" -> Worker
                          sys_rank = 'worker'
+                    elif 'عون' in raw_rank:
+                         # "Agent" alone (Admin Agent, Office Agent, Data Entry Agent) -> Admin
+                         # Check if explicitly admin-related keywords follow "Agent"
+                         if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
+                             sys_rank = 'admin'
+                         else:
+                             # Default fallback for generic "Agent" to Admin as per "First point" in request
+                             sys_rank = 'admin'
 
                     # Validation: Filter out header rows that might have slipped through
                     # If 'rank' literally contains "الرتبة" or "rank", skip
@@ -460,26 +580,18 @@ def hr_home(request):
             if file:
                 try:
                     # Save temporary file for analysis
-                    from .ai_utils import analyze_global_assignment
-
-                    # Ensure tempfile is available (global import might be shadowed or we want to be safe)
                     import tempfile
-
                     with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
                         for chunk in file.chunks():
                             tmp.write(chunk)
                         tmp_path = tmp.name
 
-                    results = analyze_global_assignment(tmp_path)
+                    # Store path in session to pass to matching view
+                    request.session['assignment_temp_path'] = tmp_path
+                    return redirect('assignment_matching_view')
 
-                    if results['processed'] > 0:
-                        messages.success(request, f"تم تحليل الإسناد: تم تحديث {results['processed']} أستاذ (تم العثور على {results['classes']} قسم).")
-                    else:
-                        messages.warning(request, "لم يتم العثور على بيانات مطابقة. تأكد من أن أسماء الأساتذة في الملف تطابق قاعدة البيانات.")
-
-                    os.remove(tmp_path)
                 except Exception as e:
-                    messages.error(request, f"خطأ في التحليل: {e}")
+                    messages.error(request, f"خطأ في رفع الملف: {e}")
             return redirect('hr_home')
 
     # Filtering
@@ -492,7 +604,8 @@ def hr_home(request):
     counts = {
         'teachers': Employee.objects.filter(rank='teacher').count(),
         'workers': Employee.objects.filter(rank='worker').count(),
-        'admins': Employee.objects.filter(rank='admin').count()
+        'admins': Employee.objects.filter(rank='admin').count(),
+        'total': Employee.objects.count()
     }
 
     context = {
@@ -615,17 +728,18 @@ def ai_chat_view(request):
         from django.http import JsonResponse
 
         query = request.POST.get('query')
-        # Mode: 'rag', 'free', 'gemini_full'
-        mode = request.POST.get('mode', 'rag')
+        # Mode requested by UI (will be checked against permissions inside AIService)
+        requested_mode = request.POST.get('mode', None)
 
-        ai = AIService()
+        # Pass current user for permission check
+        ai = AIService(user=request.user)
 
-        # System instructions vary by mode
-        sys_instr = "أنت مساعد مدير المدرسة. دورك هو تقديم استشارات إدارية وتربوية دقيقة. كن رسمياً، مهنياً."
+        # System instructions base (overridden by mode logic in generate_response)
+        sys_instr = "أنت مساعد مدير المدرسة."
 
-        rag_enabled = (mode == 'rag')
+        rag_enabled = (requested_mode == 'rag' or requested_mode is None)
 
-        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=mode)
+        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode)
         return JsonResponse({'response': response_text})
 
     return render(request, 'students/ai_chat.html')

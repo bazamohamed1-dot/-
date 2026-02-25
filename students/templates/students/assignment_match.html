@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}مطابقة الأساتذة{% endblock %}
+{% block header_title %}مطابقة الأساتذة المستخرجين{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> تم العثور على <strong>{{ unmatched_count }}</strong> أستاذ في الملف بحاجة إلى ربط مع قاعدة البيانات. يرجى اختيار الأستاذ الصحيح من القائمة.
+    </div>
+
+    <form method="post" action="{% url 'assignment_matching_view' %}">
+        {% csrf_token %}
+        <input type="hidden" name="file_path" value="{{ temp_file_path }}">
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>الاسم في الملف</th>
+                    <th>الأقسام المستخرجة</th>
+                    <th>المادة المستخرجة</th>
+                    <th>مطابقة مع (قاعدة البيانات)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in candidates %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td>
+                        {% for c in item.classes %}
+                        <span class="badge bg-secondary">{{ c }}</span>
+                        {% endfor %}
+                    </td>
+                    <td>{{ item.subject }}</td>
+                    <td>
+                        <select name="match_{{ forloop.counter0 }}" class="form-control select2">
+                            <option value="ignore">-- تجاهل --</option>
+                            <option value="create_new">++ إنشاء جديد ++</option>
+                            {% for teacher in all_teachers %}
+                            <option value="{{ teacher.id }}" {% if teacher.id == item.suggested_id %}selected{% endif %}>
+                                {{ teacher.last_name }} {{ teacher.first_name }} ({{ teacher.subject|default:"-" }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" name="name_{{ forloop.counter0 }}" value="{{ item.name }}">
+                        <input type="hidden" name="classes_{{ forloop.counter0 }}" value="{{ item.classes_json }}">
+                        <input type="hidden" name="subject_{{ forloop.counter0 }}" value="{{ item.subject }}">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <a href="{% url 'hr_home' %}" class="btn btn-secondary">إلغاء</a>
+            <button type="submit" class="btn btn-primary">حفظ واعتماد</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
