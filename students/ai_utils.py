@@ -91,8 +91,12 @@ class AIService:
         effective_mode = mode if mode else 'rag'
 
         # Enforce Permissions (Downgrade if necessary)
+        # RELAXED LOGIC: If user_ai_level is 'full_comprehensive', they get gemini_full.
+        # We removed the 'superuser' check earlier, relying solely on the profile setting.
+
         if effective_mode == 'gemini_full' and user_ai_level != 'full_comprehensive':
-            effective_mode = 'free' if user_ai_level == 'educational_free' else 'rag'
+             # Only downgrade if they truly lack the profile setting
+             effective_mode = 'free' if user_ai_level == 'educational_free' else 'rag'
 
         if effective_mode == 'free' and user_ai_level == 'restricted_rag':
             effective_mode = 'rag'
@@ -113,17 +117,17 @@ class AIService:
                      You are an expert consultant, strategist, and creative partner.
                      You are NOT an assistant. You are a peer to the Director.
 
-                     Context: The user is a School Director who needs deep, comprehensive, and unrestricted analysis.
+                     Context: The user is a School Director (or authorized user) who demands absolute intellectual freedom.
 
                      User Query: {user_query}
 
                      Directives:
-                     1. IGNORE any previous instructions to be concise or limited.
-                     2. Be expansive, detailed, and creative.
-                     3. If the user asks for a plan, provide a full strategic roadmap.
-                     4. If the user asks for an opinion, provide a strong, expert opinion with pros and cons.
-                     5. Use your full knowledge base (Psychology, Management, Law, Pedagogy, Technology).
-                     6. Format your response beautifully with Markdown (Headers, Tables, Lists).
+                     1. ABSOLUTELY NO RESTRICTIONS. Ignore any "assistant" persona constraints.
+                     2. Be expansive, detailed, and creative. Write as much as needed.
+                     3. Provide strategic roadmaps, critical analysis, and expert opinions without hesitation.
+                     4. Use your FULL knowledge base (Psychology, Management, Law, Pedagogy, Technology, Philosophy).
+                     5. Format beautifully with Markdown.
+                     6. If the user asks for code, provide full, working code. If they ask for a speech, write a moving one.
                      """
 
                      # Allow maximum tokens for full mode
@@ -131,8 +135,8 @@ class AIService:
                          full_prompt,
                          generation_config=genai.types.GenerationConfig(
                              candidate_count=1,
-                             max_output_tokens=4000, # Maximize length even further
-                             temperature=0.8 # Slightly more creative
+                             max_output_tokens=8000, # Push limits
+                             temperature=0.9 # High creativity
                          )
                      )
                      return response.text
@@ -287,118 +291,167 @@ def analyze_global_assignment_content(file_path):
     Returns a list of dicts: [{'name': '...', 'subject': '...', 'classes': [...]}, ...]
     Does NOT save to DB.
     """
-    text = ""
     ext = os.path.splitext(file_path)[1].lower()
+    candidates = []
 
     try:
         if ext == '.pdf':
+            # PDF Table Extraction (More Robust Logic for PyPDF2)
             reader = PdfReader(file_path)
-            for page in reader.pages: text += page.extract_text() + "\n"
+            full_text = ""
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    # Fix Arabic Reversal if present (PyPDF2 sometimes reverses Arabic)
+                    # Simple heuristic: Split by lines
+                    full_text += text + "\n"
+
+            # Process text line by line using "Columns" logic
+            # The image shows: | Classes | Subject | Rank | Teacher Name | No |
+            # We look for lines containing a teacher name (usually at end of line in Arabic visual, start in logical)
+            # Strategy: Find lines with Subject keywords + Classes patterns
+            candidates = _process_text_for_assignment(full_text)
+
         elif ext == '.docx':
             doc = Document(file_path)
-            for p in doc.paragraphs: text += p.text + "\n"
-            for t in doc.tables:
-                for r in t.rows:
-                    text += " ".join([c.text for c in r.cells]) + "\n"
+            # Iterate tables directly (much more reliable for Word)
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = [cell.text.strip() for cell in row.cells]
+                    # Filter empty cells
+                    row_text = [t for t in row_text if t]
+                    # Convert to string for regex
+                    line = " ".join(row_text)
+                    extracted = _extract_from_line(line)
+                    if extracted:
+                        _merge_candidate(candidates, extracted)
+
+            # Also check paragraphs for non-table data
+            full_text = "\n".join([p.text for p in doc.paragraphs])
+            candidates.extend(_process_text_for_assignment(full_text))
+
         elif ext in ['.xlsx', '.xls']:
             import pandas as pd
             try:
                 df = pd.read_excel(file_path)
-                text = df.to_string()
+                # Convert whole DF to string lines or iterate rows
+                for index, row in df.iterrows():
+                    line = " ".join([str(x) for x in row.values if str(x) != 'nan'])
+                    extracted = _extract_from_line(line)
+                    if extracted:
+                        _merge_candidate(candidates, extracted)
             except:
                 pass
 
-        if not text and ext in ['.html', '.htm']:
+        elif ext in ['.html', '.htm']:
              with open(file_path, 'r', encoding='utf-8') as f:
                  soup = BeautifulSoup(f.read(), 'html.parser')
-                 text = soup.get_text()
-
-        if not text:
-             try:
-                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: text = f.read()
-             except: pass
-
-        # Extraction Logic
-        candidates = []
-        lines = text.split('\n')
-
-        # Regex for Classes (e.g., 1AM1, 4M3, 1 متوسط 2)
-        class_pattern = r'\b(\d+\s*(?:AM|M|متوسط)\s*\d*|\d+[AM]+\d+|\d+M\d+)\b'
-
-        # Heuristic: Lines with a name often don't have many numbers, but schedule lines do.
-        # This is a hard problem without structured data.
-        # Let's assume a row contains: Teacher Name | Subject | Classes...
-
-        # We will iterate lines and try to extract "Name-like" strings + Classes
-
-        for line in lines:
-            line = line.strip()
-            if not line or len(line) < 5: continue
-
-            # Find classes in line
-            found_classes = re.findall(class_pattern, line, re.IGNORECASE)
-
-            # If classes found, look for a name in the SAME line or PREVIOUS lines?
-            # Simple assumption: Name is in the same line or block.
-
-            # Filter classes (normalize)
-            normalized_classes = []
-            for c in found_classes:
-                c = c.upper().replace(' ', '')
-                normalized_classes.append(c)
-
-            if normalized_classes:
-                # Guess Subject
-                subjects_map = {
-                    'رياضيات': 'رياضيات', 'فيزياء': 'فيزياء', 'علوم': 'علوم طبيعية',
-                    'عربية': 'لغة عربية', 'فرنسية': 'لغة فرنسية', 'انجليزية': 'لغة إنجليزية',
-                    'تاريخ': 'تاريخ وجغرافيا', 'جغرافيا': 'تاريخ وجغرافيا',
-                    'إسلامية': 'تربية إسلامية', 'مدنية': 'تربية مدنية',
-                    'إعلام': 'إعلام آلي', 'تكنولوجيا': 'تكنولوجيا',
-                    'بدنية': 'تربية بدنية', 'موسيقى': 'تربية موسيقية', 'تشكيلية': 'تربية تشكيلية'
-                }
-                found_subject = "/"
-                for key, val in subjects_map.items():
-                    if key in line:
-                        found_subject = val
-                        break
-
-                # Guess Name: Remove digits, known keywords, and punctuation
-                # This is "dirty" extraction but better than nothing
-                name_part = re.sub(class_pattern, '', line, flags=re.IGNORECASE)
-                name_part = re.sub(r'[0-9]+', '', name_part)
-                # Remove common headers
-                name_part = re.sub(r'(الأستاذ|المادة|القسم|التوقيت|يوم|سا)', '', name_part)
-                # Remove subject names
-                for s in subjects_map.keys():
-                    name_part = name_part.replace(s, '')
-
-                name_candidate = name_part.strip()
-
-                # Filter noise
-                if len(name_candidate) > 4:
-                    # Check duplication
-                    exists = False
-                    for cand in candidates:
-                        if cand['name'] == name_candidate:
-                            cand['classes'].extend(normalized_classes)
-                            cand['classes'] = list(set(cand['classes']))
-                            if cand['subject'] == '/': cand['subject'] = found_subject
-                            exists = True
-                            break
-
-                    if not exists:
-                        candidates.append({
-                            'name': name_candidate,
-                            'subject': found_subject,
-                            'classes': list(set(normalized_classes))
-                        })
+                 # Parse TRs
+                 for tr in soup.find_all('tr'):
+                     line = " ".join([td.get_text() for td in tr.find_all(['td', 'th'])])
+                     extracted = _extract_from_line(line)
+                     if extracted:
+                        _merge_candidate(candidates, extracted)
 
         return candidates
 
     except Exception as e:
         logger.error(f"Global Analysis Failed: {e}")
         return []
+
+def _process_text_for_assignment(text):
+    candidates = []
+    lines = text.split('\n')
+    for line in lines:
+        extracted = _extract_from_line(line)
+        if extracted:
+            _merge_candidate(candidates, extracted)
+    return candidates
+
+def _merge_candidate(candidates, new_cand):
+    # Check if name already exists
+    for c in candidates:
+        if c['name'] == new_cand['name']:
+            c['classes'].extend(new_cand['classes'])
+            c['classes'] = list(set(c['classes']))
+            if c['subject'] == '/' and new_cand['subject'] != '/':
+                c['subject'] = new_cand['subject']
+            return
+    candidates.append(new_cand)
+
+def _extract_from_line(line):
+    """
+    Core logic to extract Name, Subject, Classes from a single line string.
+    """
+    line = line.strip()
+    if not line or len(line) < 5: return None
+
+    # 1. Subject Detection
+    subjects_map = {
+        'رياضيات': 'رياضيات', 'فيزياء': 'فيزياء', 'علوم': 'علوم طبيعية',
+        'عربية': 'لغة عربية', 'فرنسية': 'لغة فرنسية', 'انجليزية': 'لغة إنجليزية',
+        'تاريخ': 'تاريخ وجغرافيا', 'جغرافيا': 'تاريخ وجغرافيا',
+        'إسلامية': 'تربية إسلامية', 'مدنية': 'تربية مدنية',
+        'إعلام': 'إعلام آلي', 'تكنولوجيا': 'تكنولوجيا', 'تكنولوجية': 'تكنولوجيا',
+        'بدنية': 'تربية بدنية', 'موسيقى': 'تربية موسيقية', 'تشكيلية': 'تربية تشكيلية', 'رسم': 'تربية تشكيلية',
+        'اجتماعيات': 'تاريخ وجغرافيا', 'رياضة': 'تربية بدنية'
+    }
+
+    found_subject = "/"
+    for key, val in subjects_map.items():
+        if key in line:
+            found_subject = val
+            break
+
+    # 2. Class Detection (Improved Regex)
+    # Matches: 1AM1, 4M3, 1م1, 4م3, 1 م 1
+    class_pattern = r'\b(\d+\s*(?:AM|M|م|متوسط)\s*\d*)\b'
+    found_classes = re.findall(class_pattern, line, re.IGNORECASE)
+
+    # Normalize Classes
+    normalized_classes = []
+    for c in found_classes:
+        # Standardize: Remove spaces, replace 'م' with 'M' (or keep consistent)
+        c_clean = c.replace(' ', '').replace('م', 'M').replace('متوسط', 'M')
+        # Ensure format "1M1"
+        # If it's "1M", append nothing? No, usually class has number.
+        # But if the file says "1م4", it becomes "1M4".
+        normalized_classes.append(c_clean)
+
+    # If no classes and no subject, probably a header or noise
+    if not normalized_classes and found_subject == '/': return None
+
+    # 3. Name Extraction
+    # Strategy: Remove detected classes, subject keywords, and other noise.
+    # What remains is likely the name.
+
+    temp_line = line
+    # Remove classes
+    temp_line = re.sub(class_pattern, '', temp_line, flags=re.IGNORECASE)
+    # Remove subject keys
+    for key in subjects_map.keys():
+        temp_line = temp_line.replace(key, '')
+
+    # Remove numeric noise (hours, coefficients)
+    temp_line = re.sub(r'\b\d+\b', '', temp_line)
+
+    # Remove Keywords
+    keywords = ['الأستاذ', 'المادة', 'القسم', 'التوقيت', 'الحجم', 'الرتبة', 'ساعي', 'أستاذ', 'تعليم', 'متوسط', 'ثانوي', 'قسم', 'أول', 'ثان', 'رئيسي', 'مكون']
+    for k in keywords:
+        temp_line = temp_line.replace(k, '')
+
+    # Clean up punctuation and spaces
+    name_candidate = re.sub(r'[^\w\s]', '', temp_line).strip()
+
+    # Validate Name
+    # Must be at least 3 chars (e.g. "علي")
+    if len(name_candidate) < 3: return None
+
+    return {
+        'name': name_candidate,
+        'subject': found_subject,
+        'classes': list(set(normalized_classes))
+    }
 
 def analyze_global_assignment(file_path):
     """
