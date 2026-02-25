@@ -20,3 +20,7 @@ def strip_level_from_class(class_name, level):
     pattern = re.compile(f"^{level_escaped}\s*", re.IGNORECASE)
 
     return pattern.sub('', str(class_name)).strip()
+
+@register.filter
+def get_item(dictionary, key):
+    return dictionary.get(key)

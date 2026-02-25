@@ -47,6 +47,7 @@ urlpatterns = [
     path('pending_updates/', ui_views.pending_updates_view, name='pending_updates_view'),
     path('settings/', ui_views.settings_view, name='settings'),
     path('import_eleve/', ui_views.import_eleve_view, name='import_eleve_view'),
+    path('import_eleve/confirm/', ui_views.import_eleve_confirm, name='import_eleve_confirm'),
     path('api/import_json/', views.import_students_json, name='api_import_json'),
     path('api/import/update/', views.upload_update_file, name='api_import_update'),
     path('ui/', ui_views.canteen_home, name='canteen_home'),
