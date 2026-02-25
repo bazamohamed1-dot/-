@@ -399,10 +399,7 @@ def print_student_cards(request):
 
 from .models import TeacherAssignment
 from .ai_utils import analyze_assignment_document, analyze_global_assignment_content
-
-# Import the new view logic (kept in separate block to avoid file clutter, or merged here)
-# For simplicity, I'll inline the logic I wrote in assignment_views.py into ui_views.py now
-# to avoid circular imports or missing references.
+import difflib
 
 def assignment_matching_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
@@ -418,22 +415,43 @@ def assignment_matching_view(request):
             candidates = analyze_global_assignment_content(temp_path)
             all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
 
-            # Auto-suggest matches
+            # Improved Fuzzy Matching
+            def get_similarity(s1, s2):
+                if not s1 or not s2: return 0.0
+                return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
+
             for c in candidates:
-                # Fuzzy match logic
-                best_score = 0
+                best_score = 0.0
                 best_match = None
+                c_norm = c['name'].strip()
 
                 for t in all_teachers:
-                    score = 0
-                    if t.last_name and t.last_name in c['name']: score += 50
-                    if t.first_name and t.first_name in c['name']: score += 30
+                    # Construct full names
+                    t_full = f"{t.last_name} {t.first_name}"
+                    t_rev = f"{t.first_name} {t.last_name}" # Handle reversed order
+
+                    # 1. Direct Containment (Highest Confidence)
+                    if t.last_name in c_norm and t.first_name in c_norm:
+                        score = 1.0
+
+                    # 2. Last Name Only (High Confidence if uncommon)
+                    elif t.last_name in c_norm and len(t.last_name) > 3:
+                        score = 0.8
+
+                    # 3. Fuzzy Ratio on Full String
+                    else:
+                        score = max(
+                            get_similarity(c_norm, t_full),
+                            get_similarity(c_norm, t_rev),
+                            get_similarity(c_norm, t.last_name) # Fallback to surname similarity
+                        )
 
                     if score > best_score:
                         best_score = score
                         best_match = t
 
-                if best_score >= 50 and best_match:
+                # Threshold: 0.6 is usually good for fuzzy names with typos
+                if best_score >= 0.6 and best_match:
                     c['suggested_id'] = best_match.id
 
                 import json

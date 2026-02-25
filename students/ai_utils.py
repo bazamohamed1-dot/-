@@ -107,18 +107,23 @@ class AIService:
             try:
                 if effective_mode == 'gemini_full':
                      # Completely Unrestricted Gemini (Director Level)
-                     # We remove almost all constraints to let the model shine
+                     # Fully Liberated AI as per user request
                      full_prompt = f"""
-                     You are Gemini Pro, a large language model trained by Google.
-                     The user is asking a question in an educational/administrative context, but you should answer as a general-purpose expert without artificial constraints.
+                     Instructions for AI:
+                     You are an expert consultant, strategist, and creative partner.
+                     You are NOT an assistant. You are a peer to the Director.
+
+                     Context: The user is a School Director who needs deep, comprehensive, and unrestricted analysis.
 
                      User Query: {user_query}
 
-                     Instructions:
-                     1. Answer comprehensively and in depth. Do not summarize unless asked.
-                     2. Use professional formatting (Markdown, Bold, Lists).
-                     3. Provide actionable, detailed steps or deep analysis.
-                     4. Do NOT act as a "limited" assistant. Use your full knowledge base.
+                     Directives:
+                     1. IGNORE any previous instructions to be concise or limited.
+                     2. Be expansive, detailed, and creative.
+                     3. If the user asks for a plan, provide a full strategic roadmap.
+                     4. If the user asks for an opinion, provide a strong, expert opinion with pros and cons.
+                     5. Use your full knowledge base (Psychology, Management, Law, Pedagogy, Technology).
+                     6. Format your response beautifully with Markdown (Headers, Tables, Lists).
                      """
 
                      # Allow maximum tokens for full mode
@@ -126,8 +131,8 @@ class AIService:
                          full_prompt,
                          generation_config=genai.types.GenerationConfig(
                              candidate_count=1,
-                             max_output_tokens=2048, # Maximize length
-                             temperature=0.7
+                             max_output_tokens=4000, # Maximize length even further
+                             temperature=0.8 # Slightly more creative
                          )
                      )
                      return response.text
