@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block header_title %}ربط أسماء الأقسام{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Existing Mappings -->
+    <div class="col-md-8">
+        <div class="card">
+            <h4><i class="fas fa-link"></i> الروابط المسجلة</h4>
+            <p class="text-muted">هنا يمكنك ربط أسماء الأقسام كما تظهر في ملفات Excel (مثلاً "1 م 1") بالاسم الرسمي في قاعدة البيانات (مثلاً "1AM1").</p>
+
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>الاسم في الملف (Alias)</th>
+                        <th><i class="fas fa-arrow-left"></i></th>
+                        <th>الاسم في القاعدة (Official)</th>
+                        <th>حذف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alias in aliases %}
+                    <tr>
+                        <td><strong>{{ alias.alias }}</strong></td>
+                        <td>يربط بـ</td>
+                        <td><span class="badge bg-success">{{ alias.canonical_class }}</span></td>
+                        <td>
+                            <form method="post" style="display:inline;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete_alias">
+                                <input type="hidden" name="pk" value="{{ alias.pk }}">
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4">لا توجد روابط مسجلة.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add New Mapping -->
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <h4><i class="fas fa-plus-circle"></i> إضافة ربط جديد</h4>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_alias">
+
+                <div class="mb-3">
+                    <label>الاسم كما يظهر في الملف (نسخ/لصق)</label>
+                    <input type="text" name="alias_name" class="form-control" placeholder="مثال: 1 م 1" required>
+                </div>
+
+                <div class="mb-3">
+                    <label>القسم الموافق في القاعدة</label>
+                    <select name="target_class" class="form-control" required>
+                        <option value="">-- اختر القسم --</option>
+                        {% for cls in db_classes %}
+                        <option value="{{ cls }}">{{ cls }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">حفظ الربط</button>
+            </form>
+        </div>
+
+        <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle"></i>
+            <strong>نصيحة:</strong> إذا لم تجد القسم في القائمة، تأكد من استيراد قائمة التلاميذ أولاً.
+        </div>
+    </div>
+</div>
+{% endblock %}

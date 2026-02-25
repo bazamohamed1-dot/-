@@ -175,9 +175,25 @@
             </div>
 
             <div class="mb-3">
-                <label>الأقسام المسندة (مفصولة بفاصلة)</label>
-                <input type="text" name="classes_str" id="assignClasses" class="form-control" placeholder="1M1, 2M3, 4AM2...">
-                <small class="text-muted">أدخل الأقسام وافصل بينها بفاصلة.</small>
+                <label>الأقسام المسندة</label>
+                <!-- Hidden input to store raw value if needed -->
+                <input type="hidden" name="classes_str" id="assignClassesHidden">
+
+                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                    {% if all_classes %}
+                        {% for cls in all_classes %}
+                        <div class="form-check">
+                            <input class="form-check-input class-checkbox" type="checkbox" value="{{ cls }}" id="chk_{{ cls }}">
+                            <label class="form-check-label" for="chk_{{ cls }}">
+                                {{ cls }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-danger">لا توجد أقسام مسجلة في قاعدة البيانات. يرجى استيراد قائمة التلاميذ أولاً.</p>
+                        <input type="text" name="classes_str_manual" class="form-control" placeholder="أدخل الأقسام يدوياً (مفصولة بفاصلة)" id="manualInput">
+                    {% endif %}
+                </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2">
@@ -232,8 +248,27 @@ function openManualAssign(id, name, subject) {
     document.getElementById('assignTeacherId').value = id;
     document.getElementById('assignTeacherName').innerText = name;
     document.getElementById('assignSubject').value = subject;
-    document.getElementById('assignClasses').value = ""; // Reset or fetch via AJAX if needed
+
+    // Reset Checkboxes
+    document.querySelectorAll('.class-checkbox').forEach(cb => cb.checked = false);
+    if(document.getElementById('manualInput')) document.getElementById('manualInput').value = "";
+
+    // TODO: Fetch existing assignment via AJAX to pre-fill?
+    // For now, it starts empty.
 }
+
+// Intercept form submit to gather checkboxes
+document.querySelector('#manualAssignModal form').addEventListener('submit', function(e) {
+    const checked = Array.from(document.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
+
+    // If manual input exists (fallback), merge it
+    const manual = document.getElementById('manualInput');
+    if (manual && manual.value) {
+        checked.push(...manual.value.split(',').map(s => s.trim()));
+    }
+
+    document.getElementById('assignClassesHidden').value = checked.join(' ');
+});
 
 function toggleSubject(rank) {
     const subjField = document.getElementById('subjectField');

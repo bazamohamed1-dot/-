@@ -89,14 +89,13 @@ class AIService:
         effective_mode = mode if mode else 'rag'
 
         # Auto-upgrade Director to 'gemini_full' if they request 'rag' (default chat)
-        if user_ai_level == 'full_comprehensive' and effective_mode == 'rag':
-             effective_mode = 'gemini_full'
+        if user_ai_level == 'full_comprehensive':
+             # Always default to full for Director unless explicitly downgraded
+             if effective_mode == 'rag' or effective_mode is None:
+                  effective_mode = 'gemini_full'
 
         # Enforce Permissions (Downgrade if necessary)
-        # RELAXED LOGIC: If user_ai_level is 'full_comprehensive', they get gemini_full.
-
         if effective_mode == 'gemini_full' and user_ai_level != 'full_comprehensive':
-             # Only downgrade if they truly lack the profile setting (and are not director)
              effective_mode = 'free' if user_ai_level == 'educational_free' else 'rag'
 
         if effective_mode == 'free' and user_ai_level == 'restricted_rag':
@@ -106,6 +105,10 @@ class AIService:
         context = ""
         if rag_enabled and effective_mode == 'rag':
             context = self.get_rag_context(user_query)
+
+        # Check API Key Availability
+        if effective_mode == 'gemini_full' and not self.model:
+             return "⚠️ عذراً سيدي المدير، يبدو أن مفتاح API الخاص بـ Gemini غير مفعل في إعدادات النظام (.env). يرجى إضافته لتفعيل الوضع الشامل."
 
         # 1. Try Real AI (Gemini)
         if self.model:
