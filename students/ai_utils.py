@@ -107,18 +107,31 @@ class AIService:
             try:
                 if effective_mode == 'gemini_full':
                      # Completely Unrestricted Gemini (Director Level)
+                     # We remove almost all constraints to let the model shine
                      full_prompt = f"""
-                     Role: You are an advanced AI model (Gemini Pro) acting as a comprehensive assistant.
-                     Context: The user is a school director/educator, so prioritize educational/administrative relevance if ambiguous.
+                     You are Gemini Pro, a large language model trained by Google.
+                     The user is asking a question in an educational/administrative context, but you should answer as a general-purpose expert without artificial constraints.
 
                      User Query: {user_query}
 
-                     Guidelines:
-                     - Provide exhaustive, deep, and highly detailed answers.
-                     - Use complex Markdown formatting (tables, lists, headers).
-                     - Do not limit yourself to "administrative assistant" role unless useful.
-                     - Act as a senior consultant, educator, and technical expert combined.
+                     Instructions:
+                     1. Answer comprehensively and in depth. Do not summarize unless asked.
+                     2. Use professional formatting (Markdown, Bold, Lists).
+                     3. Provide actionable, detailed steps or deep analysis.
+                     4. Do NOT act as a "limited" assistant. Use your full knowledge base.
                      """
+
+                     # Allow maximum tokens for full mode
+                     response = self.model.generate_content(
+                         full_prompt,
+                         generation_config=genai.types.GenerationConfig(
+                             candidate_count=1,
+                             max_output_tokens=2048, # Maximize length
+                             temperature=0.7
+                         )
+                     )
+                     return response.text
+
                 elif effective_mode == 'free':
                     # Educational/Free Mode (Pedagogical Assistant)
                     full_prompt = f"""

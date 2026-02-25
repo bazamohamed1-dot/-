@@ -454,7 +454,8 @@ def hr_home(request):
                     # Improved Classification Logic based on User Feedback
                     if 'أستاذ' in raw_rank:
                         sys_rank = 'teacher'
-                    elif 'عامل مهني' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
+                    # Explicitly catch "Aoun Khidma" (Service Agent) regardless of level (1, 2, 3...)
+                    elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
                          # "Service Agent", "Prevention Agent", "Worker", "Cleaner", "Guard" -> Worker
                          sys_rank = 'worker'
                     elif 'عون' in raw_rank:
