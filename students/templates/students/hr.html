@@ -60,6 +60,9 @@
                     <td>{{ emp.subject|default:"-" }}</td>
                     <td>{{ emp.phone }}</td>
                     <td>
+                        {% if emp.rank == 'teacher' %}
+                        <button class="btn btn-sm btn-warning" onclick='openManualAssign("{{ emp.id }}", "{{ emp.last_name }} {{ emp.first_name }}", "{{ emp.subject|default:"" }}")' title="إسناد الأقسام"><i class="fas fa-chalkboard-teacher"></i></button>
+                        {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})'><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
                     </td>
@@ -156,6 +159,35 @@
     </div>
 </div>
 
+<!-- Manual Assignment Modal -->
+<div id="manualAssignModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="modal-content" style="background: white; width: 500px; margin: 100px auto; padding: 20px; border-radius: 8px;">
+        <h3>إسناد الأقسام يدوياً</h3>
+        <h5 id="assignTeacherName" class="text-primary mb-3"></h5>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="manual_assign_single">
+            <input type="hidden" name="teacher_id" id="assignTeacherId">
+
+            <div class="mb-3">
+                <label>المادة</label>
+                <input type="text" name="subject" id="assignSubject" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label>الأقسام المسندة (مفصولة بفاصلة)</label>
+                <input type="text" name="classes_str" id="assignClasses" class="form-control" placeholder="1M1, 2M3, 4AM2...">
+                <small class="text-muted">أدخل الأقسام وافصل بينها بفاصلة.</small>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('manualAssignModal').style.display='none'">إلغاء</button>
+                <button type="submit" class="btn btn-primary">حفظ الإسناد</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function openImportModal() { document.getElementById('importModal').style.display = 'block'; }
 function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
@@ -193,6 +225,14 @@ function closeAddModal() { document.getElementById('addModal').style.display = '
 
 function openAssignmentModal() {
     document.getElementById('assignmentModal').style.display = 'block';
+}
+
+function openManualAssign(id, name, subject) {
+    document.getElementById('manualAssignModal').style.display = 'block';
+    document.getElementById('assignTeacherId').value = id;
+    document.getElementById('assignTeacherName').innerText = name;
+    document.getElementById('assignSubject').value = subject;
+    document.getElementById('assignClasses').value = ""; // Reset or fetch via AJAX if needed
 }
 
 function toggleSubject(rank) {

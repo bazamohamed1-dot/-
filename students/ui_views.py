@@ -688,6 +688,32 @@ def hr_home(request):
                 messages.error(request, f"خطأ: {e}")
             return redirect('hr_home')
 
+        elif action == 'manual_assign_single':
+            try:
+                teacher_id = request.POST.get('teacher_id')
+                subject = request.POST.get('subject')
+                classes_str = request.POST.get('classes_str')
+
+                # Parse classes: split by comma or space
+                raw_list = classes_str.replace(',', ' ').split()
+                classes_list = [c.strip() for c in raw_list if c.strip()]
+
+                teacher = Employee.objects.get(id=teacher_id)
+                if subject:
+                    teacher.subject = subject
+                    teacher.save()
+
+                # Update or Create Assignment
+                assign, created = TeacherAssignment.objects.get_or_create(teacher=teacher)
+                assign.subject = subject or teacher.subject or "عام"
+                assign.classes = classes_list
+                assign.save()
+
+                messages.success(request, f"تم تحديث الإسناد للأستاذ {teacher.last_name}")
+            except Exception as e:
+                messages.error(request, f"خطأ: {e}")
+            return redirect('hr_home')
+
         elif action == 'import_assignment_global':
             file = request.FILES.get('assignment_file')
             if file:
