@@ -24,7 +24,11 @@ class AIService:
     Falls back to a Rule-Based Expert System if no API Key is provided.
     """
 
-    def __init__(self):
+    def __init__(self, user=None):
+        """
+        Initialize AI Service with User Context for Permission Checks.
+        """
+        self.user = user
         self.settings = SchoolSettings.objects.first()
         self.tone = self.settings.ai_tone if self.settings else "professional"
         self.focus = self.settings.ai_focus if self.settings else "academic"
@@ -64,22 +68,45 @@ class AIService:
                 return True
         return False
 
-    def generate_response(self, system_instruction, user_query, rag_enabled=True, mode='rag'):
+    def generate_response(self, system_instruction, user_query, rag_enabled=True, mode=None):
         """
         Calls Gemini API with System Instructions + RAG Context.
-        If API Key is missing, uses a sophisticated Rule-Based System.
 
-        mode: 'rag', 'free', 'gemini_full'
+        Logic:
+        1. If 'mode' is explicitly passed (e.g. from specific tool view), check if user has permission for it.
+        2. If 'mode' is None, fallback to user's assigned 'ai_mode' in profile.
+        3. Enforce permissions:
+           - 'restricted_rag' users CANNOT access 'free' or 'gemini_full'.
+           - 'educational_free' users CANNOT access 'gemini_full'.
         """
+
+        # Determine effective mode based on User Profile
+        user_ai_level = 'restricted_rag'
+        if self.user and hasattr(self.user, 'profile'):
+            user_ai_level = self.user.profile.ai_mode
+        elif self.user and self.user.is_superuser:
+            user_ai_level = 'full_comprehensive'
+
+        # If no explicit mode requested, use user's default level
+        effective_mode = mode if mode else 'rag'
+
+        # Enforce Permissions (Downgrade if necessary)
+        if effective_mode == 'gemini_full' and user_ai_level != 'full_comprehensive':
+            effective_mode = 'free' if user_ai_level == 'educational_free' else 'rag'
+
+        if effective_mode == 'free' and user_ai_level == 'restricted_rag':
+            effective_mode = 'rag'
+
+        # Context Loading
         context = ""
-        if rag_enabled and mode == 'rag':
+        if rag_enabled and effective_mode == 'rag':
             context = self.get_rag_context(user_query)
 
         # 1. Try Real AI (Gemini)
         if self.model:
             try:
-                if mode == 'gemini_full':
-                     # Completely Unrestricted Gemini
+                if effective_mode == 'gemini_full':
+                     # Completely Unrestricted Gemini (Director Level)
                      full_prompt = f"""
                      Role: You are an advanced AI model (Gemini Pro) acting as a comprehensive assistant.
                      Context: The user is a school director/educator, so prioritize educational/administrative relevance if ambiguous.
@@ -92,25 +119,24 @@ class AIService:
                      - Do not limit yourself to "administrative assistant" role unless useful.
                      - Act as a senior consultant, educator, and technical expert combined.
                      """
-                elif mode == 'free':
-                    # Relaxed Prompt for Free Mode (School Context but flexible)
+                elif effective_mode == 'free':
+                    # Educational/Free Mode (Pedagogical Assistant)
                     full_prompt = f"""
-                    Role: You are a helpful, intelligent, and comprehensive AI assistant for a School Director.
-                    Goal: Provide detailed, deep, and valuable answers similar to Gemini/ChatGPT.
-                    Context: {system_instruction} (Use as general guidance, but do not restrict length or depth).
+                    Role: You are a helpful, intelligent, and comprehensive Pedagogical AI Assistant.
+                    Goal: Provide detailed, deep, and valuable answers similar to Gemini/ChatGPT but focused on education.
+                    Context: {system_instruction}
 
                     User Query: {user_query}
 
                     Guidelines:
                     - Be comprehensive and thorough.
-                    - Use Markdown for structure (headings, lists).
-                    - Do not be overly concise unless asked.
-                    - Offer examples, strategies, and deep insights.
+                    - Use Markdown for structure.
+                    - Offer educational strategies, psychological insights, and teaching methodologies.
                     """
                 else:
-                    # Standard RAG/Professional Mode
+                    # Standard RAG/Professional Mode (Administrative Assistant - Restricted)
                     full_prompt = f"""
-                    Role: Educational Assistant for a School Director.
+                    Role: Administrative Assistant for a School Director (Restricted Scope).
                     Tone: {self.tone} (Professional, Empathetic, Solution-Oriented).
                     Focus: {self.focus}.
 
@@ -237,8 +263,128 @@ def analyze_assignment_document(assignment):
     """
     pass
 
+def analyze_global_assignment_content(file_path):
+    """
+    Analyzes a global assignment file (Schedule) to extract potential candidates (Name, Subject, Classes).
+    Returns a list of dicts: [{'name': '...', 'subject': '...', 'classes': [...]}, ...]
+    Does NOT save to DB.
+    """
+    text = ""
+    ext = os.path.splitext(file_path)[1].lower()
+
+    try:
+        if ext == '.pdf':
+            reader = PdfReader(file_path)
+            for page in reader.pages: text += page.extract_text() + "\n"
+        elif ext == '.docx':
+            doc = Document(file_path)
+            for p in doc.paragraphs: text += p.text + "\n"
+            for t in doc.tables:
+                for r in t.rows:
+                    text += " ".join([c.text for c in r.cells]) + "\n"
+        elif ext in ['.xlsx', '.xls']:
+            import pandas as pd
+            try:
+                df = pd.read_excel(file_path)
+                text = df.to_string()
+            except:
+                pass
+
+        if not text and ext in ['.html', '.htm']:
+             with open(file_path, 'r', encoding='utf-8') as f:
+                 soup = BeautifulSoup(f.read(), 'html.parser')
+                 text = soup.get_text()
+
+        if not text:
+             try:
+                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: text = f.read()
+             except: pass
+
+        # Extraction Logic
+        candidates = []
+        lines = text.split('\n')
+
+        # Regex for Classes (e.g., 1AM1, 4M3, 1 متوسط 2)
+        class_pattern = r'\b(\d+\s*(?:AM|M|متوسط)\s*\d*|\d+[AM]+\d+|\d+M\d+)\b'
+
+        # Heuristic: Lines with a name often don't have many numbers, but schedule lines do.
+        # This is a hard problem without structured data.
+        # Let's assume a row contains: Teacher Name | Subject | Classes...
+
+        # We will iterate lines and try to extract "Name-like" strings + Classes
+
+        for line in lines:
+            line = line.strip()
+            if not line or len(line) < 5: continue
+
+            # Find classes in line
+            found_classes = re.findall(class_pattern, line, re.IGNORECASE)
+
+            # If classes found, look for a name in the SAME line or PREVIOUS lines?
+            # Simple assumption: Name is in the same line or block.
+
+            # Filter classes (normalize)
+            normalized_classes = []
+            for c in found_classes:
+                c = c.upper().replace(' ', '')
+                normalized_classes.append(c)
+
+            if normalized_classes:
+                # Guess Subject
+                subjects_map = {
+                    'رياضيات': 'رياضيات', 'فيزياء': 'فيزياء', 'علوم': 'علوم طبيعية',
+                    'عربية': 'لغة عربية', 'فرنسية': 'لغة فرنسية', 'انجليزية': 'لغة إنجليزية',
+                    'تاريخ': 'تاريخ وجغرافيا', 'جغرافيا': 'تاريخ وجغرافيا',
+                    'إسلامية': 'تربية إسلامية', 'مدنية': 'تربية مدنية',
+                    'إعلام': 'إعلام آلي', 'تكنولوجيا': 'تكنولوجيا',
+                    'بدنية': 'تربية بدنية', 'موسيقى': 'تربية موسيقية', 'تشكيلية': 'تربية تشكيلية'
+                }
+                found_subject = "/"
+                for key, val in subjects_map.items():
+                    if key in line:
+                        found_subject = val
+                        break
+
+                # Guess Name: Remove digits, known keywords, and punctuation
+                # This is "dirty" extraction but better than nothing
+                name_part = re.sub(class_pattern, '', line, flags=re.IGNORECASE)
+                name_part = re.sub(r'[0-9]+', '', name_part)
+                # Remove common headers
+                name_part = re.sub(r'(الأستاذ|المادة|القسم|التوقيت|يوم|سا)', '', name_part)
+                # Remove subject names
+                for s in subjects_map.keys():
+                    name_part = name_part.replace(s, '')
+
+                name_candidate = name_part.strip()
+
+                # Filter noise
+                if len(name_candidate) > 4:
+                    # Check duplication
+                    exists = False
+                    for cand in candidates:
+                        if cand['name'] == name_candidate:
+                            cand['classes'].extend(normalized_classes)
+                            cand['classes'] = list(set(cand['classes']))
+                            if cand['subject'] == '/': cand['subject'] = found_subject
+                            exists = True
+                            break
+
+                    if not exists:
+                        candidates.append({
+                            'name': name_candidate,
+                            'subject': found_subject,
+                            'classes': list(set(normalized_classes))
+                        })
+
+        return candidates
+
+    except Exception as e:
+        logger.error(f"Global Analysis Failed: {e}")
+        return []
+
 def analyze_global_assignment(file_path):
     """
+    Deprecated in favor of interactive matching.
     Analyzes a global assignment file (Schedule) to link Teachers to Subjects and Classes.
     Supports Excel, Word, PDF, HTML.
     Returns summary stats.
