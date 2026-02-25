@@ -136,7 +136,7 @@ def import_eleve_view(request):
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('import_data'):
          return redirect('dashboard')
 
-    update_existing = request.POST.get('update_existing') == 'on'
+    force_manual = request.POST.get('manual_mapping') == 'on'
 
     if request.method == 'POST' and request.FILES.get('eleve_file'):
         eleve_file = request.FILES['eleve_file']
@@ -146,20 +146,58 @@ def import_eleve_view(request):
             _, ext = os.path.splitext(eleve_file.name)
             if not ext: ext = '.xls'
 
-            # Save file safely
+            # Save file safely to a persistent temp location (not auto-deleted immediately)
+            # We need it for the confirmation step if manual mapping is used
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                 for chunk in eleve_file.chunks():
                     tmp.write(chunk)
                 temp_path = tmp.name
 
-            # 1. Parse File using Robust Logic
+            # Check for Manual Mapping Request OR Preview Logic
+            if force_manual:
+                # Preview Mode
+                from .import_utils import extract_rows_from_file, detect_headers
+                # Re-open safely
+                with open(temp_path, 'rb') as f:
+                    all_rows = list(extract_rows_from_file(f))
+
+                if not all_rows:
+                    messages.error(request, "الملف فارغ أو غير قابل للقراءة.")
+                    os.remove(temp_path)
+                    return redirect('settings')
+
+                preview_rows = all_rows[:5] # First 5 rows
+
+                # Run detection just to suggest
+                HEADER_MAP = {
+                    'رقم التعريف': 'student_id_number', 'الرقم': 'student_id_number',
+                    'اللقب': 'last_name', 'الاسم': 'first_name',
+                    'الاسم واللقب': 'full_name', 'تاريخ الميلاد': 'date_of_birth',
+                    'القسم': 'class_name', 'المستوى': 'academic_year',
+                    'نظام التمدرس': 'attendance_system', 'رقم القيد': 'enrollment_number',
+                    'تاريخ التسجيل': 'enrollment_date', 'اسم الولي': 'guardian_name'
+                }
+                suggested_mapping, _ = detect_headers(preview_rows, HEADER_MAP)
+
+                # Invert mapping for template (index -> field_name)
+                # detect_headers returns {field: index}
+                inv_map = {v: k for k, v in suggested_mapping.items()}
+
+                context = {
+                    'temp_file_path': temp_path,
+                    'preview_rows': preview_rows,
+                    'num_columns': range(len(preview_rows[0])) if preview_rows else [],
+                    'suggested_mapping': inv_map
+                }
+                return render(request, 'students/import_preview.html', context)
+
+            # Standard Import Logic
             raw_data = parse_student_file(temp_path)
 
             if not raw_data:
-                messages.error(request, "لم يتم العثور على بيانات صالحة في الملف.")
+                messages.error(request, "لم يتم العثور على بيانات صالحة في الملف. جرب تفعيل 'تحديد الأعمدة يدوياً'.")
             else:
                 # 2. Create Dataset for django-import-export
-                # Get headers from first row keys
                 headers = list(raw_data[0].keys())
                 dataset = Dataset(headers=headers)
 
@@ -176,20 +214,76 @@ def import_eleve_view(request):
                     new_count = result.totals.get('new', 0)
                     update_count = result.totals.get('update', 0)
                     skip_count = result.totals.get('skip', 0)
-
                     total_processed = new_count + update_count + skip_count
-                    msg_type = messages.success if total_processed > 0 else messages.warning
 
-                    msg_type(request, f"تمت المعالجة: {total_processed} سجل. (جديد: {new_count}، تحديث: {update_count}، تم تخطي: {skip_count}). تحقق من سجلات التتبع إذا كان العدد أقل من المتوقع.")
+                    msg = f"تمت المعالجة: {total_processed} سجل. (جديد: {new_count}، تحديث: {update_count})."
+                    if total_processed == 0:
+                        messages.warning(request, "لم يتم استيراد أي بيانات. ربما لم يتم التعرف على الأعمدة؟ حاول استخدام 'تحديد الأعمدة يدوياً'.")
+                    else:
+                        messages.success(request, msg)
+
+            # Cleanup if not preview mode
+            if temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
 
         except Exception as e:
             messages.error(request, f"خطأ في الملف أو المعالجة: {str(e)}")
-        finally:
             if temp_path and os.path.exists(temp_path):
                 try: os.remove(temp_path)
                 except: pass
 
         return redirect('settings')
+
+    return redirect('settings')
+
+def import_eleve_confirm(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    if request.method == 'POST':
+        temp_path = request.POST.get('temp_file_path')
+        if not temp_path or not os.path.exists(temp_path):
+            messages.error(request, "انتهت صلاحية الملف المؤقت. يرجى الرفع مجدداً.")
+            return redirect('settings')
+
+        try:
+            # Reconstruct header map from POST
+            # name="col_0", value="field_name"
+            override_indices = {}
+            for key, value in request.POST.items():
+                if key.startswith('col_') and value:
+                    idx = int(key.split('_')[1])
+                    override_indices[value] = idx
+
+            if not override_indices:
+                messages.error(request, "لم يتم تحديد أي عمود!")
+                return redirect('settings')
+
+            # Parse with override
+            raw_data = parse_student_file(temp_path, override_header_indices=override_indices)
+
+            if not raw_data:
+                 messages.error(request, "فشل تحليل البيانات بالأعمدة المحددة.")
+            else:
+                # Import
+                headers = list(raw_data[0].keys())
+                dataset = Dataset(headers=headers)
+                for row in raw_data:
+                    dataset.append([row[h] for h in headers])
+
+                resource = StudentResource()
+                result = resource.import_data(dataset, dry_run=False, raise_errors=True)
+
+                new_count = result.totals.get('new', 0)
+                update_count = result.totals.get('update', 0)
+                messages.success(request, f"تم الاستيراد بنجاح: {new_count} جديد، {update_count} تحديث.")
+
+        except Exception as e:
+            messages.error(request, f"خطأ أثناء الاستيراد: {e}")
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
 
     return redirect('settings')
 

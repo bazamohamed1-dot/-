@@ -110,7 +110,7 @@ def detect_headers(rows, header_map, threshold=2):
 
     return {}, 0
 
-def parse_student_file(file_path):
+def parse_student_file(file_path, override_header_indices=None):
     """
     Parses a student import file (Excel/HTML) and returns a list of dictionaries.
     """
@@ -149,17 +149,25 @@ def parse_student_file(file_path):
         'هاتف الولي': 'guardian_phone'
     }
 
-    header_indices, data_start_row = detect_headers(rows, HEADER_MAP, threshold=2) # Lower threshold slightly
+    if override_header_indices:
+        header_indices = override_header_indices
+        # Assume data starts at row 1 (0-indexed) if user mapped manually,
+        # unless user mapped header row itself. Usually manual mapping implies data follows.
+        # Simple heuristic: Check if row 0 contains the headers or data.
+        # But safely, let's assume row 1 (skipping header row 0) if it was a preview.
+        data_start_row = 1
+    else:
+        header_indices, data_start_row = detect_headers(rows, HEADER_MAP, threshold=2) # Lower threshold slightly
 
-    # Fallback if detection fails (assume standard format)
-    if not header_indices:
-        # Standard format assumption (fallback)
-        header_indices = {
-            'student_id_number': 1, 'last_name': 2, 'first_name': 3,
-            'date_of_birth': 4, 'place_of_birth': 5, 'gender': 6,
-            'academic_year': 7, 'class_name': 8, 'attendance_system': 10
-        }
-        data_start_row = 4
+        # Fallback if detection fails (assume standard format)
+        if not header_indices:
+            # Standard format assumption (fallback)
+            header_indices = {
+                'student_id_number': 1, 'last_name': 2, 'first_name': 3,
+                'date_of_birth': 4, 'place_of_birth': 5, 'gender': 6,
+                'academic_year': 7, 'class_name': 8, 'attendance_system': 10
+            }
+            data_start_row = 4
 
     students = []
 

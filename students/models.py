@@ -9,8 +9,12 @@ def student_photo_path(instance, filename):
     ext = os.path.splitext(filename)[1]
     if not ext:
         ext = '.jpg'
+
+    # Sanitize ID for filename (Replace slashes and backslashes)
+    safe_id = str(instance.student_id_number).replace('/', '_').replace('\\', '_').strip()
+
     # Return path: students_photos/{student_id}{ext}
-    return f'students_photos/{instance.student_id_number}{ext}'
+    return f'students_photos/{safe_id}{ext}'
 
 class Student(models.Model):
     student_id_number = models.CharField(max_length=16, unique=True, verbose_name="رقم التعريف")
@@ -52,7 +56,8 @@ class Student(models.Model):
                         root, ext = os.path.splitext(old_path)
 
                         # New name logic: students_photos/{new_id}{ext}
-                        new_name = f'students_photos/{self.student_id_number}{ext}'
+                        safe_id = str(self.student_id_number).replace('/', '_').replace('\\', '_').strip()
+                        new_name = f'students_photos/{safe_id}{ext}'
                         new_full_path = os.path.join(settings.MEDIA_ROOT, new_name)
 
                         try:

@@ -100,9 +100,14 @@
             <span id="fileName" style="color:#64748b;">لم يتم اختيار ملف</span>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
             <input type="checkbox" id="updateExisting" name="update_existing" style="width:20px; height:20px;">
             <label for="updateExisting" style="cursor:pointer;">تحديث البيانات الموجودة (إذا وجد الطالب)</label>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <input type="checkbox" id="manualMapping" name="manual_mapping" style="width:20px; height:20px;">
+            <label for="manualMapping" style="cursor:pointer;">تحديد الأعمدة يدوياً (إذا اختلف التنسيق)</label>
         </div>
 
         <button type="submit" class="btn btn-primary">
