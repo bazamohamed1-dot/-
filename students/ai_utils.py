@@ -36,7 +36,12 @@ class AIService:
         self.api_key = os.environ.get("GOOGLE_API_KEY")
         if self.api_key and HAS_GEMINI:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
+            # Try latest models first
+            try:
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
+            except:
+                # Fallback
+                self.model = genai.GenerativeModel('gemini-pro')
         else:
             self.model = None
 
