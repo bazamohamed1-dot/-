@@ -197,3 +197,99 @@ https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/READM
   import google.generativeai as genai
 /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
   mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 26, 2026 - 00:44:31
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/app/students/ai_utils.py:13: FutureWarning:
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 26, 2026 - 16:31:52
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/app/students/ai_utils.py:13: FutureWarning:
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+[26/Feb/2026 22:39:12] "GET / HTTP/1.1" 200 25768
+[26/Feb/2026 22:39:15] "POST /canteen/auth/login/ HTTP/1.1" 200 192
+[26/Feb/2026 22:39:17] "GET /canteen/dashboard/ HTTP/1.1" 200 32609
+[26/Feb/2026 22:39:17] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:17] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/rest_framework/pagination.py:207: UnorderedObjectListWarning: Pagination may yield inconsistent results with an unordered object_list: <class 'students.models.SystemMessage'> QuerySet.
+  paginator = self.django_paginator_class(queryset, page_size)
+[26/Feb/2026 22:39:17] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
+[26/Feb/2026 22:39:18] "GET /service-worker.js HTTP/1.1" 200 4170
+[26/Feb/2026 22:39:18] "GET /canteen/ai/chat/ HTTP/1.1" 200 31645
+[26/Feb/2026 22:39:18] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /canteen/ HTTP/1.1" 302 0
+[26/Feb/2026 22:39:18] "GET /canteen/ui/ HTTP/1.1" 200 52564
+[26/Feb/2026 22:39:18] "GET /canteen/settings/ HTTP/1.1" 200 77378
+[26/Feb/2026 22:39:18] "GET /canteen/management/ HTTP/1.1" 200 74671
+[26/Feb/2026 22:39:18] "GET /static_v2/manifest.json HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /canteen/pending_updates/ HTTP/1.1" 200 34308
+[26/Feb/2026 22:39:18] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /canteen/hr/ HTTP/1.1" 200 42013
+[26/Feb/2026 22:39:18] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[26/Feb/2026 22:39:18] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179

@@ -61,7 +61,10 @@
                     <td>{{ emp.phone }}</td>
                     <td>
                         {% if emp.rank == 'teacher' %}
-                        <button class="btn btn-sm btn-warning" onclick='openManualAssign("{{ emp.id }}", "{{ emp.last_name }} {{ emp.first_name }}", "{{ emp.subject|default:"" }}")' title="إسناد الأقسام"><i class="fas fa-chalkboard-teacher"></i></button>
+                        <!-- Pass current assignments if available -->
+                        {% with assign=emp.assignments.last %}
+                        <button class="btn btn-sm btn-warning" onclick='openManualAssign("{{ emp.id }}", "{{ emp.last_name }} {{ emp.first_name }}", "{{ emp.subject|default:"" }}", {{ assign.classes|default:"[]"|safe }})' title="إسناد الأقسام"><i class="fas fa-chalkboard-teacher"></i></button>
+                        {% endwith %}
                         {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})'><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
@@ -91,6 +94,37 @@
         </form>
     </div>
 </div>
+
+<script>
+    // Pre-populate logic from server session (auto_select_data)
+    {% if auto_select_data %}
+    document.addEventListener('DOMContentLoaded', function() {
+        // auto_select_data is a dict: { teacher_id: { subject: "...", classes: [...] } }
+        const autoData = {{ auto_select_data|safe }};
+
+        // Loop through teachers in the table and show indicator
+        for (const [tid, data] of Object.entries(autoData)) {
+            // Find the teacher row or button
+            // We can't auto-click everything, but we can highlight or show a notification
+            // Or better: If the user opens the manual modal for this teacher, pre-fill it!
+        }
+
+        // Store globally to use when opening modal
+        window.autoAssignmentData = autoData;
+
+        // Notify user
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success';
+        alertDiv.style.position = 'fixed';
+        alertDiv.style.top = '10px';
+        alertDiv.style.right = '10px';
+        alertDiv.style.zIndex = '10000';
+        alertDiv.innerHTML = '<i class="fas fa-magic"></i> تم تحليل الملف! عند فتح نافذة الإسناد لأي أستاذ، سيتم تحديد الأقسام تلقائياً.';
+        document.body.appendChild(alertDiv);
+        setTimeout(() => alertDiv.remove(), 5000);
+    });
+    {% endif %}
+</script>
 
 <!-- Add/Edit Modal -->
 <div id="addModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
@@ -142,18 +176,18 @@
     </div>
 </div>
 
-<!-- Global Assignment Modal -->
+<!-- Global Assignment Modal (Auto-Matching) -->
 <div id="assignmentModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
     <div class="modal-content" style="background: white; width: 500px; margin: 100px auto; padding: 20px; border-radius: 8px;">
         <h3>استيراد الإسناد (AI)</h3>
-        <p>ارفع ملف الإسناد (Excel, PDF, Word, HTML). سيقوم النظام بتحليله واستخراج المواد والأقسام وربطها بالأساتذة تلقائياً.</p>
+        <p>ارفع ملف الإسناد (Excel, PDF, Word). سيقوم النظام باستخراج الأقسام لكل أستاذ وربطها تلقائياً.</p>
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="import_assignment_global">
             <input type="file" name="assignment_file" class="form-control mb-3" required>
             <div class="d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('assignmentModal').style.display='none'">إلغاء</button>
-                <button type="submit" class="btn btn-primary">بدء التحليل</button>
+                <button type="submit" class="btn btn-success"><i class="fas fa-magic"></i> تحليل وربط تلقائي</button>
             </div>
         </form>
     </div>
@@ -243,7 +277,7 @@ function openAssignmentModal() {
     document.getElementById('assignmentModal').style.display = 'block';
 }
 
-function openManualAssign(id, name, subject) {
+function openManualAssign(id, name, subject, classesJson) {
     document.getElementById('manualAssignModal').style.display = 'block';
     document.getElementById('assignTeacherId').value = id;
     document.getElementById('assignTeacherName').innerText = name;
@@ -253,8 +287,43 @@ function openManualAssign(id, name, subject) {
     document.querySelectorAll('.class-checkbox').forEach(cb => cb.checked = false);
     if(document.getElementById('manualInput')) document.getElementById('manualInput').value = "";
 
-    // TODO: Fetch existing assignment via AJAX to pre-fill?
-    // For now, it starts empty.
+    // 1. Pre-fill from Existing Database (if passed)
+    if (classesJson && Array.isArray(classesJson)) {
+        classesJson.forEach(clsName => {
+            const cb = document.getElementById('chk_' + clsName);
+            if (cb) cb.checked = true;
+            else {
+                 const man = document.getElementById('manualInput');
+                 if(man && man.value.indexOf(clsName) === -1) man.value += (man.value ? ", " : "") + clsName;
+            }
+        });
+    }
+
+    // 2. Pre-fill from Auto-Select (Smart Import) - OVERRIDES DB if conflicts? No, let's MERGE or HIGHLIGHT.
+    // Let's assume Smart Import is meant to *add* or *suggest*.
+    if (window.autoAssignmentData && window.autoAssignmentData[id]) {
+        const data = window.autoAssignmentData[id];
+
+        // Show indicator
+        document.getElementById('assignTeacherName').innerHTML = name + ' <span class="badge bg-success"><i class="fas fa-magic"></i> مقترح ملف</span>';
+
+        if (data.classes && data.classes.length > 0) {
+            data.classes.forEach(cls => {
+                const cb = document.getElementById('chk_' + cls);
+                if (cb) cb.checked = true;
+            });
+        }
+
+        if (data.subject && data.subject !== '/') {
+             // Only update subject if current is empty or generic
+             if(!document.getElementById('assignSubject').value || document.getElementById('assignSubject').value === '/') {
+                 document.getElementById('assignSubject').value = data.subject;
+             }
+        }
+    } else {
+        // Reset name just in case
+        document.getElementById('assignTeacherName').innerText = name;
+    }
 }
 
 // Intercept form submit to gather checkboxes

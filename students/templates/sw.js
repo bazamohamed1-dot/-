@@ -1,4 +1,3 @@
-const CACHE_NAME = 'school-pwa-v2'; // Incremented version
 {% load static %}
 const CACHE_NAME = 'school-pwa-v3'; // Bump version
 const STATIC_ASSETS = [
