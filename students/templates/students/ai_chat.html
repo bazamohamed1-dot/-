@@ -28,13 +28,16 @@
     </div>
 
     <!-- Input Area -->
-    <div style="padding: 15px; border-top: 1px solid #e2e8f0; background: #f8fafc; border-radius: 0 0 12px 12px; display: flex; gap: 10px;">
+    <div style="padding: 15px; border-top: 1px solid #e2e8f0; background: #f8fafc; border-radius: 0 0 12px 12px; display: flex; gap: 10px; align-items: center;">
+        <button onclick="toggleVoiceInput()" id="micBtn" class="btn btn-outline-secondary" title="إدخال صوتي" style="border-radius: 50%; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center;"><i class="fas fa-microphone"></i></button>
         <input type="text" id="userQuery" class="form-control" placeholder="اكتب سؤالك هنا..." style="flex: 1; padding: 12px; border-radius: 20px; border: 1px solid #cbd5e1;" onkeypress="if(event.key === 'Enter') sendQuery()">
         <button onclick="sendQuery()" class="btn btn-primary" style="border-radius: 50%; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center;"><i class="fas fa-paper-plane"></i></button>
     </div>
 </div>
 
 <style>
+    .listening { background-color: #dc2626 !important; color: white !important; border-color: #dc2626 !important; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
     .chat-message { display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start; }
     .chat-message.user { flex-direction: row-reverse; }
     .avatar { width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; display: flex; justify-content: center; align-items: center; color: #64748b; font-size: 1.2rem; }
@@ -48,6 +51,62 @@
 
 <script>
     let currentMode = 'rag';
+
+    // Voice Recognition Setup
+    let recognition;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ar-DZ'; // Algerian Dialect Preference
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = function() {
+            const btn = document.getElementById('micBtn');
+            btn.classList.add('listening');
+            btn.innerHTML = '<i class="fas fa-stop"></i>'; // Change icon to stop
+        };
+
+        recognition.onend = function() {
+            const btn = document.getElementById('micBtn');
+            btn.classList.remove('listening');
+            btn.innerHTML = '<i class="fas fa-microphone"></i>'; // Back to mic
+        };
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            const input = document.getElementById('userQuery');
+            input.value = transcript;
+            input.focus();
+        };
+
+        recognition.onerror = function(event) {
+            console.error("Speech Error:", event.error);
+            const btn = document.getElementById('micBtn');
+            btn.classList.remove('listening');
+            btn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+            setTimeout(() => btn.innerHTML = '<i class="fas fa-microphone"></i>', 2000);
+        };
+    } else {
+        document.getElementById('micBtn').style.display = 'none'; // Hide if not supported
+    }
+
+    function toggleVoiceInput() {
+        if (!recognition) {
+            alert("متصفحك لا يدعم الإدخال الصوتي. يرجى استخدام Google Chrome.");
+            return;
+        }
+        if (document.getElementById('micBtn').classList.contains('listening')) {
+            recognition.stop();
+        } else {
+            try {
+                recognition.start();
+            } catch(e) {
+                console.error(e);
+                recognition.stop();
+            }
+        }
+    }
 
     function updateMode() {
         currentMode = document.getElementById('chatMode').value;

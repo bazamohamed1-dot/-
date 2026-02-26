@@ -794,11 +794,15 @@ def hr_home(request):
     all_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
     all_classes.sort()
 
+    # Auto-Select Logic (If file was uploaded previously)
+    auto_select_data = request.session.pop('auto_select_assignment', None)
+
     context = {
         'employees': employees,
         'current_rank': rank_filter,
         'counts': counts,
         'all_classes': all_classes,
+        'auto_select_data': auto_select_data, # Pass to template
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
