@@ -236,8 +236,9 @@
                     {% if all_classes %}
                         {% for cls in all_classes %}
                         <div class="form-check">
-                            <input class="form-check-input class-checkbox" type="checkbox" value="{{ cls }}" id="chk_{{ cls }}">
-                            <label class="form-check-label" for="chk_{{ cls }}">
+                            <!-- Removed ID from input as spaces break HTML IDs, using value instead for targeting -->
+                            <input class="form-check-input class-checkbox" type="checkbox" value="{{ cls }}">
+                            <label class="form-check-label">
                                 {{ cls }}
                             </label>
                         </div>
@@ -309,7 +310,8 @@ function openManualAssign(id, name, subject, classesJson) {
     // 1. Pre-fill from Existing Database (if passed)
     if (classesJson && Array.isArray(classesJson)) {
         classesJson.forEach(clsName => {
-            const cb = document.getElementById('chk_' + clsName);
+            // Target by value instead of ID to support spaces in class names like "4 م 1"
+            const cb = document.querySelector(`.class-checkbox[value="${clsName}"]`);
             if (cb) cb.checked = true;
             else {
                  const man = document.getElementById('manualInput');
@@ -318,8 +320,7 @@ function openManualAssign(id, name, subject, classesJson) {
         });
     }
 
-    // 2. Pre-fill from Auto-Select (Smart Import) - OVERRIDES DB if conflicts? No, let's MERGE or HIGHLIGHT.
-    // Let's assume Smart Import is meant to *add* or *suggest*.
+    // 2. Pre-fill from Auto-Select (Smart Import)
     if (window.autoAssignmentData && window.autoAssignmentData[id]) {
         const data = window.autoAssignmentData[id];
 
@@ -328,13 +329,12 @@ function openManualAssign(id, name, subject, classesJson) {
 
         if (data.classes && data.classes.length > 0) {
             data.classes.forEach(cls => {
-                const cb = document.getElementById('chk_' + cls);
+                const cb = document.querySelector(`.class-checkbox[value="${cls}"]`);
                 if (cb) cb.checked = true;
             });
         }
 
         if (data.subject && data.subject !== '/') {
-             // Only update subject if current is empty or generic
              if(!document.getElementById('assignSubject').value || document.getElementById('assignSubject').value === '/') {
                  document.getElementById('assignSubject').value = data.subject;
              }
