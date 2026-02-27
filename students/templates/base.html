@@ -660,38 +660,45 @@
 
     function askBot() {
         const input = document.getElementById('botInput');
-        const text = input.value.trim().toLowerCase();
+        const text = input.value.trim();
         if (!text) return;
 
         // User Msg
         addBotMsg(text, 'user');
         input.value = '';
 
-        // Simple Knowledge Base
-        let response = "عذراً، لم أفهم سؤالك. جرب سؤالاً آخر.";
+        // Add Loading Indicator
+        const loadingId = 'bot-loading-' + Date.now();
+        addBotMsg('<i class="fas fa-spinner fa-spin"></i> جاري البحث...', 'bot', loadingId);
 
-        if (text.includes("حذف موظف")) {
-            response = "لحذف موظف: اذهب إلى 'الموارد البشرية' > اختر الموظف > اضغط أيقونة الحذف الحمراء.";
-        } else if (text.includes("اضافة تلميذ") || text.includes("إضافة تلميذ")) {
-            response = "لإضافة تلميذ: اذهب إلى 'تسيير التلاميذ' > اضغط 'إضافة تلميذ' > املأ البيانات.";
-        } else if (text.includes("استيراد")) {
-            response = "للاستيراد: اذهب إلى 'الإعدادات' > استيراد التلاميذ > اختر ملف Excel.";
-        } else if (text.includes("كلمة المرور") || text.includes("نسيت")) {
-            response = "لاستعادة كلمة المرور: استخدم رابط 'نسيت كلمة المرور' في صفحة الدخول، أو اطلب من المدير إعادة تعيينها.";
-        } else if (text.includes("الغياب") || text.includes("غياب")) {
-            response = "لتسجيل الغياب: امسح بطاقة التلميذ في الواجهة الرئيسية أو استخدم التسجيل اليدوي في لوحة القيادة.";
-        } else if (text.includes("مرحبا") || text.includes("سلام")) {
-            response = "أهلاً بك! أنا مساعدك الآلي لشرح البرنامج.";
-        }
+        // Call AI API
+        const formData = new FormData();
+        formData.append('query', text);
+        formData.append('mode', 'bot_helper'); // Special mode for short answers
 
-        // Simulating delay
-        setTimeout(() => {
-            addBotMsg(response, 'bot');
-        }, 500);
+        fetch("{% url 'ai_chat_view' %}", {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')},
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            // Remove loading
+            const loader = document.getElementById(loadingId);
+            if(loader) loader.remove();
+
+            addBotMsg(data.response, 'bot');
+        })
+        .catch(err => {
+            const loader = document.getElementById(loadingId);
+            if(loader) loader.remove();
+            addBotMsg("عذراً، حدث خطأ في الاتصال بالمساعد الذكي.", 'bot');
+        });
     }
 
-    function addBotMsg(text, sender) {
+    function addBotMsg(text, sender, id=null) {
         const div = document.createElement('div');
+        if(id) div.id = id;
         div.style.marginBottom = '10px';
         div.style.padding = '8px';
         div.style.borderRadius = '8px';
@@ -708,7 +715,7 @@
             div.style.marginLeft = 'auto'; // Force right align
         }
 
-        div.innerText = text;
+        div.innerHTML = text; // Allow HTML for spinner
         document.getElementById('botMessages').appendChild(div);
         document.getElementById('botMessages').scrollTop = document.getElementById('botMessages').scrollHeight;
     }
