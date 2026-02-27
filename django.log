@@ -50,3 +50,54 @@ https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/READM
 /home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
   mw_instance = middleware(adapted_handler)
 [27/Feb/2026 15:13:49] "GET / HTTP/1.1" 200 25768
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 27, 2026 - 15:07:23
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 27, 2026 - 16:00:17
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+February 27, 2026 - 16:03:42
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)

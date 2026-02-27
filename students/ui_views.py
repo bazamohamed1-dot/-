@@ -13,7 +13,17 @@ from tablib import Dataset
 from .resources import StudentResource
 from .import_utils import parse_student_file
 from .utils import normalize_arabic
+from .utils_sync import sync_photos_logic
 from django.db.models import Q
+
+def sync_photos_view(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and request.user.profile.role != 'director':
+        return redirect('dashboard')
+
+    count = sync_photos_logic()
+    messages.success(request, f"تمت مزامنة {count} صورة بنجاح.")
+    return redirect('settings')
 
 def pending_updates_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
