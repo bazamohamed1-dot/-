@@ -17,6 +17,11 @@ if not exist venv (
 
 REM 2. Activate Environment
 call venv\Scripts\activate
+if errorlevel 1 (
+    echo [ERROR] Failed to activate venv.
+    pause
+    exit /b
+)
 
 REM 3. Install Dependencies (Quietly check)
 echo [INFO] Checking dependencies...
@@ -24,6 +29,11 @@ pip install -r requirements.txt > nul 2>&1
 if errorlevel 1 (
     echo [WARN] Installing missing packages...
     pip install -r requirements.txt
+    if errorlevel 1 (
+        echo [ERROR] Failed to install dependencies.
+        pause
+        exit /b
+    )
 )
 
 REM 4. Setup Firewall (Once)
