@@ -129,12 +129,14 @@ class AIService:
                         if response and response.text:
                             return response.text
                     except Exception as e:
-                        print(f"Gemini V1 Fail ({model}) key=...{key[-4:]}: {e}") # Force Print
-                        logger.warning(f"Gemini V1 Fail ({model}): {e}")
+                        error_msg = f"Gemini V1 Fail ({model}) key=...{key[-4:]}: {e}"
+                        print(error_msg) # Force Print
+                        logger.warning(error_msg)
                         continue
             except Exception as e:
-                print(f"Gemini Client Init Error: {e}")
-                logger.error(f"Gemini Client Error: {e}")
+                error_msg = f"Gemini Client Init Error for key=...{key[-4:]}: {e}"
+                print(error_msg)
+                logger.error(error_msg)
         return None
 
     def _try_groq(self, prompt):
@@ -150,8 +152,12 @@ class AIService:
                             model=model,
                         )
                         return chat_completion.choices[0].message.content
-                    except: continue
-            except: continue
+                    except Exception as e:
+                        logger.warning(f"Groq Fail ({model}): {e}")
+                        continue
+            except Exception as e:
+                logger.error(f"Groq Client Error: {e}")
+                continue
         return None
 
     def _try_claude(self, prompt):
@@ -167,8 +173,12 @@ class AIService:
                             messages=[{"role": "user", "content": prompt}]
                         )
                         return msg.content[0].text
-                    except: continue
-            except: continue
+                    except Exception as e:
+                        logger.warning(f"Claude Fail ({model}): {e}")
+                        continue
+            except Exception as e:
+                logger.error(f"Claude Client Error: {e}")
+                continue
         return None
 
 # Stub
