@@ -73,13 +73,22 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // IGNORE POST/PUT/DELETE
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
     // 2. Handle GET API Requests (Data) - Network First, Cache Fallback
     // This ensures we always try to get fresh data (like student lists) but fallback if offline.
-    if (event.request.method === 'GET' && (event.request.url.includes('/api/') || event.request.url.includes('/canteen/'))) {
+    if (event.request.url.includes('/api/') || event.request.url.includes('/canteen/')) {
          event.respondWith(
             fetch(event.request)
                 .then((response) => {
-                    if(!response || response.status !== 200) return response;
+                    // Check valid response
+                    if(!response || response.status !== 200 || response.type !== 'basic') {
+                        return response;
+                    }
+
                     const responseToCache = response.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, responseToCache);
@@ -98,9 +107,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             const fetchPromise = fetch(event.request).then((networkResponse) => {
-                if(networkResponse && networkResponse.status === 200) {
+                if(networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+                     const responseToCache = networkResponse.clone();
                      caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, networkResponse.clone());
+                        cache.put(event.request, responseToCache);
                     });
                 }
                 return networkResponse;
