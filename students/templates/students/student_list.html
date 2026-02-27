@@ -31,7 +31,14 @@
             <tbody>
                 {% for student in students %}
                 <tr id="student-row-{{ student.id }}">
-                    <td>{{ student.student_id_number }}</td>
+                    <td>
+                        {% if student.photo %}
+                        <img src="{{ student.photo.url }}?v={{ now }}" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; margin-left: 5px;">
+                        {% else %}
+                        <i class="fas fa-user-circle" style="font-size: 1.5rem; vertical-align: middle; color: #cbd5e1; margin-left: 5px;"></i>
+                        {% endif %}
+                        {{ student.student_id_number }}
+                    </td>
                     <td>{{ student.last_name }}</td>
                     <td>{{ student.first_name }}</td>
                     <td class="western-nums" style="direction:ltr;">{{ student.date_of_birth|date:"Y/m/d" }}</td>
