@@ -1,53 +1,41 @@
 @echo off
 chcp 65001 > nul
+setlocal enabledelayedexpansion
+
 echo ==========================================
 echo      برنامج تسيير المؤسسات التربوية
 echo ==========================================
 
-REM 1. Check/Create Virtual Environment
-if not exist venv (
-    echo [INFO] Creating Virtual Environment (First Run)...
-    python -m venv venv
-    if errorlevel 1 (
-        echo [ERROR] Failed to create venv. Ensure Python 3.10+ is installed.
-        pause
-        exit /b
-    )
-)
+REM 1. Check Virtual Environment
+if exist venv goto ACTIVATE_VENV
 
-REM 2. Activate Environment
+echo [INFO] Creating Virtual Environment (First Run)...
+python -m venv venv
+if %errorlevel% neq 0 goto ERROR_VENV
+
+:ACTIVATE_VENV
 call venv\Scripts\activate
-if errorlevel 1 (
-    echo [ERROR] Failed to activate venv.
-    pause
-    exit /b
-)
+if %errorlevel% neq 0 goto ERROR_ACTIVATE
 
-REM 3. Install Dependencies (Quietly check)
+REM 2. Check Dependencies
 echo [INFO] Checking dependencies...
 pip install -r requirements.txt > nul 2>&1
-if errorlevel 1 (
-    echo [WARN] Installing missing packages...
-    pip install -r requirements.txt
-    if errorlevel 1 (
-        echo [ERROR] Failed to install dependencies.
-        pause
-        exit /b
-    )
-)
+if %errorlevel% equ 0 goto FIREWALL_SETUP
 
-REM 4. Setup Firewall (Once)
-if not exist .firewall_done (
-    echo [INFO] Configuring Firewall for Network Access...
-    netsh advfirewall firewall add rule name="SchoolApp_8000" dir=in action=allow protocol=TCP localport=8000 > nul 2>&1
-    echo done > .firewall_done
-)
+echo [WARN] Installing missing packages...
+pip install -r requirements.txt
+if %errorlevel% neq 0 goto ERROR_DEPS
 
-REM 5. Run Migrations
+:FIREWALL_SETUP
+if exist .firewall_done goto START_APP
+echo [INFO] Configuring Firewall for Network Access...
+netsh advfirewall firewall add rule name="SchoolApp_8000" dir=in action=allow protocol=TCP localport=8000 > nul 2>&1
+echo done > .firewall_done
+
+:START_APP
 echo [INFO] Updating Database...
 python manage.py migrate --noinput > nul
 
-REM 6. Start Server
 echo.
 echo [SUCCESS] Server Started!
 echo ------------------------------------------
@@ -58,4 +46,23 @@ echo Press Ctrl+C to stop.
 echo.
 
 python manage.py runserver 0.0.0.0:8000
+goto END
+
+:ERROR_VENV
+echo [ERROR] Failed to create venv. Ensure Python 3.10+ is installed.
+goto ERROR_PAUSE
+
+:ERROR_ACTIVATE
+echo [ERROR] Failed to activate venv.
+goto ERROR_PAUSE
+
+:ERROR_DEPS
+echo [ERROR] Failed to install dependencies. Check internet connection.
+goto ERROR_PAUSE
+
+:ERROR_PAUSE
+pause
+exit /b 1
+
+:END
 pause
