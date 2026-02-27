@@ -1,54 +1,70 @@
-from .models import SchoolMemory, SchoolSettings, Employee, TeacherAssignment
+from .models import SchoolMemory, SchoolSettings
 import logging
 import os
-import re
 import random
+import time
 from PyPDF2 import PdfReader
 from docx import Document
 from bs4 import BeautifulSoup
-import openpyxl
 
-# Optional Gemini Import
+# Provider Libraries
 try:
     import google.generativeai as genai
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
 
+try:
+    from groq import Groq
+    HAS_GROQ = True
+except ImportError:
+    HAS_GROQ = False
+
+try:
+    import anthropic
+    HAS_CLAUDE = True
+except ImportError:
+    HAS_CLAUDE = False
+
 logger = logging.getLogger(__name__)
 
 class AIService:
     """
-    Service to handle AI interactions using Google Gemini API.
-    Implements Unrestricted Access for Director/Admin.
+    Advanced AI Service with Multi-Provider Fallback (Google -> Groq -> Claude).
+    Implements Load Balancing for multiple keys of the same provider.
     """
 
     def __init__(self, user=None):
-        """
-        Initialize AI Service.
-        """
         self.user = user
         self.settings = SchoolSettings.objects.first()
-        self.tone = self.settings.ai_tone if self.settings else "professional"
-        self.focus = self.settings.ai_focus if self.settings else "academic"
 
-        # Load API Key (Check Env then Settings)
-        self.api_key = os.environ.get("GOOGLE_API_KEY")
-        if self.api_key and HAS_GEMINI:
-            genai.configure(api_key=self.api_key)
-            # Try latest models first
-            try:
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
-            except:
-                # Fallback
-                self.model = genai.GenerativeModel('gemini-pro')
-        else:
-            self.model = None
+        # Load API Keys with Rotation Support
+        self.gemini_keys = self._load_keys("GOOGLE_API_KEY")
+        self.groq_keys = self._load_keys("GROQ_API_KEY")
+        self.claude_keys = self._load_keys("ANTHROPIC_API_KEY")
+
+        # Models Configuration (Ranked by Preference)
+        self.models_config = {
+            'gemini': ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro'],
+            'groq': ['llama3-70b-8192', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+            'claude': ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229']
+        }
+
+    def _load_keys(self, prefix):
+        """Loads keys like KEY, KEY_2, KEY_3..."""
+        keys = []
+        k1 = os.environ.get(prefix)
+        if k1: keys.append(k1)
+
+        i = 2
+        while True:
+            k = os.environ.get(f"{prefix}_{i}")
+            if not k: break
+            keys.append(k)
+            i += 1
+        return keys
 
     def get_rag_context(self, query):
-        """
-        Retrieves relevant context from SchoolMemory.
-        """
         keywords = query.split()
         matches = SchoolMemory.objects.filter(
             title__icontains=keywords[0]
@@ -60,121 +76,116 @@ class AIService:
         context_text = "\n".join([f"[{m.category}] {m.title}: {m.content}" for m in matches[:3]])
         return context_text
 
-    def _contains_any(self, query, keywords):
-        for k in keywords:
-            if k in query:
-                return True
-        return False
-
     def generate_response(self, system_instruction, user_query, rag_enabled=True, mode=None):
-        """
-        Unshackled Response Generation.
-        Defaults to 'gemini_full' (Creative/Strategic) if API Key exists.
-        Falls back to Restricted Rule-Based if API Key is missing.
-        """
-
-        # Check API Key Availability immediately
-        if not self.model:
-             return "⚠️ عذراً سيدي المدير، يبدو أن مفتاح API الخاص بـ Gemini غير مفعل أو غير صحيح في إعدادات النظام (.env). يرجى إضافته لتفعيل الذكاء الاصطناعي."
-
-        # Context Loading (Optional RAG)
+        # 1. Prepare Context
         context = ""
         if rag_enabled:
             context = self.get_rag_context(user_query)
 
-        # Build Full Prompt (Unrestricted)
-        full_prompt = f"""
-        Instructions for AI:
-        You are an expert consultant, strategist, and creative partner for a School Director.
-
-        Context provided by user: {system_instruction}
-        School Memory Context: {context if context else "No specific records found."}
-
+        prompt = f"""
+        System Role: Expert School Director Consultant.
+        Context: {system_instruction}
+        School Data: {context if context else "None"}
         User Query: {user_query}
 
         Directives:
-        1. **Response Length Intelligence:**
-           - IF the user says "Hello", "Hi", "Thanks", or simple phatic communication -> BE CONCISE (1-2 sentences).
-           - IF the user asks a complex question, strategic plan, or detailed analysis -> BE EXPANSIVE and detailed.
-        2. ABSOLUTELY NO RESTRICTIONS on creativity or depth for complex tasks.
-        3. Use your full knowledge base (Education, Psychology, Law, Management).
-        4. Format beautifully with Markdown (bullet points, bold text).
+        - Concise for greetings (1-2 sentences).
+        - Detailed for tasks/plans.
+        - Use Markdown.
         """
 
-        try:
-            # Allow maximum tokens for full mode
-            response = self.model.generate_content(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    candidate_count=1,
-                    max_output_tokens=8000, # Push limits
-                    temperature=0.9 # High creativity
-                )
-            )
-            return response.text
-        except Exception as e:
-            logger.error(f"Gemini API Error: {e}")
-            return f"خطأ في الاتصال بـ Gemini API: {str(e)}"
+        # 2. Provider Cascade Strategy
+        # Priority 1: Google Gemini (Fast & Free Tier usually available)
+        if self.gemini_keys and HAS_GEMINI:
+            resp = self._try_gemini_rotation(prompt)
+            if resp: return resp
 
-    def _mock_observation_response(self, query):
-        return "يرجى مراجعة سجل المتابعة التربوية."
+        # Priority 2: Groq (Super Fast)
+        if self.groq_keys and HAS_GROQ:
+            resp = self._try_groq_rotation(prompt)
+            if resp: return resp
 
-    def _mock_task_explanation(self, manager_instructions):
-        return f"بناءً على التوجيهات: {manager_instructions}."
+        # Priority 3: Claude (High Quality)
+        if self.claude_keys and HAS_CLAUDE:
+            resp = self._try_claude_rotation(prompt)
+            if resp: return resp
 
-    def generate_reminder(self, task_title, manager_instructions):
-        return f"تذكير ودي: لا تنس {task_title}. {manager_instructions[:50]}... إنجازك لهذا العمل يساهم في سير المؤسسة بامتياز!"
+        return "⚠️ عذراً، جميع خوادم الذكاء الاصطناعي مشغولة حالياً أو المفاتيح غير صالحة. يرجى المحاولة لاحقاً."
 
+    def _try_gemini_rotation(self, prompt):
+        """Round-Robin Load Balancing for Gemini Keys"""
+        keys = list(self.gemini_keys)
+        random.shuffle(keys)
 
-# Legacy Functions (Keep for compatibility)
-def analyze_assignment_document(assignment):
-    pass
+        for key in keys:
+            genai.configure(api_key=key)
+            for model_name in self.models_config['gemini']:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    config = genai.types.GenerationConfig(
+                        candidate_count=1,
+                        temperature=0.7
+                    )
+                    response = model.generate_content(prompt, generation_config=config)
+                    if response and response.text:
+                        return response.text
+                except Exception as e:
+                    logger.warning(f"Gemini Fail ({model_name}): {e}")
+                    if "429" in str(e) or "404" in str(e):
+                        continue # Try next model/key
+                    break # Other errors might be prompt related
+        return None
 
+    def _try_groq_rotation(self, prompt):
+        """Round-Robin Load Balancing for Groq Keys"""
+        keys = list(self.groq_keys)
+        random.shuffle(keys)
+
+        for key in keys:
+            try:
+                client = Groq(api_key=key)
+                for model in self.models_config['groq']:
+                    try:
+                        completion = client.chat.completions.create(
+                            messages=[{"role": "user", "content": prompt}],
+                            model=model,
+                        )
+                        return completion.choices[0].message.content
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.warning(f"Groq Fail: {e}")
+        return None
+
+    def _try_claude_rotation(self, prompt):
+        """Round-Robin Load Balancing for Claude Keys"""
+        keys = list(self.claude_keys)
+        random.shuffle(keys)
+
+        for key in keys:
+            try:
+                client = anthropic.Anthropic(api_key=key)
+                for model in self.models_config['claude']:
+                    try:
+                        message = client.messages.create(
+                            model=model,
+                            max_tokens=1024,
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        return message.content[0].text
+                    except Exception:
+                        continue
+            except Exception as e:
+                logger.warning(f"Claude Fail: {e}")
+        return None
+
+# Legacy/Stub Functions
+def analyze_assignment_document(assignment): pass
+def analyze_global_assignment(file_path): pass
 def analyze_global_assignment_content(file_path):
-    """
-    Analyzes a global assignment file (Schedule) to extract potential candidates.
-    Delegates to smart analyzer.
-    """
+    # Delegate to smart analyzer
+    from students.utils_tools.smart_assignment_analyzer import extract_from_excel, extract_from_word
     ext = os.path.splitext(file_path)[1].lower()
-    candidates = []
-
-    try:
-        if ext == '.pdf':
-            reader = PdfReader(file_path)
-            full_text = ""
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    full_text += text + "\n"
-            candidates = _process_text_for_assignment(full_text)
-
-        elif ext == '.docx':
-            from students.utils_tools.smart_assignment_analyzer import extract_from_word
-            smart_candidates = extract_from_word(file_path)
-            if smart_candidates:
-                candidates.extend(smart_candidates)
-
-        elif ext in ['.xlsx', '.xls']:
-            from students.utils_tools.smart_assignment_analyzer import extract_from_excel
-            smart_candidates = extract_from_excel(file_path)
-            if smart_candidates:
-                candidates.extend(smart_candidates)
-
-        elif ext in ['.html', '.htm']:
-             with open(file_path, 'r', encoding='utf-8') as f:
-                 soup = BeautifulSoup(f.read(), 'html.parser')
-                 # Basic HTML table parsing fallback
-                 pass
-
-        return candidates
-
-    except Exception as e:
-        logger.error(f"Global Analysis Failed: {e}")
-        return []
-
-def _process_text_for_assignment(text):
-    # Fallback text processor (can be improved or removed if smart analyzer covers PDF)
+    if ext in ['.xlsx', '.xls']: return extract_from_excel(file_path)
+    if ext == '.docx': return extract_from_word(file_path)
     return []
-
-def analyze_global_assignment(file_path):
-    pass

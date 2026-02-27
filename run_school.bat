@@ -1,54 +1,51 @@
 @echo off
-setlocal
+chcp 65001 > nul
+echo ==========================================
+echo      برنامج تسيير المؤسسات التربوية
+echo ==========================================
 
-echo ========================================================
-echo       START SCHOOL MANAGEMENT SYSTEM
-echo ========================================================
-echo.
-
-:: 1. Check Virtual Environment
-if not exist "venv" (
-    echo [1/3] First Run Detected! Setting up environment...
-    echo       This may take a few minutes...
+REM 1. Check/Create Virtual Environment
+if not exist venv (
+    echo [INFO] Creating Virtual Environment (First Run)...
     python -m venv venv
-    call venv\Scripts\activate.bat
-    python -m pip install --upgrade pip
-) else (
-    echo [1/3] Environment found. Activating...
-    call venv\Scripts\activate.bat
+    if errorlevel 1 (
+        echo [ERROR] Failed to create venv. Ensure Python 3.10+ is installed.
+        pause
+        exit /b
+    )
 )
 
-:: 2. Ensure Dependencies
-echo.
-echo [1.5/3] Checking dependencies...
-pip install -r requirements.txt
-if %errorlevel% neq 0 (
-    echo [WARNING] Failed to install requirements. Check internet connection.
-    echo Continuing anyway...
+REM 2. Activate Environment
+call venv\Scripts\activate
+
+REM 3. Install Dependencies (Quietly check)
+echo [INFO] Checking dependencies...
+pip install -r requirements.txt > nul 2>&1
+if errorlevel 1 (
+    echo [WARN] Installing missing packages...
+    pip install -r requirements.txt
 )
 
-:: 3. Set Environment Variables
-set DATABASE_URL=sqlite:///db.sqlite3
-set DEBUG=True
+REM 4. Setup Firewall (Once)
+if not exist .firewall_done (
+    echo [INFO] Configuring Firewall for Network Access...
+    netsh advfirewall firewall add rule name="SchoolApp_8000" dir=in action=allow protocol=TCP localport=8000 > nul 2>&1
+    echo done > .firewall_done
+)
 
-:: 4. Run Migrations & Checks
-echo.
-echo [2/3] Checking Database...
-python manage.py migrate --noinput
-python manage.py collectstatic --noinput
+REM 5. Run Migrations
+echo [INFO] Updating Database...
+python manage.py migrate --noinput > nul
 
-:: 5. Start Server
+REM 6. Start Server
 echo.
-echo [3/3] Starting Server...
+echo [SUCCESS] Server Started!
+echo ------------------------------------------
+echo Local Access:   http://localhost:8000
+echo Network Access: http://0.0.0.0:8000
+echo ------------------------------------------
+echo Press Ctrl+C to stop.
 echo.
-echo ========================================================
-echo  ACCESS LINK: http://localhost:8000/canteen/
-echo ========================================================
-echo.
-echo  Keep this window open to keep the system running.
-echo.
-echo  Opening browser automatically...
-start http://localhost:8000/canteen/
 
-waitress-serve --listen=*:8000 --threads=4 School_Management.wsgi:application
+python manage.py runserver 0.0.0.0:8000
 pause
