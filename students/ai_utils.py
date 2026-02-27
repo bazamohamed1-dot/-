@@ -102,10 +102,15 @@ class AIService:
             resp = self._try_claude(prompt)
             if resp: return resp
 
-        return "⚠️ All AI services are busy. Please try again later."
+        # Detailed Failure Message
+        return "⚠️ عذراً، لم أتمكن من الاتصال بأي خادم (Google, Groq, Claude). يرجى التأكد من صحة المفاتيح في ملف .env ومن اتصال الإنترنت."
 
     def _try_gemini_v1(self, prompt):
         """Uses new google-genai SDK"""
+        if not self.gemini_keys:
+            logger.warning("No Google Keys Found")
+            return None
+
         keys = list(self.gemini_keys)
         random.shuffle(keys)
 
@@ -124,9 +129,11 @@ class AIService:
                         if response and response.text:
                             return response.text
                     except Exception as e:
+                        print(f"Gemini V1 Fail ({model}) key=...{key[-4:]}: {e}") # Force Print
                         logger.warning(f"Gemini V1 Fail ({model}): {e}")
                         continue
             except Exception as e:
+                print(f"Gemini Client Init Error: {e}")
                 logger.error(f"Gemini Client Error: {e}")
         return None
 

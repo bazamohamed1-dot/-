@@ -321,17 +321,21 @@ function openManualAssign(id, name, subject, classesJson) {
 }
 
 // Intercept form submit to gather checkboxes
-document.querySelector('#manualAssignModal form').addEventListener('submit', function(e) {
-    const checked = Array.from(document.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
+const manualForm = document.querySelector('#manualAssignModal form');
+if (manualForm) {
+    manualForm.addEventListener('submit', function(e) {
+        const checked = Array.from(document.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
 
-    // If manual input exists (fallback), merge it
-    const manual = document.getElementById('manualInput');
-    if (manual && manual.value) {
-        checked.push(...manual.value.split(',').map(s => s.trim()));
-    }
+        // If manual input exists (fallback), merge it
+        const manual = document.getElementById('manualInput');
+        if (manual && manual.value) {
+            checked.push(...manual.value.split(',').map(s => s.trim()));
+        }
 
-    document.getElementById('assignClassesHidden').value = checked.join(' ');
-});
+        const hiddenInput = document.getElementById('assignClassesHidden');
+        if(hiddenInput) hiddenInput.value = checked.join(' ');
+    });
+}
 
 function toggleSubject(rank) {
     const subjField = document.getElementById('subjectField');
