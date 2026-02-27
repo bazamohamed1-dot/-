@@ -28,6 +28,6 @@ urlpatterns = [
 
     # Explicitly serve media files using 'serve' view even if DEBUG=False
     # This is crucial for local deployments (Waitress/Gunicorn) where Nginx is not present
-    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
-    re_path(r'^static/(?P<path>.*)$', serve, {'document_root': settings.STATIC_ROOT}),
+    re_path(r'^' + settings.MEDIA_URL.lstrip('/') + r'(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^' + settings.STATIC_URL.lstrip('/') + r'(?P<path>.*)$', serve, {'document_root': settings.STATIC_ROOT}),
 ]
