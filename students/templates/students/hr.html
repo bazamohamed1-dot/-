@@ -61,9 +61,16 @@
                     <td>{{ emp.phone }}</td>
                     <td>
                         {% if emp.rank == 'teacher' %}
-                        <!-- Pass current assignments if available -->
+                        <!-- Pass current assignments safely using a data attribute to avoid JS syntax errors -->
                         {% with assign=emp.assignments.last %}
-                        <button class="btn btn-sm btn-warning" onclick='openManualAssign("{{ emp.id }}", "{{ emp.last_name|escapejs }} {{ emp.first_name|escapejs }}", "{{ emp.subject|default:""|escapejs }}", {{ assign.classes|default:"[]"|safe }})' title="إسناد الأقسام"><i class="fas fa-chalkboard-teacher"></i></button>
+                        <button class="btn btn-sm btn-warning btn-assign"
+                                data-id="{{ emp.id }}"
+                                data-name="{{ emp.last_name }} {{ emp.first_name }}"
+                                data-subject="{{ emp.subject|default:'' }}"
+                                data-classes="{{ assign.classes|default:'[]'|safe_json|escape }}"
+                                title="إسناد الأقسام">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </button>
                         {% endwith %}
                         {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})'><i class="fas fa-edit"></i></button>
@@ -118,6 +125,24 @@
         setTimeout(() => alertDiv.remove(), 5000);
     });
     {% endif %}
+
+    // Event listener for Assignment buttons (Replacing inline onclick)
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.btn-assign').forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                const name = this.getAttribute('data-name');
+                const subject = this.getAttribute('data-subject');
+                let classes = [];
+                try {
+                    classes = JSON.parse(this.getAttribute('data-classes'));
+                } catch (e) {
+                    console.error("Error parsing classes JSON:", e);
+                }
+                openManualAssign(id, name, subject, classes);
+            });
+        });
+    });
 </script>
 
 <!-- Add/Edit Modal -->
