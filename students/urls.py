@@ -51,6 +51,7 @@ urlpatterns = [
     path('import_eleve/confirm/', ui_views.import_eleve_confirm, name='import_eleve_confirm'),
     path('api/import_json/', views.import_students_json, name='api_import_json'),
     path('api/import/update/', views.upload_update_file, name='api_import_update'),
+    path('sync/photos/', ui_views.sync_photos_view, name='sync_photos_view'),
     path('ui/', ui_views.canteen_home, name='canteen_home'),
     path('list/', ui_views.student_list, name='student_list'),
     path('management/', ui_views.students_management, name='students_management'),
