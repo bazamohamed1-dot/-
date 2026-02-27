@@ -4,8 +4,14 @@ import os
 import sys
 
 
+import dotenv
+
 def main():
     """Run administrative tasks."""
+    # Load .env file
+    if os.path.exists(os.path.join(os.path.dirname(__file__), '.env')):
+        dotenv.load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'School_Management.settings')
     try:
         from django.core.management import execute_from_command_line
