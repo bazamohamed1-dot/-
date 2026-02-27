@@ -1,6 +1,7 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.views.generic import TemplateView
+from django.views.static import serve
 from rest_framework.routers import DefaultRouter
 from students.views import StudentViewSet
 from students import ui_views
@@ -24,12 +25,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('canteen/', include('students.urls')),
-]
 
-# Serve static and media files during development and local production (if DEBUG=False with specific setup or True)
-# For simple local setup, serving via Django is easiest, even with DEBUG=False if using 'insecure' runserver or WhiteNoise for static.
-# Media files need manual serving if DEBUG=False unless using a specific server config.
-# We will use this pattern which works for both runserver modes usually.
-# Always serve media/static files locally for this specific deployment style (Waitress)
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    # Explicitly serve media files using 'serve' view even if DEBUG=False
+    # This is crucial for local deployments (Waitress/Gunicorn) where Nginx is not present
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^static/(?P<path>.*)$', serve, {'document_root': settings.STATIC_ROOT}),
+]

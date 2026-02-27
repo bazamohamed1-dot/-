@@ -181,7 +181,6 @@ class EmployeeProfile(models.Model):
     # AI Access Control (Director sets this for each user)
     AI_MODE_CHOICES = [
         ('restricted_rag', 'وضع مقيد (RAG) - مساعد إداري'),
-        ('educational_free', 'وضع حر (تربوي)'),
         ('full_comprehensive', 'وضع شامل (Gemini Pro Full)'),
     ]
     ai_mode = models.CharField(max_length=30, choices=AI_MODE_CHOICES, default='restricted_rag', verbose_name="صلاحيات الذكاء الاصطناعي")
