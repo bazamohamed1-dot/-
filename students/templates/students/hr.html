@@ -100,14 +100,8 @@
     {% if auto_select_data %}
     document.addEventListener('DOMContentLoaded', function() {
         // auto_select_data is a dict: { teacher_id: { subject: "...", classes: [...] } }
-        const autoData = {{ auto_select_data|safe }};
-
-        // Loop through teachers in the table and show indicator
-        for (const [tid, data] of Object.entries(autoData)) {
-            // Find the teacher row or button
-            // We can't auto-click everything, but we can highlight or show a notification
-            // Or better: If the user opens the manual modal for this teacher, pre-fill it!
-        }
+        // Use single quotes for the JSON string to avoid syntax errors with HTML escaping
+        const autoData = JSON.parse('{{ auto_select_data|escapejs }}');
 
         // Store globally to use when opening modal
         window.autoAssignmentData = autoData;
