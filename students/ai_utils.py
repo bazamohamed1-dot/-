@@ -45,7 +45,8 @@ class AIService:
 
         # Models Config
         self.models_config = {
-            'gemini': ['gemini-1.5-flash', 'gemini-1.5-pro'],
+            # Try 2.0 first (Fastest), then 1.5-flash (Stable), then Pro
+            'gemini': ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
             'groq': ['llama3-70b-8192', 'mixtral-8x7b-32768'],
             'claude': ['claude-3-haiku-20240307']
         }
