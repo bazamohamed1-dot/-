@@ -82,16 +82,29 @@ class AIService:
         if rag_enabled:
             context = self.get_rag_context(user_query)
 
+        # Adjust Prompt based on Mode
+        directives = """
+        - Concise for greetings (1-2 sentences).
+        - Detailed for tasks/plans.
+        - Use Markdown.
+        """
+
+        if mode == 'bot_helper':
+            directives = """
+            - Role: In-App Helper Bot.
+            - Goal: Explain how to use the app features briefly.
+            - Tone: Helpful, direct, very concise (max 3 sentences).
+            - NO long strategic advice. Just "How-To".
+            """
+
         prompt = f"""
-        System Role: Expert School Director Consultant.
+        System Role: Expert School Director Consultant / Helper.
         Context: {system_instruction}
         School Data: {context if context else "None"}
         User Query: {user_query}
 
         Directives:
-        - Concise for greetings (1-2 sentences).
-        - Detailed for tasks/plans.
-        - Use Markdown.
+        {directives}
         """
 
         # 2. Provider Cascade Strategy
