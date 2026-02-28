@@ -121,9 +121,15 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="import_file">
             <input type="file" name="file" class="form-control mb-3" required>
+
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <input type="checkbox" id="manualMappingHr" name="manual_mapping" style="width:20px; height:20px;">
+                <label for="manualMappingHr" style="cursor:pointer; margin:0;">تحديد الأعمدة يدوياً (إذا اختلف التنسيق)</label>
+            </div>
+
             <div class="d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-secondary" onclick="closeImportModal()">إلغاء</button>
-                <button type="submit" class="btn btn-primary">استيراد</button>
+                <button type="submit" class="btn btn-primary">بدء الاستيراد</button>
             </div>
         </form>
     </div>

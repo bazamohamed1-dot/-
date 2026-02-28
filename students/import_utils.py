@@ -241,9 +241,9 @@ def parse_student_file(file_path, override_header_indices=None):
 
     return students
 
-def parse_hr_file(file_path):
+def parse_hr_file(file_path, override_header_indices=None):
     """
-    Parses an employee/HR import file using smart header detection.
+    Parses an employee/HR import file using smart header detection or manual overrides.
     """
     with open(file_path, 'rb') as f:
         rows = list(extract_rows_from_file(f))
@@ -282,16 +282,20 @@ def parse_hr_file(file_path):
         'الرمز الوظيفي': 'employee_code'
     }
 
-    header_indices, data_start_row = detect_headers(rows, HEADER_MAP, threshold=2)
+    if override_header_indices:
+        header_indices = override_header_indices
+        data_start_row = 1
+    else:
+        header_indices, data_start_row = detect_headers(rows, HEADER_MAP, threshold=2)
 
-    if not header_indices:
-        # Fallback to standard layout if no headers found
-        header_indices = {
-            'employee_code': 0, 'last_name': 1, 'first_name': 2,
-            'date_of_birth': 3, 'rank': 6, 'subject': 7,
-            'grade': 8, 'effective_date': 9
-        }
-        data_start_row = 4
+        if not header_indices:
+            # Fallback to standard layout if no headers found
+            header_indices = {
+                'employee_code': 0, 'last_name': 1, 'first_name': 2,
+                'date_of_birth': 3, 'rank': 6, 'subject': 7,
+                'grade': 8, 'effective_date': 9
+            }
+            data_start_row = 4
 
     employees = []
 

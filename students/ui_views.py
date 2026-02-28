@@ -188,7 +188,10 @@ def import_eleve_view(request):
                     'الاسم واللقب': 'full_name', 'تاريخ الميلاد': 'date_of_birth',
                     'القسم': 'class_name', 'المستوى': 'academic_year',
                     'نظام التمدرس': 'attendance_system', 'رقم القيد': 'enrollment_number',
-                    'تاريخ التسجيل': 'enrollment_date', 'اسم الولي': 'guardian_name'
+                    'تاريخ التسجيل': 'enrollment_date', 'تاريخ الخروج': 'exit_date',
+                    'اسم الولي': 'guardian_name', 'اسم الأم': 'mother_name',
+                    'هاتف الولي': 'guardian_phone', 'العنوان': 'address',
+                    'مكان الميلاد': 'place_of_birth', 'الجنس': 'gender'
                 }
                 suggested_mapping, _ = detect_headers(preview_rows, HEADER_MAP)
 
@@ -605,6 +608,121 @@ def assignment_matching_view(request):
 
         return redirect('hr_home')
 
+def import_hr_confirm(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    if request.method == 'POST':
+        temp_path = request.POST.get('temp_file_path')
+        if not temp_path or not os.path.exists(temp_path):
+            messages.error(request, "انتهت صلاحية الملف المؤقت. يرجى الرفع مجدداً.")
+            return redirect('hr_home')
+
+        try:
+            override_indices = {}
+            for key, value in request.POST.items():
+                if key.startswith('col_') and value:
+                    idx = int(key.split('_')[1])
+                    override_indices[value] = idx
+
+            if not override_indices:
+                messages.error(request, "لم يتم تحديد أي عمود!")
+                return redirect('hr_home')
+
+            from .import_utils import parse_hr_file
+            employees_data = parse_hr_file(temp_path, override_header_indices=override_indices)
+
+            count = process_hr_import_data(employees_data)
+
+            if count > 0:
+                messages.success(request, f"تم استيراد/تحديث {count} موظف.")
+            else:
+                messages.warning(request, "لم يتم استيراد أي موظف. ربما الملف فارغ أو الأعمدة غير صحيحة.")
+
+        except Exception as e:
+            messages.error(request, f"خطأ أثناء الاستيراد: {e}")
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+
+    return redirect('hr_home')
+
+def process_hr_import_data(employees_data):
+    count = 0
+    for emp in employees_data:
+        # Parse Rank: Use what's in the file, map to system keys
+        raw_rank = emp.get('rank', '').strip()
+
+        sys_rank = 'admin' # Default to admin for general staff
+
+        if 'أستاذ' in raw_rank:
+            sys_rank = 'teacher'
+        elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
+             sys_rank = 'worker'
+        elif 'عون' in raw_rank:
+             if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
+                 sys_rank = 'admin'
+             else:
+                 sys_rank = 'admin'
+
+        if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
+            continue
+
+        subject = emp.get('subject', '/')
+        if sys_rank != 'teacher':
+            subject = "/"
+
+        def parse_d(val):
+            if not val: return None
+            if isinstance(val, (date, datetime)): return val
+            try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
+            except: pass
+            try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
+            except: pass
+            return None
+
+        dob = parse_d(emp.get('date_of_birth'))
+        eff_date = parse_d(emp.get('effective_date'))
+
+        emp_code = emp.get('employee_code')
+        ln = emp.get('last_name', '')
+        fn = emp.get('first_name', '')
+
+        existing = None
+        if emp_code:
+            existing = Employee.objects.filter(employee_code=emp_code).first()
+
+        if not existing and ln and fn:
+            existing = Employee.objects.filter(
+                last_name=ln,
+                first_name=fn,
+                date_of_birth=dob
+            ).first()
+
+        defaults={
+            'last_name': ln,
+            'first_name': fn,
+            'full_name': f"{ln} {fn}",
+            'date_of_birth': dob,
+            'rank': sys_rank,
+            'role': raw_rank,
+            'subject': subject,
+            'grade': emp.get('grade', ''),
+            'effective_date': eff_date,
+            'phone': emp.get('phone', ''),
+            'email': emp.get('email', ''),
+        }
+
+        if existing:
+            for key, value in defaults.items():
+                setattr(existing, key, value)
+            existing.save()
+        else:
+            Employee.objects.create(employee_code=emp_code, **defaults)
+
+        count += 1
+    return count
+
 def hr_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
@@ -615,6 +733,7 @@ def hr_home(request):
 
         if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
+            force_manual = request.POST.get('manual_mapping') == 'on'
             # Save strictly to disk for processing
             temp_path = None
             try:
@@ -624,103 +743,41 @@ def hr_home(request):
                         tmp.write(chunk)
                     temp_path = tmp.name
 
+                if force_manual:
+                    from .import_utils import extract_rows_from_file, detect_headers
+                    with open(temp_path, 'rb') as f:
+                        all_rows = list(extract_rows_from_file(f, override_filename=temp_path))
+
+                    if not all_rows:
+                        messages.error(request, "الملف فارغ أو غير قابل للقراءة.")
+                        os.remove(temp_path)
+                        return redirect('hr_home')
+
+                    preview_rows = all_rows[:5]
+
+                    HEADER_MAP = {
+                        'اللقب': 'last_name', 'الاسم': 'first_name',
+                        'الاسم واللقب': 'full_name', 'تاريخ الازدياد': 'date_of_birth',
+                        'مكان الازدياد': 'place_of_birth', 'الرتبة': 'rank', 'الصفة': 'rank',
+                        'المادة': 'subject', 'الدرجة': 'grade', 'تاريخ السريان': 'effective_date',
+                        'الهاتف': 'phone', 'البريد': 'email', 'رقم': 'employee_code',
+                        'الرمز الوظيفي': 'employee_code'
+                    }
+                    suggested_mapping, _ = detect_headers(preview_rows, HEADER_MAP)
+                    inv_map = {v: k for k, v in suggested_mapping.items()}
+
+                    context = {
+                        'temp_file_path': temp_path,
+                        'preview_rows': preview_rows,
+                        'num_columns': range(len(preview_rows[0])) if preview_rows else [],
+                        'suggested_mapping': inv_map
+                    }
+                    return render(request, 'students/hr_import_preview.html', context)
+
                 from .import_utils import parse_hr_file
                 employees_data = parse_hr_file(temp_path)
 
-                count = 0
-                for emp in employees_data:
-                    # Parse Rank: Use what's in the file, map to system keys
-                    raw_rank = emp.get('rank', '').strip()
-
-                    # Logic: If 'أستاذ' is in rank, it's a teacher.
-                    # If 'عامل مهني' is in rank, it's a worker.
-                    # Everything else (Director, Admin, Steward, Data Entry) is 'admin'.
-
-                    sys_rank = 'admin' # Default to admin for general staff
-
-                    # Improved Classification Logic based on User Feedback
-                    if 'أستاذ' in raw_rank:
-                        sys_rank = 'teacher'
-                    # Explicitly catch "Aoun Khidma" (Service Agent) regardless of level (1, 2, 3...)
-                    elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
-                         # "Service Agent", "Prevention Agent", "Worker", "Cleaner", "Guard" -> Worker
-                         sys_rank = 'worker'
-                    elif 'عون' in raw_rank:
-                         # "Agent" alone (Admin Agent, Office Agent, Data Entry Agent) -> Admin
-                         # Check if explicitly admin-related keywords follow "Agent"
-                         if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
-                             sys_rank = 'admin'
-                         else:
-                             # Default fallback for generic "Agent" to Admin as per "First point" in request
-                             sys_rank = 'admin'
-
-                    # Validation: Filter out header rows that might have slipped through
-                    # If 'rank' literally contains "الرتبة" or "rank", skip
-                    if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
-                        continue
-
-                    # Handle Subject
-                    subject = emp.get('subject', '/')
-                    if sys_rank != 'teacher':
-                        subject = "/"
-
-                    # Dates Parsing
-                    def parse_d(val):
-                        if not val: return None
-                        if isinstance(val, (date, datetime)): return val
-                        try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
-                        except: pass
-                        try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
-                        except: pass
-                        return None
-
-                    dob = parse_d(emp.get('date_of_birth'))
-                    eff_date = parse_d(emp.get('effective_date'))
-
-                    # Duplicate Prevention Logic:
-                    # 1. Try to find by unique Employee Code if present
-                    # 2. Try to find by Name + DOB if Code is generic/missing
-
-                    emp_code = emp.get('employee_code')
-                    ln = emp.get('last_name', '')
-                    fn = emp.get('first_name', '')
-
-                    # Search for existing
-                    existing = None
-                    if emp_code:
-                        existing = Employee.objects.filter(employee_code=emp_code).first()
-
-                    if not existing and ln and fn:
-                        existing = Employee.objects.filter(
-                            last_name=ln,
-                            first_name=fn,
-                            date_of_birth=dob
-                        ).first()
-
-                    # Data dict
-                    defaults={
-                        'last_name': ln,
-                        'first_name': fn,
-                        'full_name': f"{ln} {fn}",
-                        'date_of_birth': dob,
-                        'rank': sys_rank,
-                        'role': raw_rank,
-                        'subject': subject,
-                        'grade': emp.get('grade', ''),
-                        'effective_date': eff_date,
-                        'phone': emp.get('phone', ''),
-                        'email': emp.get('email', ''),
-                    }
-
-                    if existing:
-                        for key, value in defaults.items():
-                            setattr(existing, key, value)
-                        existing.save()
-                    else:
-                        Employee.objects.create(employee_code=emp_code, **defaults)
-
-                    count += 1
-
+                count = process_hr_import_data(employees_data)
                 messages.success(request, f"تم استيراد/تحديث {count} موظف.")
             except Exception as e:
                 messages.error(request, f"خطأ في الملف: {e}")
