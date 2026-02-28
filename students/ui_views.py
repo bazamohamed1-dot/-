@@ -172,8 +172,7 @@ def import_eleve_view(request):
                 from .import_utils import extract_rows_from_file, detect_headers
                 # Re-open safely
                 with open(temp_path, 'rb') as f:
-                    f.name = temp_path # provide extension for detection
-                    all_rows = list(extract_rows_from_file(f))
+                    all_rows = list(extract_rows_from_file(f, override_filename=temp_path))
 
                 if not all_rows:
                     messages.error(request, "الملف فارغ أو غير قابل للقراءة.")
@@ -211,30 +210,55 @@ def import_eleve_view(request):
             if not raw_data:
                 messages.error(request, "لم يتم العثور على بيانات صالحة في الملف. جرب تفعيل 'تحديد الأعمدة يدوياً'.")
             else:
+                # Check for update flag
+                update_existing = request.POST.get('update_existing') == 'on'
+
                 # 2. Create Dataset for django-import-export
                 headers = list(raw_data[0].keys())
                 dataset = Dataset(headers=headers)
 
+                # Fetch existing IDs if we shouldn't update them, to prevent Unique Constraint errors
+                existing_ids = set()
+                if not update_existing:
+                    existing_ids = set(Student.objects.values_list('student_id_number', flat=True))
+
                 for row in raw_data:
+                    sid = str(row.get('student_id_number', '')).strip()
+                    if not update_existing and sid in existing_ids:
+                        continue # Skip existing to prevent Unique Constraint errors
                     dataset.append([row[h] for h in headers])
 
-                # 3. Use Resource to Import
-                resource = StudentResource()
-                result = resource.import_data(dataset, dry_run=False, raise_errors=True)
-
-                if result.has_errors():
-                    messages.error(request, "حدثت أخطاء أثناء الاستيراد.")
+                if len(dataset) == 0:
+                     messages.warning(request, "كل التلاميذ في الملف موجودون مسبقاً في قاعدة البيانات (لم تقم باختيار 'تحديث').")
                 else:
-                    new_count = result.totals.get('new', 0)
-                    update_count = result.totals.get('update', 0)
-                    skip_count = result.totals.get('skip', 0)
-                    total_processed = new_count + update_count + skip_count
+                    # 3. Use Resource to Import
+                    resource = StudentResource()
 
-                    msg = f"تمت المعالجة: {total_processed} سجل. (جديد: {new_count}، تحديث: {update_count})."
-                    if total_processed == 0:
-                        messages.warning(request, "لم يتم استيراد أي بيانات. ربما لم يتم التعرف على الأعمدة؟ حاول استخدام 'تحديد الأعمدة يدوياً'.")
+                    # By default import-export handles update gracefully if configured,
+                    # but if skip_unchanged=True is the only guard, we want to enforce explicitly.
+                    # We pass dry_run=False. The resource class uses import_id_fields=('student_id_number',).
+                    # If update_existing=False, we've already stripped existing IDs above.
+                    # If update_existing=True, we let import_export update them.
+
+                    result = resource.import_data(dataset, dry_run=False, raise_errors=False)
+
+                    if result.has_errors():
+                        # Extract exact errors for user context
+                        err_msgs = []
+                        for i, err in enumerate(result.row_errors()):
+                            for e in err[1]: err_msgs.append(str(e.error))
+                        messages.error(request, f"حدثت أخطاء أثناء الاستيراد: {', '.join(set(err_msgs))[:100]}...")
                     else:
-                        messages.success(request, msg)
+                        new_count = result.totals.get('new', 0)
+                        update_count = result.totals.get('update', 0)
+                        skip_count = result.totals.get('skip', 0)
+                        total_processed = new_count + update_count + skip_count
+
+                        msg = f"تمت المعالجة: {total_processed} سجل. (جديد: {new_count}، تحديث: {update_count})."
+                        if total_processed == 0:
+                            messages.warning(request, "لم يتم استيراد أي بيانات. ربما لم يتم التعرف على الأعمدة؟ حاول استخدام 'تحديد الأعمدة يدوياً'.")
+                        else:
+                            messages.success(request, msg)
 
             # Cleanup if not preview mode
             if temp_path and os.path.exists(temp_path):
