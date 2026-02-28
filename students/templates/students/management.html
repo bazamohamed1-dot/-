@@ -509,9 +509,6 @@ function fillForm(idx, row) {
     document.getElementById('academicYear').value = s.level;
 
     let classNum = s.class;
-    if (s.class && s.class.includes(s.level)) {
-        classNum = s.class.replace(s.level, '').trim();
-    }
     document.getElementById('className').value = classNum;
 
     document.getElementById('attendanceSystem').value = s.sys;
@@ -572,7 +569,9 @@ async function saveCurrent() {
 
     const level = document.getElementById('academicYear').value;
     const classNum = document.getElementById('className').value.trim();
-    const fullClass = `${level} ${classNum}`;
+
+    // We only save the class number as per user requirement.
+    const fullClass = classNum;
 
     const studentData = {
         student_id_number: document.getElementById('studentID').value.trim(),
@@ -695,6 +694,7 @@ async function deleteStudent() {
     // Store globally for filtering logic
     let distinctLevels = [];
     let distinctClasses = [];
+    let levelClassMap = {};
 
     async function populateFilters() {
         try {
@@ -705,6 +705,7 @@ async function deleteStudent() {
 
             distinctLevels = data.levels || [];
             distinctClasses = data.classes || [];
+            levelClassMap = data.level_class_map || {};
 
             // Populate Levels Dropdown
             const levelSelect = document.getElementById('filterLevel');
@@ -742,10 +743,10 @@ function onLevelChange() {
     const selectedLevel = levelSelect.value;
     const selectedClass = classSelect.value;
 
-    // Filter available classes based on selected level (Client-side logic for dropdown UX)
+    // Filter available classes based on selected level map
     let availableClasses = distinctClasses;
-    if (selectedLevel) {
-        availableClasses = distinctClasses.filter(c => c.includes(selectedLevel));
+    if (selectedLevel && levelClassMap[selectedLevel]) {
+        availableClasses = levelClassMap[selectedLevel];
     }
 
     // Rebuild Class Dropdown
@@ -922,18 +923,7 @@ function renderTable() {
     if (!tbody) return;
 
     tbody.innerHTML = filteredList.map((s, i) => {
-        // Strip level from class name if present (e.g. "أولى 1" -> "1")
         let shortClass = s.class || "";
-        let levelStr = s.level || "";
-
-        // Normalize and check
-        try {
-            if (levelStr && shortClass) {
-                // Regex to replace level at start, case insensitive, plus spaces
-                const regex = new RegExp('^' + levelStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i');
-                shortClass = shortClass.replace(regex, '').trim();
-            }
-        } catch(e) { console.warn('Regex parsing error on class name', e); }
 
         const pendingStyle = s.isPending ? 'background-color: #fff7ed;' : '';
         let pendingBadge = s.isPending ? '<i class="fas fa-clock" title="تعديلات معلقة" style="color:#f59e0b; margin-right:5px;"></i>' : '';

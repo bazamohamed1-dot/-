@@ -58,16 +58,35 @@ class Base64ImageField(serializers.ImageField):
 
 class StudentSerializer(serializers.ModelSerializer):
     photo = Base64ImageField(required=False, allow_null=True)
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
         fields = '__all__'
+
+    def get_photo_url(self, obj):
+        if obj.photo and hasattr(obj.photo, 'url'):
+            return obj.photo.url
+
+        # Fallback to checking file system if DB is empty
+        safe_id = str(obj.student_id_number).replace('/', '_').replace('\\', '_').strip()
+        expected_path = os.path.join(settings.MEDIA_ROOT, 'students_photos', f'{safe_id}.jpg')
+        if os.path.isfile(expected_path):
+            return f'{settings.MEDIA_URL}students_photos/{safe_id}.jpg'
+        return None
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret['photo'] = ret['photo_url']
+        return ret
+
 
 class StudentListSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for listing students.
     """
     level = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -76,7 +95,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             'class_name', 'academic_year', 'level', 'gender', 'date_of_birth',
             'place_of_birth', 'attendance_system', 'enrollment_date',
             'enrollment_number', 'exit_date', 'guardian_name', 'mother_name',
-            'guardian_phone', 'address', 'photo'
+            'guardian_phone', 'address', 'photo', 'photo_url'
         ]
 
     def get_level(self, obj):
@@ -90,6 +109,22 @@ class StudentListSerializer(serializers.ModelSerializer):
                 # Validate if it looks like a level (optional)
                 return possible_level
         return ""
+
+    def get_photo_url(self, obj):
+        if obj.photo and hasattr(obj.photo, 'url'):
+            return obj.photo.url
+
+        # Fallback to checking file system if DB is empty
+        safe_id = str(obj.student_id_number).replace('/', '_').replace('\\', '_').strip()
+        expected_path = os.path.join(settings.MEDIA_ROOT, 'students_photos', f'{safe_id}.jpg')
+        if os.path.isfile(expected_path):
+            return f'{settings.MEDIA_URL}students_photos/{safe_id}.jpg'
+        return None
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret['photo'] = ret['photo_url']
+        return ret
 
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:

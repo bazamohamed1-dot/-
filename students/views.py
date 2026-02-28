@@ -71,9 +71,10 @@ class StudentViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get('search') or self.request.query_params.get('q')
 
         if level:
-            queryset = queryset.filter(Q(academic_year__icontains=level) | Q(class_name__istartswith=level))
+            queryset = queryset.filter(academic_year=level)
         if class_name:
-            queryset = queryset.filter(class_name__icontains=class_name) # Using icontains to be safe with partial matches or "Level Class" format
+            # We want exact match for class_name since it's just a number now
+            queryset = queryset.filter(class_name=class_name)
         if search:
             norm_search = normalize_arabic(search)
             q_obj = Q(student_id_number__icontains=search) | \
@@ -1123,19 +1124,12 @@ def student_filters(request):
     levels_raw = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
     classes_raw = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct())
 
-    # Fallback: Extract levels from class names if levels are missing or inconsistent
+    # Since level and class_name are now exact, no fallback extraction needed
     derived_levels = set(levels_raw)
-    for c in classes_raw:
-        parts = c.split()
-        if parts:
-            # Only add if it's a number or contains AM/AS/AP to avoid weird data
-            if parts[0].isdigit() or re.match(r'^\d+[a-zA-Z]+$', parts[0]):
-                 derived_levels.add(parts[0])
-            elif not levels_raw:
-                 derived_levels.add(parts[0])
 
     # Sort logically
     def custom_sort(item):
+        if not item: return (999, item)
         # Extract leading number for logical sorting (e.g., '1', '2', '1AM', '2AM')
         match = re.search(r'\d+', item)
         if match:
@@ -1143,11 +1137,30 @@ def student_filters(request):
         return (999, item) # Put non-numbered items at the end
 
     levels = sorted(list(derived_levels), key=custom_sort)
-    classes = sorted(list(classes_raw), key=custom_sort)
+
+    # We clean up classes to ensure they are distinct numbers if stored that way
+    clean_classes = set()
+    for c in classes_raw:
+        # If class string still contains extra spaces or things, we strip it
+        clean_classes.add(str(c).strip())
+
+    classes = sorted(list(clean_classes), key=custom_sort)
+
+    # Build a mapping of level -> available classes
+    level_class_map = {}
+    for level in levels:
+        level_class_map[level] = sorted(list(set(
+            str(c).strip() for c in
+            Student.objects.filter(academic_year=level)
+            .exclude(class_name__isnull=True)
+            .exclude(class_name__exact='')
+            .values_list('class_name', flat=True)
+        )), key=custom_sort)
 
     return Response({
         'levels': levels,
-        'classes': classes
+        'classes': classes,
+        'level_class_map': level_class_map
     })
 
 from .resources import StudentResource
