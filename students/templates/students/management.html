@@ -550,6 +550,16 @@ async function saveCurrent() {
         }
     }
 
+    // Photo Warning Check
+    const photoVal = document.getElementById('photoPath').value;
+    // Check if there is NO photo (neither an existing URL nor a new Base64 string)
+    if (!photoVal || photoVal === "undefined" || photoVal === "null" || photoVal.trim() === "") {
+        const proceed = confirm("التلميذ ليس لديه صورة، هل تريد الاستمرار في الحفظ؟");
+        if (!proceed) {
+            return; // Halt saving
+        }
+    }
+
     const level = document.getElementById('academicYear').value;
     const classNum = document.getElementById('className').value.trim();
     const fullClass = `${level} ${classNum}`;

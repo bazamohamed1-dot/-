@@ -18,7 +18,6 @@ router.register(r'pending_updates', views.PendingUpdateViewSet, basename='pendin
 
 # AI & Tasks
 router.register(r'tasks', ai_views.TaskViewSet, basename='tasks')
-router.register(r'observations', ai_views.TeacherObservationViewSet, basename='observations')
 router.register(r'school_memory', ai_views.SchoolMemoryViewSet, basename='school_memory')
 
 urlpatterns = [
@@ -91,7 +90,6 @@ urlpatterns = [
     path('tasks/', ui_views.tasks_view, name='tasks_view'),
     path('ai/control/', ui_views.ai_control_panel, name='ai_control_panel'),
     path('ai/chat/', ui_views.ai_chat_view, name='ai_chat_view'),
-    path('ai/observations/', ui_views.observations_view, name='observations_view'),
     path('ai/manual/', ui_views.ai_manual_view, name='ai_manual_view'),
 
     # Reminders

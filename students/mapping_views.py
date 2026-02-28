@@ -2,11 +2,31 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import ClassAlias, Student
 
+from django.http import JsonResponse
+from .models import Employee, TeacherAssignment
+
 def class_mapping_view(request):
     """
     Interface to map imported class names (aliases) to database class names.
     """
     if not request.user.is_authenticated: return redirect('canteen_landing')
+
+    if request.method == 'POST' and request.GET.get('action') == 'quick_save':
+        emp_id = request.POST.get('employee_id')
+        subject = request.POST.get('subject', '').strip()
+        classes = request.POST.getlist('classes')
+        try:
+            emp = Employee.objects.get(id=emp_id)
+            emp.subject = subject
+            emp.save()
+
+            assign, created = TeacherAssignment.objects.get_or_create(teacher=emp)
+            assign.subject = subject
+            assign.classes = classes
+            assign.save()
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
     # 1. Get all distinct classes currently in DB (for dropdown)
     db_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
