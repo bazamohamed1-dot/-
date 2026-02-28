@@ -25,13 +25,14 @@
              <button class="btn btn-success" onclick="openImportModal()"><i class="fas fa-file-excel"></i> استيراد القوائم</button>
              <button class="btn btn-info" onclick="openAssignmentModal()"><i class="fas fa-upload"></i> استيراد الإسناد (AI)</button>
              <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> إضافة موظف</button>
+             <button class="btn btn-warning" onclick="toggleEditAssignments()"><i class="fas fa-edit"></i> تعديل الإسناد للأساتذة</button>
         </div>
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="mainTableCard">
     <div class="table-responsive">
-        <table class="table">
+        <table class="table" id="employeesTable">
             <thead>
                 <tr>
                     <th>الرمز</th>
@@ -44,7 +45,7 @@
             </thead>
             <tbody>
                 {% for emp in employees %}
-                <tr>
+                <tr class="employee-row" data-rank="{{ emp.rank }}">
                     <td>{{ emp.employee_code }}</td>
                     <td>
                         {% if emp.photo %}
@@ -80,6 +81,32 @@
                 {% empty %}
                 <tr><td colspan="6" class="text-center">لا توجد بيانات</td></tr>
                 {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Dynamic Assignment Editor Container (Hidden by default) -->
+<div class="card" id="assignmentEditorCard" style="display: none;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="fas fa-edit"></i> تعديل الإسناد السريع للأساتذة</h3>
+        <div>
+            <button class="btn btn-secondary" onclick="toggleEditAssignments()"><i class="fas fa-times"></i> إغلاق</button>
+            <button class="btn btn-success" onclick="saveAllAssignments()"><i class="fas fa-save"></i> حفظ الكل</button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>الأستاذ</th>
+                    <th>المادة</th>
+                    <th>الأقسام المسندة (مفصولة بفاصلة)</th>
+                    <th>إجراء</th>
+                </tr>
+            </thead>
+            <tbody id="assignmentEditorBody">
+                <!-- Dynamically populated via JS -->
             </tbody>
         </table>
     </div>
@@ -259,6 +286,124 @@
 </div>
 
 <script>
+    // --- Dynamic Assignment Editor Logic ---
+    function toggleEditAssignments() {
+        const mainCard = document.getElementById('mainTableCard');
+        const editorCard = document.getElementById('assignmentEditorCard');
+        const tbody = document.getElementById('assignmentEditorBody');
+
+        if (mainCard.style.display !== 'none') {
+            // Switch to Edit Mode
+            mainCard.style.display = 'none';
+            editorCard.style.display = 'block';
+
+            // Populate Editor
+            tbody.innerHTML = '';
+            document.querySelectorAll('.btn-assign').forEach(btn => {
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                const subject = btn.getAttribute('data-subject') || '';
+                const classesRaw = btn.getAttribute('data-classes');
+                let classesArray = [];
+                try {
+                    classesArray = JSON.parse(classesRaw);
+                } catch(e) {}
+                const classesStr = classesArray.join(', ');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${name}</td>
+                    <td>
+                        <input type="text" class="form-control dyn-subject" data-id="${id}" value="${subject}" placeholder="المادة">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control dyn-classes" data-id="${id}" value="${classesStr}" placeholder="مثال: 1م1, 2م3, 4م2">
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="saveSingleAssignment('${id}', this)">حفظ</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            // Switch to Main View
+            editorCard.style.display = 'none';
+            mainCard.style.display = 'block';
+            // Reload page to reflect changes if any were made
+            window.location.reload();
+        }
+    }
+
+    function saveSingleAssignment(empId, btnElement) {
+        const tr = btnElement.closest('tr');
+        const subject = tr.querySelector('.dyn-subject').value.trim();
+        const classesStr = tr.querySelector('.dyn-classes').value.trim();
+        const classesArray = classesStr.split(',').map(s => s.trim()).filter(s => s !== '');
+
+        btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btnElement.disabled = true;
+
+        const formData = new FormData();
+        formData.append('employee_id', empId);
+        formData.append('subject', subject);
+        classesArray.forEach(c => formData.append('classes', c));
+
+        fetch("{% url 'class_mapping_view' %}?action=quick_save", {
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            btnElement.innerHTML = '<i class="fas fa-check"></i>';
+            btnElement.classList.replace('btn-primary', 'btn-success');
+            setTimeout(() => {
+                btnElement.innerHTML = 'حفظ';
+                btnElement.classList.replace('btn-success', 'btn-primary');
+                btnElement.disabled = false;
+            }, 2000);
+        })
+        .catch(e => {
+            alert('حدث خطأ أثناء الحفظ');
+            btnElement.innerHTML = 'حفظ';
+            btnElement.disabled = false;
+        });
+    }
+
+    function saveAllAssignments() {
+        const promises = [];
+        document.querySelectorAll('#assignmentEditorBody tr').forEach(tr => {
+            const btn = tr.querySelector('button');
+            const empId = tr.querySelector('.dyn-subject').getAttribute('data-id');
+            const subject = tr.querySelector('.dyn-subject').value.trim();
+            const classesStr = tr.querySelector('.dyn-classes').value.trim();
+            const classesArray = classesStr.split(',').map(s => s.trim()).filter(s => s !== '');
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('employee_id', empId);
+            formData.append('subject', subject);
+            classesArray.forEach(c => formData.append('classes', c));
+
+            promises.push(
+                fetch("{% url 'class_mapping_view' %}?action=quick_save", {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                    body: formData
+                }).then(res => res.json())
+            );
+        });
+
+        Promise.all(promises).then(() => {
+            alert("تم حفظ جميع التعديلات بنجاح!");
+            toggleEditAssignments(); // Reloads
+        }).catch(() => {
+            alert("حدث خطأ أثناء الحفظ الجماعي.");
+        });
+    }
+
 function openImportModal() { document.getElementById('importModal').style.display = 'block'; }
 function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
 function openAddModal(id = null, data = null) {

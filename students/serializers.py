@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, SystemMessage, UserRole, PendingUpdate, Task, TeacherObservation, SchoolMemory
+from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, SystemMessage, UserRole, PendingUpdate, Task, SchoolMemory
 from django.conf import settings
 from django.core.files.base import ContentFile
 import uuid
@@ -140,14 +140,6 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_kwargs = {'manager_instructions': {'write_only': True}} # Hide context from user
 
-class TeacherObservationSerializer(serializers.ModelSerializer):
-    teacher_name = serializers.CharField(source='teacher.username', read_only=True)
-    student_name = serializers.CharField(source='student.last_name', read_only=True)
-
-    class Meta:
-        model = TeacherObservation
-        fields = '__all__'
-        read_only_fields = ['status', 'ai_suggestion', 'created_at', 'teacher']
 
 class SchoolMemorySerializer(serializers.ModelSerializer):
     class Meta:

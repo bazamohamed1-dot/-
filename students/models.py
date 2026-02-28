@@ -355,23 +355,6 @@ class Task(models.Model):
         verbose_name = "مهمة"
         verbose_name_plural = "المهام"
 
-class TeacherObservation(models.Model):
-    STATUS_CHOICES = [
-        ('pending', 'قيد الانتظار'),
-        ('ai_suggested', 'مقترح AI'),
-        ('teacher_approved', 'موافقة الأستاذ'),
-        ('admin_review', 'مراجعة المدير'),
-        ('delivered', 'تم التسليم'),
-        ('rejected', 'مرفوض')
-    ]
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
-    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='observations_created', verbose_name="الأستاذ")
-    content = models.TextField(verbose_name="ملاحظة الأستاذ")
-    ai_suggestion = models.TextField(verbose_name="مقترح الذكاء الاصطناعي", blank=True, null=True)
-    final_content = models.TextField(verbose_name="المحتوى النهائي", blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    created_at = models.DateTimeField(auto_now_add=True)
-    admin_feedback = models.TextField(verbose_name="رد الإدارة", blank=True, null=True)
 
     class Meta:
         verbose_name = "ملاحظة تربوية"

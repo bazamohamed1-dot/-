@@ -318,15 +318,10 @@
             </li>
             {% endif %}
 
-            <!-- Shared Links for Tasks/Observations (Moved to main list) -->
+            <!-- Shared Links for Tasks (Moved to main list) -->
             <li class="nav-item">
                 <a href="{% url 'tasks_view' %}" class="nav-link {% if 'tasks' in request.path %}active{% endif %}">
                     <i class="fas fa-list-check"></i> المهام
-                </a>
-            </li>
-            <li class="nav-item">
-                <a href="{% url 'observations_view' %}" class="nav-link {% if 'observations' in request.path %}active{% endif %}">
-                    <i class="fas fa-comments"></i> الملاحظات والوساطة
                 </a>
             </li>
 
