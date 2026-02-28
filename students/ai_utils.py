@@ -52,7 +52,12 @@ class AIService:
 
         # Models Config
         self.models_config = {
-            'openrouter': ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3-8b-instruct:free', 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free'], # Generous free tier models on OpenRouter
+            'openrouter': [
+                'google/gemma-2-9b-it:free',
+                'meta-llama/llama-3-8b-instruct:free',
+                'qwen/qwen-2-7b-instruct:free',
+                'mistralai/mistral-7b-instruct:free'
+            ],
             # Try 2.0 first (Fastest), then 1.5-flash (Stable), then Pro
             'gemini': ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
             # Updated to use currently active Groq models (removed decommissioned models)
@@ -179,8 +184,13 @@ class AIService:
         keys = list(self.openrouter_keys)
         random.shuffle(keys)
         last_error = None
+
+        # Shuffle models so we pick a random one, but retry with others if it fails
+        models = list(self.models_config['openrouter'])
+        random.shuffle(models)
+
         for key in keys:
-            for model in self.models_config['openrouter']:
+            for model in models:
                 try:
                     response = requests.post(
                         url="https://openrouter.ai/api/v1/chat/completions",

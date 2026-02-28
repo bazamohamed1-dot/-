@@ -5,6 +5,17 @@ from .models import ClassAlias, Student
 from django.http import JsonResponse
 from .models import Employee, TeacherAssignment
 
+def resolve_class_alias(alias_str):
+    """
+    Looks up the alias string (e.g., '1م1') in the ClassAlias table.
+    Returns (canonical_level, canonical_class) if found, else (None, None).
+    """
+    try:
+        alias_obj = ClassAlias.objects.get(alias=alias_str.strip())
+        return alias_obj.canonical_level, alias_obj.canonical_class
+    except ClassAlias.DoesNotExist:
+        return None, None
+
 def class_mapping_view(request):
     """
     Interface to map imported class names (aliases) to database class names.
