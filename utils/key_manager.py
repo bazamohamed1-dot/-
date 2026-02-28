@@ -13,17 +13,22 @@ def main():
                     k, v = line.strip().split('=', 1)
                     current_keys[k] = v
 
-    # 1. Google Gemini
+    # 1. OpenRouter (Recommended / Free Tier)
+    print("\n--- OpenRouter ---")
+    or_key = input(f"أدخل مفتاح OpenRouter API (الحالي: {current_keys.get('OPENROUTER_API_KEY', 'غير موجود')}): ").strip()
+    if or_key: current_keys['OPENROUTER_API_KEY'] = or_key
+
+    # 2. Google Gemini
     print("\n--- Google Gemini ---")
     g_key = input(f"أدخل مفتاح Google API (الحالي: {current_keys.get('GOOGLE_API_KEY', 'غير موجود')}): ").strip()
     if g_key: current_keys['GOOGLE_API_KEY'] = g_key
 
-    # 2. Groq
+    # 3. Groq
     print("\n--- Groq ---")
     groq_key = input(f"أدخل مفتاح Groq API (الحالي: {current_keys.get('GROQ_API_KEY', 'غير موجود')}): ").strip()
     if groq_key: current_keys['GROQ_API_KEY'] = groq_key
 
-    # 3. Anthropic Claude
+    # 4. Anthropic Claude
     print("\n--- Anthropic Claude ---")
     c_key = input(f"أدخل مفتاح Claude API (الحالي: {current_keys.get('ANTHROPIC_API_KEY', 'غير موجود')}): ").strip()
     if c_key: current_keys['ANTHROPIC_API_KEY'] = c_key
