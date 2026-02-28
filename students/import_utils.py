@@ -115,6 +115,9 @@ def parse_student_file(file_path, override_header_indices=None):
     Parses a student import file (Excel/HTML) and returns a list of dictionaries.
     """
     with open(file_path, 'rb') as f:
+        # Pass the filename onto the file object if missing so extract_rows_from_file can know the type
+        if not hasattr(f, 'name') or not f.name:
+            f.name = file_path
         rows = list(extract_rows_from_file(f))
 
     if not rows: return []
