@@ -117,6 +117,11 @@ class AIService:
             resp = self._try_claude(prompt)
             if resp: return resp
 
+        # If we got here, all providers failed. Let's try to get the last error from OpenRouter for debugging
+        last_or_error = getattr(self, '_last_openrouter_error', None)
+        if last_or_error:
+            return f"⚠️ عذراً، فشل الاتصال بالذكاء الاصطناعي.\nالسبب من خادم OpenRouter:\n{last_or_error}"
+
         # Detailed Failure Message
         return "⚠️ عذراً، لم أتمكن من الاتصال بأي خادم (OpenRouter, Google, Groq, Claude). يرجى التأكد من صحة المفاتيح في ملف .env ومن اتصال الإنترنت."
 
@@ -210,6 +215,7 @@ class AIService:
         # If we exhausted all keys and models, return detailed error for debugging
         if last_error:
             logger.error(f"All OpenRouter attempts failed. Last error: {last_error}")
+            self._last_openrouter_error = last_error
 
         return None
 

@@ -34,13 +34,14 @@ def class_mapping_view(request):
         .exclude(class_name__isnull=True).exclude(class_name__exact='')
         .values_list('academic_year', 'class_name').distinct()
     )
-    # Sort them nicely
+    # Sort them nicely: Level descending (4,3,2,1) and Class ascending (1,2,3,4)
     import re
     def sort_key(item):
         lvl, cls = item
         l_match = re.search(r'\d+', str(lvl))
         c_match = re.search(r'\d+', str(cls))
-        l_num = int(l_match.group()) if l_match else 999
+        # Negative for descending level
+        l_num = -int(l_match.group()) if l_match else -999
         c_num = int(c_match.group()) if c_match else 999
         return (l_num, c_num, lvl, cls)
 
