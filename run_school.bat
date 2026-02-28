@@ -33,8 +33,13 @@ netsh advfirewall firewall add rule name="SchoolApp_8000" dir=in action=allow pr
 echo done > .firewall_done
 
 :START_APP
+echo [INFO] Cleaning up broken migration files if they exist...
+if exist students\migrations\0020_classalias_canonical_level_and_more.py del students\migrations\0020_classalias_canonical_level_and_more.py
+if exist students\migrations\0021_merge_*.py del students\migrations\0021_merge_*.py
+
 echo [INFO] Updating Database...
-python manage.py migrate --noinput > nul
+python manage.py makemigrations students --noinput
+python manage.py migrate --noinput
 
 echo.
 echo [SUCCESS] Server Started!
