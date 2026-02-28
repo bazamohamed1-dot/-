@@ -289,13 +289,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const tray = document.querySelector('.action-tray');
         const table = document.querySelector('.table-container');
         const sidebar = document.querySelector('.sidebar-photo-container');
-        const cameraModal = document.getElementById('cameraModal');
 
-        // Prevent triggering when interacting with camera modal
-        if (cameraModal.style.display !== 'none' && cameraModal.contains(event.target)) return;
+        try {
+            const cameraModal = document.getElementById('cameraModal');
+            // Prevent triggering when interacting with camera modal
+            if (cameraModal && cameraModal.style.display !== 'none' && cameraModal.contains(event.target)) return;
+        } catch(e){}
 
         // If click is NOT inside form, tray, table, or sidebar, and we are in Edit Mode
-        if (isEditMode && !form.contains(event.target) && !tray.contains(event.target) && !table.contains(event.target) && !sidebar.contains(event.target)) {
+        if (isEditMode && form && tray && table && sidebar &&
+            !form.contains(event.target) && !tray.contains(event.target) && !table.contains(event.target) && !sidebar.contains(event.target)) {
             // Disabled persistent nagging as requested
             // if (confirm("إلغاء التعديل؟")) { ... }
         }
@@ -916,17 +919,21 @@ async function applyPendingUpdates() {
 
 function renderTable() {
     const tbody = document.querySelector('#studentsTable tbody');
+    if (!tbody) return;
+
     tbody.innerHTML = filteredList.map((s, i) => {
         // Strip level from class name if present (e.g. "أولى 1" -> "1")
         let shortClass = s.class || "";
         let levelStr = s.level || "";
 
         // Normalize and check
-        if (levelStr && shortClass) {
-            // Regex to replace level at start, case insensitive, plus spaces
-            const regex = new RegExp('^' + levelStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i');
-            shortClass = shortClass.replace(regex, '').trim();
-        }
+        try {
+            if (levelStr && shortClass) {
+                // Regex to replace level at start, case insensitive, plus spaces
+                const regex = new RegExp('^' + levelStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i');
+                shortClass = shortClass.replace(regex, '').trim();
+            }
+        } catch(e) { console.warn('Regex parsing error on class name', e); }
 
         const pendingStyle = s.isPending ? 'background-color: #fff7ed;' : '';
         let pendingBadge = s.isPending ? '<i class="fas fa-clock" title="تعديلات معلقة" style="color:#f59e0b; margin-right:5px;"></i>' : '';
@@ -939,11 +946,11 @@ function renderTable() {
             <td onclick="event.stopPropagation()">
                 <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox" onchange="updateSelectionState()">
             </td>
-            <td>${s.id}</td>
-            <td>${s.ln} ${pendingBadge}</td>
-            <td>${s.fn}</td>
+            <td>${s.id || ''}</td>
+            <td>${s.ln || ''} ${pendingBadge}</td>
+            <td>${s.fn || ''}</td>
             <td style="direction:ltr; font-family: 'Segoe UI', sans-serif;">${s.dob || ''}</td>
-            <td>${s.level}</td>
+            <td>${s.level || ''}</td>
             <td>${shortClass}</td>
         </tr>
         `;

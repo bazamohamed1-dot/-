@@ -163,12 +163,16 @@ def import_eleve_view(request):
                     tmp.write(chunk)
                 temp_path = tmp.name
 
+            # Make sure Dataset is imported correctly here to prevent UnboundLocalError or memory crash in some views
+            from tablib import Dataset
+
             # Check for Manual Mapping Request OR Preview Logic
             if force_manual:
                 # Preview Mode
                 from .import_utils import extract_rows_from_file, detect_headers
                 # Re-open safely
                 with open(temp_path, 'rb') as f:
+                    f.name = temp_path # provide extension for detection
                     all_rows = list(extract_rows_from_file(f))
 
                 if not all_rows:

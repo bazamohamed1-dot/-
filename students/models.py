@@ -355,11 +355,6 @@ class Task(models.Model):
         verbose_name = "مهمة"
         verbose_name_plural = "المهام"
 
-
-    class Meta:
-        verbose_name = "ملاحظة تربوية"
-        verbose_name_plural = "الملاحظات التربوية"
-
 class SchoolMemory(models.Model):
     CATEGORY_CHOICES = [
         ('rule', 'قانون داخلي'),
