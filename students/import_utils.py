@@ -218,20 +218,24 @@ def parse_student_file(file_path, override_header_indices=None):
                 student_data['first_name'] = "" # Or duplicate? keeping empty safer
 
         if has_data and 'student_id_number' in student_data:
-            # Inference logic
+            # Clean up Class Name (Extract just the number if available, else keep it cleaned)
+            if 'class_name' in student_data:
+                cls = student_data['class_name']
+                # Try to extract the number if "القسم" contains something like "أولى 1" or "1"
+                m = re.search(r'(\d+)', cls)
+                if m:
+                    student_data['class_name'] = m.group(1)
+                else:
+                    student_data['class_name'] = str(cls).strip()
+
+            # Make sure Level is extracted
             if 'academic_year' not in student_data and 'class_name' in student_data:
                 cls = student_data['class_name']
-                # Normalize Class Name (remove extra spaces)
-                cls = " ".join(cls.split())
-                student_data['class_name'] = cls
-
+                # Just fallback to the class if we can't find level, though Excel normally provides "السنة"
                 m = re.match(r'(\d+)', cls)
                 if m:
                     lvl = m.group(1)
-                    if 'M' in cls or 'AM' in cls:
-                        student_data['academic_year'] = f"{lvl} متوسط"
-                    else:
-                        student_data['academic_year'] = lvl
+                    student_data['academic_year'] = lvl
 
             students.append(student_data)
 
