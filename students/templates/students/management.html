@@ -550,14 +550,21 @@ async function saveCurrent() {
         }
     }
 
-    // Photo Warning Check
-    const photoVal = document.getElementById('photoPath').value;
-    // Check if there is NO photo (neither an existing URL nor a new Base64 string)
-    if (!photoVal || photoVal === "undefined" || photoVal === "null" || photoVal.trim() === "") {
-        const proceed = confirm("التلميذ ليس لديه صورة، هل تريد الاستمرار في الحفظ؟");
-        if (!proceed) {
-            return; // Halt saving
+    // Photo Warning Check (Wrapped in try/catch to prevent blocking execution)
+    try {
+        const photoInput = document.getElementById('photoPath');
+        if (photoInput) {
+            const photoVal = photoInput.value;
+            // Check if there is NO photo (neither an existing URL nor a new Base64 string)
+            if (!photoVal || photoVal === "undefined" || photoVal === "null" || photoVal.trim() === "") {
+                const proceed = confirm("التلميذ ليس لديه صورة، هل تريد الاستمرار في الحفظ؟");
+                if (!proceed) {
+                    return; // Halt saving
+                }
+            }
         }
+    } catch (e) {
+        console.warn("Photo validation skipped due to error:", e);
     }
 
     const level = document.getElementById('academicYear').value;
