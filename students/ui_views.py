@@ -216,8 +216,12 @@ def import_eleve_view(request):
                 # Check for update flag
                 update_existing = request.POST.get('update_existing') == 'on'
 
-                # 2. Create Dataset for django-import-export
-                headers = list(raw_data[0].keys())
+                # Gather all possible headers from ALL rows to avoid missing fields if the first row has empty cells
+                all_headers = set()
+                for row in raw_data:
+                    all_headers.update(row.keys())
+                headers = list(all_headers)
+
                 dataset = Dataset(headers=headers)
 
                 # Fetch existing IDs if we shouldn't update them, to prevent Unique Constraint errors
@@ -229,7 +233,11 @@ def import_eleve_view(request):
                     sid = str(row.get('student_id_number', '')).strip()
                     if not update_existing and sid in existing_ids:
                         continue # Skip existing to prevent Unique Constraint errors
-                    dataset.append([row[h] for h in headers])
+
+                    # Ensure all headers exist in the row.
+                    # Use empty string instead of None to prevent NOT NULL constraint failures
+                    # for fields like academic_year that might just be empty text.
+                    dataset.append([row.get(h, '') if row.get(h) is not None else '' for h in headers])
 
                 if len(dataset) == 0:
                      messages.warning(request, "كل التلاميذ في الملف موجودون مسبقاً في قاعدة البيانات (لم تقم باختيار 'تحديث').")
@@ -306,11 +314,15 @@ def import_eleve_confirm(request):
             if not raw_data:
                  messages.error(request, "فشل تحليل البيانات بالأعمدة المحددة.")
             else:
-                # Import
-                headers = list(raw_data[0].keys())
+                # Import: dynamically get all unique headers to prevent missing fields due to empty cells in row 0
+                all_headers = set()
+                for row in raw_data:
+                    all_headers.update(row.keys())
+                headers = list(all_headers)
+
                 dataset = Dataset(headers=headers)
                 for row in raw_data:
-                    dataset.append([row[h] for h in headers])
+                    dataset.append([row.get(h, '') if row.get(h) is not None else '' for h in headers])
 
                 resource = StudentResource()
                 result = resource.import_data(dataset, dry_run=False, raise_errors=True)
