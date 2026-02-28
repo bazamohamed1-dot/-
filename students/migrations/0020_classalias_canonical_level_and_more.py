@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("students", "0019_alter_employeeprofile_ai_mode_and_more"),
+        ("students", "0018_classalias"),
     ]
 
     operations = [
