@@ -139,12 +139,38 @@
             // Remove Loading
             document.getElementById(loadingId).remove();
 
+            // Check if backend returned an error (e.g., 402 Payment Required)
+            if (!res.ok && data.error_type === 'insufficient_funds') {
+                showGlobalAlert(data.message, 'danger');
+                addMessage("⚠️ تعذر إكمال الطلب بسبب نفاد رصيد الذكاء الاصطناعي.", 'ai');
+                return;
+            }
+
             // Add AI Response
-            addMessage(data.response, 'ai');
+            if (data.response) {
+                addMessage(data.response, 'ai');
+            } else {
+                 addMessage("حدث خطأ غير معروف.", 'ai');
+            }
 
         } catch (e) {
-            document.getElementById(loadingId).innerText = "حدث خطأ في الاتصال.";
+            if (document.getElementById(loadingId)) {
+                document.getElementById(loadingId).innerText = "حدث خطأ في الاتصال.";
+            }
         }
+    }
+
+    // Function to show a dismissible bootstrap alert at the top of the chat
+    function showGlobalAlert(message, type='danger') {
+        const area = document.getElementById('chatArea');
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show mb-3" role="alert" style="border-radius:15px; border-right: 5px solid darkred; margin: 10px;">
+                <strong><i class="fas fa-exclamation-triangle"></i> تنبيه إداري:</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        // Insert right at the top of the chat area
+        area.insertAdjacentHTML('afterbegin', alertHtml);
     }
 
     function addMessage(text, sender, isLoading=false) {
