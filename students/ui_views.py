@@ -1213,5 +1213,33 @@ def analytics_dashboard(request):
     if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
         return redirect('dashboard')
 
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'import_grades' and request.FILES.get('file'):
+            file = request.FILES['file']
+            term = request.POST.get('term')
+            import tempfile
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
+                    for chunk in file.chunks():
+                        tmp.write(chunk)
+                    temp_path = tmp.name
+
+                from .grade_importer import process_grades_file
+                count, msg = process_grades_file(temp_path, term)
+                if count > 0:
+                    messages.success(request, msg)
+                else:
+                    messages.warning(request, msg)
+            except Exception as e:
+                messages.error(request, f"خطأ في معالجة الملف: {e}")
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try: os.remove(temp_path)
+                    except: pass
+
+            return redirect('analytics_dashboard')
+
     context = {}
     return render(request, 'students/analytics.html', context)
