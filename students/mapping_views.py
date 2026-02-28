@@ -73,7 +73,22 @@ def class_mapping_view(request):
                         alias=raw,
                         defaults={'canonical_level': lvl, 'canonical_class': cls}
                     )
-                    messages.success(request, f"تم ربط '{raw}' بـ '{target_combined}'")
+
+                    # Auto-assign teachers: Update any existing teacher assignments containing the raw alias
+                    # to use the new canonical format
+                    updated_assignments_count = 0
+                    for assignment in TeacherAssignment.objects.all():
+                        if raw in assignment.classes:
+                            # Replace the alias with the canonical string and ensure uniqueness
+                            new_classes = [target_combined if c == raw else c for c in assignment.classes]
+                            assignment.classes = list(set(new_classes))
+                            assignment.save()
+                            updated_assignments_count += 1
+
+                    if updated_assignments_count > 0:
+                        messages.success(request, f"تم ربط '{raw}' بـ '{target_combined}' وتم تحديث الإسناد لـ {updated_assignments_count} أستاذ آلياً.")
+                    else:
+                        messages.success(request, f"تم ربط '{raw}' بـ '{target_combined}' بنجاح.")
                 else:
                     messages.error(request, "تنسيق القسم غير صالح.")
 

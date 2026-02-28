@@ -402,7 +402,7 @@ async function fetchStudents(page = 1) {
                 mother: s.mother_name,
                 phone: s.guardian_phone,
                 addr: s.address,
-                photo: s.photo,
+                photo: s.photo_url || s.photo, // Prioritize the computed photo_url from Serializer
                 isPending: false
             };
         });
