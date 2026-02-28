@@ -26,11 +26,17 @@ try:
 except ImportError:
     HAS_CLAUDE = False
 
+try:
+    import requests # Required for OpenRouter fallback
+    HAS_OPENROUTER = True
+except ImportError:
+    HAS_OPENROUTER = False
+
 logger = logging.getLogger(__name__)
 
 class AIService:
     """
-    Advanced AI Service with Multi-Provider Fallback (Google -> Groq -> Claude).
+    Advanced AI Service with Multi-Provider Fallback (OpenRouter -> Google -> Groq -> Claude).
     Updated to use `google-genai` (Official v1 SDK).
     """
 
@@ -39,12 +45,14 @@ class AIService:
         self.settings = SchoolSettings.objects.first()
 
         # Load API Keys
+        self.openrouter_keys = self._load_keys("OPENROUTER_API_KEY")
         self.gemini_keys = self._load_keys("GOOGLE_API_KEY")
         self.groq_keys = self._load_keys("GROQ_API_KEY")
         self.claude_keys = self._load_keys("ANTHROPIC_API_KEY")
 
         # Models Config
         self.models_config = {
+            'openrouter': ['google/gemini-2.0-flash-lite-preview-02-05:free', 'meta-llama/llama-3-8b-instruct:free', 'cognitivecomputations/dolphin3.0-r1-mistral-24b:free'], # Generous free tier models on OpenRouter
             # Try 2.0 first (Fastest), then 1.5-flash (Stable), then Pro
             'gemini': ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
             # Updated to use currently active Groq models (removed decommissioned models)
@@ -89,23 +97,28 @@ class AIService:
         Directives: {directives}
         """
 
-        # 1. Google Gemini (v1 SDK)
+        # 1. OpenRouter (High Free Tier)
+        if self.openrouter_keys and HAS_OPENROUTER:
+            resp = self._try_openrouter(prompt)
+            if resp: return resp
+
+        # 2. Google Gemini (v1 SDK)
         if self.gemini_keys and HAS_GEMINI:
             resp = self._try_gemini_v1(prompt)
             if resp: return resp
 
-        # 2. Groq
+        # 3. Groq
         if self.groq_keys and HAS_GROQ:
             resp = self._try_groq(prompt)
             if resp: return resp
 
-        # 3. Claude
+        # 4. Claude
         if self.claude_keys and HAS_CLAUDE:
             resp = self._try_claude(prompt)
             if resp: return resp
 
         # Detailed Failure Message
-        return "⚠️ عذراً، لم أتمكن من الاتصال بأي خادم (Google, Groq, Claude). يرجى التأكد من صحة المفاتيح في ملف .env ومن اتصال الإنترنت."
+        return "⚠️ عذراً، لم أتمكن من الاتصال بأي خادم (OpenRouter, Google, Groq, Claude). يرجى التأكد من صحة المفاتيح في ملف .env ومن اتصال الإنترنت."
 
     def _handle_bot_helper_local(self, query):
         """
@@ -156,6 +169,39 @@ class AIService:
             return "أهلاً بك! أنا المساعد التقني المحلي (بدون إنترنت) لتطبيق 'تسيير متوسطة بوشنافة عمر'. يمكنني إرشادك لأماكن الأزرار وكيفية عمل الواجهات. اسألني مثلاً: 'كيف أحذف تلميذ؟' أو 'أين أجد الإسناد؟'."
 
         return "عذراً، لم أفهم سؤالك. يرجى سؤالي عن وظيفة محددة في التطبيق مثل: 'كيف أضيف تلميذ؟'، 'كيف أعدل الإسناد؟'، أو 'كيف أطبع البطاقات؟'."
+
+    def _try_openrouter(self, prompt):
+        keys = list(self.openrouter_keys)
+        random.shuffle(keys)
+        for key in keys:
+            try:
+                for model in self.models_config['openrouter']:
+                    try:
+                        response = requests.post(
+                            url="https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {key}",
+                                "HTTP-Referer": "http://localhost", # Required by OpenRouter, can be any valid URL format
+                                "X-Title": "School Management Agent", # Required by OpenRouter
+                            },
+                            json={
+                                "model": model,
+                                "messages": [
+                                    {"role": "user", "content": prompt}
+                                ]
+                            }
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+                            if "choices" in data and len(data["choices"]) > 0:
+                                return data["choices"][0]["message"]["content"]
+                    except Exception as e:
+                        logger.warning(f"OpenRouter Fail ({model}): {e}")
+                        continue
+            except Exception as e:
+                logger.error(f"OpenRouter Client Error: {e}")
+                continue
+        return None
 
     def _try_gemini_v1(self, prompt):
         """Uses new google-genai SDK"""
