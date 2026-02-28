@@ -28,14 +28,30 @@ def class_mapping_view(request):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
-    # 1. Get all distinct classes currently in DB (for dropdown)
-    db_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
-    db_classes.sort()
+    # 1. Get all distinct combinations of Level and Class currently in DB (for dropdown)
+    db_combinations = list(
+        Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='')
+        .exclude(class_name__isnull=True).exclude(class_name__exact='')
+        .values_list('academic_year', 'class_name').distinct()
+    )
+    # Sort them nicely
+    import re
+    def sort_key(item):
+        lvl, cls = item
+        l_match = re.search(r'\d+', str(lvl))
+        c_match = re.search(r'\d+', str(cls))
+        l_num = int(l_match.group()) if l_match else 999
+        c_num = int(c_match.group()) if c_match else 999
+        return (l_num, c_num, lvl, cls)
 
-    # 2. Get unmapped aliases (Optional: Store pending mappings in session or DB)
-    # For this flow, we will just allow user to create aliases manually or from recent import attempts.
-    # But since we don't persist "failed import rows", we just list existing aliases for editing.
+    db_combinations.sort(key=sort_key)
 
+    # Format for template: "Level Class" e.g., "أولى 1"
+    formatted_classes = []
+    for lvl, cls in db_combinations:
+        formatted_classes.append(f"{lvl} {cls}")
+
+    # 2. Get unmapped aliases
     aliases = ClassAlias.objects.all().order_by('alias')
 
     if request.method == 'POST':
@@ -43,14 +59,23 @@ def class_mapping_view(request):
 
         if action == 'add_alias':
             raw = request.POST.get('alias_name').strip()
-            target = request.POST.get('target_class')
+            target_combined = request.POST.get('target_class') # e.g., "أولى 1"
 
-            if raw and target:
-                ClassAlias.objects.update_or_create(
-                    alias=raw,
-                    defaults={'canonical_class': target}
-                )
-                messages.success(request, f"تم ربط '{raw}' بـ '{target}'")
+            if raw and target_combined:
+                # Split the combined string back into level and class
+                # Assuming the format is exactly as we built it: "{lvl} {cls}"
+                parts = target_combined.rsplit(' ', 1)
+
+                if len(parts) == 2:
+                    lvl = parts[0].strip()
+                    cls = parts[1].strip()
+                    ClassAlias.objects.update_or_create(
+                        alias=raw,
+                        defaults={'canonical_level': lvl, 'canonical_class': cls}
+                    )
+                    messages.success(request, f"تم ربط '{raw}' بـ '{target_combined}'")
+                else:
+                    messages.error(request, "تنسيق القسم غير صالح.")
 
         elif action == 'delete_alias':
             pk = request.POST.get('pk')
@@ -60,7 +85,7 @@ def class_mapping_view(request):
         return redirect('class_mapping_view')
 
     context = {
-        'db_classes': db_classes,
+        'db_classes': formatted_classes,
         'aliases': aliases
     }
     return render(request, 'students/class_mapping.html', context)
