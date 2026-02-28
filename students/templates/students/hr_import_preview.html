@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load student_extras %}
+
+{% block title %}معاينة استيراد الموظفين{% endblock %}
+
+{% block header_title %}معاينة استيراد الموظفين وتحديد الأعمدة{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> يرجى التأكد من مطابقة الأعمدة في الجدول أدناه مع حقول النظام الخاصة بالموظفين.
+        <br>
+        <small>قم باختيار الحقل المناسب لكل عمود من القوائم المنسدلة في الصف الأول.</small>
+    </div>
+
+    <form method="POST" action="{% url 'import_hr_confirm' %}">
+        {% csrf_token %}
+        <input type="hidden" name="temp_file_path" value="{{ temp_file_path }}">
+
+        <div style="overflow-x: auto;">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        {% for i in num_columns %}
+                        <th style="min-width: 150px;">
+                            <select name="col_{{ i }}" class="form-select" style="width: 100%;">
+                                <option value="">-- تجاهل --</option>
+                                <option value="employee_code" {% if suggested_mapping|get_item:i == 'employee_code' %}selected{% endif %}>الرمز الوظيفي</option>
+                                <option value="last_name" {% if suggested_mapping|get_item:i == 'last_name' %}selected{% endif %}>اللقب</option>
+                                <option value="first_name" {% if suggested_mapping|get_item:i == 'first_name' %}selected{% endif %}>الاسم</option>
+                                <option value="full_name" {% if suggested_mapping|get_item:i == 'full_name' %}selected{% endif %}>الاسم واللقب (مدمج)</option>
+                                <option value="date_of_birth" {% if suggested_mapping|get_item:i == 'date_of_birth' %}selected{% endif %}>تاريخ الازدياد</option>
+                                <option value="place_of_birth" {% if suggested_mapping|get_item:i == 'place_of_birth' %}selected{% endif %}>مكان الميلاد</option>
+                                <option value="rank" {% if suggested_mapping|get_item:i == 'rank' %}selected{% endif %}>الرتبة / المنصب</option>
+                                <option value="subject" {% if suggested_mapping|get_item:i == 'subject' %}selected{% endif %}>المادة (للأساتذة)</option>
+                                <option value="grade" {% if suggested_mapping|get_item:i == 'grade' %}selected{% endif %}>الدرجة</option>
+                                <option value="effective_date" {% if suggested_mapping|get_item:i == 'effective_date' %}selected{% endif %}>تاريخ السريان (التعيين)</option>
+                                <option value="phone" {% if suggested_mapping|get_item:i == 'phone' %}selected{% endif %}>رقم الهاتف</option>
+                                <option value="email" {% if suggested_mapping|get_item:i == 'email' %}selected{% endif %}>البريد الإلكتروني</option>
+                            </select>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview_rows %}
+                    <tr>
+                        {% for cell in row %}
+                        <td>{{ cell }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-file-import"></i> استيراد البيانات</button>
+            <a href="{% url 'hr_home' %}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
