@@ -308,6 +308,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a href="{% url 'analytics_dashboard' %}" class="nav-link {% if 'analytics' in request.path %}active{% endif %}">
+                    <i class="fas fa-chart-line"></i> لوحة تحليل النتائج (AI)
+                </a>
+            </li>
+            <li class="nav-item">
                 <a href="{% url 'students_management' %}" class="nav-link {% if 'management' in request.path %}active{% endif %}">
                     <i class="fas fa-user-graduate"></i> تسيير التلاميذ
                 </a>
@@ -703,6 +708,7 @@
         const formData = new FormData();
         formData.append('query', text);
         formData.append('mode', 'bot_helper'); // Special mode for short answers
+        formData.append('page_context', window.location.pathname); // Pass the current URL for context
 
         fetch("{% url 'ai_chat_view' %}", {
             method: 'POST',

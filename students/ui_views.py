@@ -127,6 +127,15 @@ def dashboard(request):
     # Convert to sorted list
     detailed_stats = sorted(stats_map.values(), key=lambda x: x['level'])
 
+    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+
+    # Fetch OpenRouter balance if Director
+    openrouter_balance = None
+    if is_director:
+        from .ai_utils import AIService
+        ai = AIService(user=request.user)
+        openrouter_balance = ai.get_openrouter_balance()
+
     context = {
         'total_students': Student.objects.count(),
         'half_board_count': Student.objects.filter(attendance_system='نصف داخلي').count(),
@@ -136,8 +145,9 @@ def dashboard(request):
         'detailed_stats': detailed_stats,
         'assigned_students': assigned_students,
         'teacher_classes': teacher_classes,
+        'openrouter_balance': openrouter_balance,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
-        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+        'is_director': is_director
     }
     return render(request, 'students/dashboard.html', context)
 
@@ -525,7 +535,11 @@ def assignment_matching_view(request):
 
             # --- END MAPPING STEP ---
 
+            from .models import TeacherAlias
             all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
+
+            # Load known Teacher Aliases
+            teacher_aliases = {a.alias_name: a.employee for a in TeacherAlias.objects.all()}
 
             # Improved Fuzzy Matching
             def get_similarity(s1, s2):
@@ -538,24 +552,30 @@ def assignment_matching_view(request):
                 c_norm = c['name'].strip()
 
                 # AUTOMATIC MATCHING LOGIC
-                for t in all_teachers:
-                    t_full = f"{t.last_name} {t.first_name}"
-                    t_rev = f"{t.first_name} {t.last_name}"
+                # 1. Check direct Alias first
+                if c_norm in teacher_aliases:
+                    best_match = teacher_aliases[c_norm]
+                    best_score = 1.0
+                else:
+                    # 2. Fuzzy match against actual teachers
+                    for t in all_teachers:
+                        t_full = f"{t.last_name} {t.first_name}"
+                        t_rev = f"{t.first_name} {t.last_name}"
 
-                    if t.last_name in c_norm and t.first_name in c_norm:
-                        score = 1.0
-                    elif t.last_name in c_norm and len(t.last_name) > 3:
-                        score = 0.8
-                    else:
-                        score = max(
-                            get_similarity(c_norm, t_full),
-                            get_similarity(c_norm, t_rev),
-                            get_similarity(c_norm, t.last_name)
-                        )
+                        if t.last_name in c_norm and t.first_name in c_norm:
+                            score = 1.0
+                        elif t.last_name in c_norm and len(t.last_name) > 3:
+                            score = 0.8
+                        else:
+                            score = max(
+                                get_similarity(c_norm, t_full),
+                                get_similarity(c_norm, t_rev),
+                                get_similarity(c_norm, t.last_name)
+                            )
 
-                    if score > best_score:
-                        best_score = score
-                        best_match = t
+                        if score > best_score:
+                            best_score = score
+                            best_match = t
 
                 if best_score >= 0.6 and best_match:
                     c['suggested_id'] = best_match.id
@@ -595,6 +615,7 @@ def assignment_matching_view(request):
     elif request.method == 'POST':
         try:
             import json
+            from .models import TeacherAlias
             count = 0
 
             # Iterate through form fields
@@ -620,6 +641,8 @@ def assignment_matching_view(request):
                             last_name=ln, first_name=fn,
                             full_name=name, rank='teacher', subject=subject
                         )
+                        # Save mapping
+                        TeacherAlias.objects.get_or_create(alias_name=name.strip(), defaults={'employee': teacher})
                     else:
                         # Existing ID
                         teacher = Employee.objects.get(id=action)
@@ -627,15 +650,25 @@ def assignment_matching_view(request):
                             teacher.subject = subject
                             teacher.save()
 
-                    # Save Assignment
-                    TeacherAssignment.objects.create(
+                        # Learn the mapping for future imports!
+                        if name.strip():
+                            TeacherAlias.objects.get_or_create(alias_name=name.strip(), defaults={'employee': teacher})
+
+                    # Check if an assignment already exists for this teacher and subject
+                    # We should update it rather than duplicating it (since user might re-upload files)
+                    final_subj = subject or teacher.subject or "عام"
+                    assign, created = TeacherAssignment.objects.get_or_create(
                         teacher=teacher,
-                        subject=subject or teacher.subject or "عام",
-                        classes=classes
+                        subject=final_subj
                     )
+
+                    # Merge classes or overwrite? Let's overwrite since the imported file is the source of truth
+                    assign.classes = classes
+                    assign.save()
+
                     count += 1
 
-            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ.")
+            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ (وتحديث قاعدة التعلم للأسماء المستعارة).")
 
             # Clean up temp file
             temp_path = request.POST.get('file_path')
@@ -1096,8 +1129,12 @@ def ai_manual_view(request):
 
 def ai_chat_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-        return redirect('dashboard')
+
+    # Allow all authenticated users to use the floating bot helper.
+    # We check requested mode inside the POST block.
+    if request.method != 'POST':
+        if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
+            return redirect('dashboard')
 
     if request.method == 'POST':
         from .ai_utils import AIService
@@ -1106,10 +1143,16 @@ def ai_chat_view(request):
         query = request.POST.get('query')
         # Mode requested by UI (will be checked against permissions inside AIService)
         requested_mode = request.POST.get('mode', None)
+        page_context = request.POST.get('page_context', None)
 
-        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous
+        # If it's a regular user, force mode to bot_helper and ensure they can't access full chat
+        if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
+            if requested_mode != 'bot_helper':
+                return JsonResponse({'error': 'Unauthorized mode for this user role.'}, status=403)
+
+        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous, except for bot_helper
         if (hasattr(request.user, 'profile') and request.user.profile.role == 'director') or request.user.is_superuser:
-            if not requested_mode or requested_mode == 'rag':
+            if not requested_mode or (requested_mode == 'rag' and requested_mode != 'bot_helper'):
                  requested_mode = 'gemini_full'
 
         # Pass current user for permission check
@@ -1120,7 +1163,7 @@ def ai_chat_view(request):
 
         rag_enabled = (requested_mode == 'rag' or requested_mode is None)
 
-        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode)
+        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode, page_context=page_context)
 
         # Check for our specific insufficient funds error flag from ai_utils.py
         if response_text == "INSUFFICIENT_FUNDS_ERROR":
@@ -1164,3 +1207,11 @@ def ai_control_panel(request):
     }
     return render(request, 'students/ai_control.html', context)
 
+
+def analytics_dashboard(request):
+    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
+        return redirect('dashboard')
+
+    context = {}
+    return render(request, 'students/analytics.html', context)
