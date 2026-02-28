@@ -253,10 +253,17 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
     serializer_class = PendingUpdateSerializer
     permission_classes = [IsAuthenticated]
 
+    def _is_director_or_superuser(self):
+        if self.request.user.is_superuser:
+            return True
+        if hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'director':
+            return True
+        return False
+
     def get_queryset(self):
         # Allow operations on the endpoint regardless of 'status' for Director,
         # but default to pending
-        if hasattr(self.request.user, 'profile') and (self.request.user.profile.role == 'director' or self.request.user.is_superuser):
+        if self._is_director_or_superuser():
             return PendingUpdate.objects.all()
         # Regular users see their own pending updates to reflect in UI
         return PendingUpdate.objects.filter(user=self.request.user, status='pending')
@@ -344,7 +351,7 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        if not self._is_director_or_superuser():
              return Response({'error': 'Unauthorized'}, status=403)
 
         update = self.get_object()
@@ -364,7 +371,7 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def approve_all(self, request):
-        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        if not self._is_director_or_superuser():
              return Response({'error': 'Unauthorized'}, status=403)
 
         updates = self.get_queryset()
@@ -387,7 +394,7 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def reject_all(self, request):
-        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        if not self._is_director_or_superuser():
              return Response({'error': 'Unauthorized'}, status=403)
 
         updates = self.get_queryset()
@@ -404,7 +411,7 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def count(self, request):
-        if not hasattr(request.user, 'profile') or request.user.profile.role != 'director':
+        if not self._is_director_or_superuser():
              return Response({'count': 0})
         count = self.get_queryset().count()
         return Response({'count': count})
