@@ -3,6 +3,8 @@ import logging
 import os
 import random
 import time
+import hashlib
+from django.core.cache import cache
 from PyPDF2 import PdfReader
 from docx import Document
 from bs4 import BeautifulSoup
@@ -53,10 +55,7 @@ class AIService:
         # Models Config
         self.models_config = {
             'openrouter': [
-                'google/gemma-2-9b-it:free',
-                'meta-llama/llama-3-8b-instruct:free',
-                'qwen/qwen-2-7b-instruct:free',
-                'mistralai/mistral-7b-instruct:free'
+                'deepseek/deepseek-chat', # Explicitly using DeepSeek via OpenRouter (paid, stable)
             ],
             # Try 2.0 first (Fastest), then 1.5-flash (Stable), then Pro
             'gemini': ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
@@ -102,25 +101,52 @@ class AIService:
         Directives: {directives}
         """
 
+        # Caching logic
+        # Hash the prompt to create a unique and manageable key
+        prompt_hash = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+        cache_key = f"ai_response_{prompt_hash}"
+
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            return cached_response
+
+        # We will track if we hit an INSUFFICIENT_FUNDS_ERROR
+        insufficient_funds = False
+        final_response = None
+
         # 1. OpenRouter (High Free Tier)
         if self.openrouter_keys and HAS_OPENROUTER:
             resp = self._try_openrouter(prompt)
-            if resp: return resp
+            if resp == "INSUFFICIENT_FUNDS_ERROR":
+                insufficient_funds = True
+            elif resp:
+                final_response = resp
 
-        # 2. Google Gemini (v1 SDK)
-        if self.gemini_keys and HAS_GEMINI:
-            resp = self._try_gemini_v1(prompt)
-            if resp: return resp
+        # Fallbacks (Only trigger if OpenRouter wasn't explicitly out of funds)
+        if not final_response and not insufficient_funds:
+            # 2. Google Gemini (v1 SDK)
+            if self.gemini_keys and HAS_GEMINI:
+                resp = self._try_gemini_v1(prompt)
+                if resp: final_response = resp
 
-        # 3. Groq
-        if self.groq_keys and HAS_GROQ:
-            resp = self._try_groq(prompt)
-            if resp: return resp
+            # 3. Groq
+            if not final_response and self.groq_keys and HAS_GROQ:
+                resp = self._try_groq(prompt)
+                if resp: final_response = resp
 
-        # 4. Claude
-        if self.claude_keys and HAS_CLAUDE:
-            resp = self._try_claude(prompt)
-            if resp: return resp
+            # 4. Claude
+            if not final_response and self.claude_keys and HAS_CLAUDE:
+                resp = self._try_claude(prompt)
+                if resp: final_response = resp
+
+        if final_response:
+            # Cache the successful response for 2 days (172800 seconds)
+            cache.set(cache_key, final_response, timeout=172800)
+            return final_response
+
+        # Error handling
+        if insufficient_funds:
+            return "INSUFFICIENT_FUNDS_ERROR"
 
         # If we got here, all providers failed. Let's try to get the last error from OpenRouter for debugging
         last_or_error = getattr(self, '_last_openrouter_error', None)
@@ -185,9 +211,7 @@ class AIService:
         random.shuffle(keys)
         last_error = None
 
-        # Shuffle models so we pick a random one, but retry with others if it fails
-        models = list(self.models_config['openrouter'])
-        random.shuffle(models)
+        models = self.models_config['openrouter'] # ['deepseek/deepseek-chat']
 
         for key in keys:
             for model in models:
@@ -196,7 +220,7 @@ class AIService:
                         url="https://openrouter.ai/api/v1/chat/completions",
                         headers={
                             "Authorization": f"Bearer {key}",
-                            "HTTP-Referer": "http://localhost", # Required by OpenRouter, can be any valid URL format
+                            "HTTP-Referer": "http://localhost", # Required by OpenRouter
                             "X-Title": "School Management Agent", # Required by OpenRouter
                         },
                         json={
@@ -205,7 +229,7 @@ class AIService:
                                 {"role": "user", "content": prompt}
                             ]
                         },
-                        timeout=15 # Avoid hanging forever
+                        timeout=30 # Increased timeout for deepseek
                     )
 
                     if response.status_code == 200:
@@ -213,7 +237,14 @@ class AIService:
                         if "choices" in data and len(data["choices"]) > 0:
                             return data["choices"][0]["message"]["content"]
                     else:
+                        # Parse OpenRouter specific errors (like 402 Payment Required)
                         last_error = f"HTTP {response.status_code}: {response.text}"
+
+                        # Return special token if insufficient funds/payment issue
+                        # OpenRouter returns 402 for no credits, or sometimes 403
+                        if response.status_code == 402 or "insufficient_quota" in response.text.lower() or "balance" in response.text.lower():
+                            return "INSUFFICIENT_FUNDS_ERROR"
+
                         print(f"OpenRouter Error ({model}): {last_error}")
                         logger.warning(f"OpenRouter Error ({model}): {last_error}")
                 except Exception as e:

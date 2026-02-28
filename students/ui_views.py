@@ -1121,6 +1121,15 @@ def ai_chat_view(request):
         rag_enabled = (requested_mode == 'rag' or requested_mode is None)
 
         response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode)
+
+        # Check for our specific insufficient funds error flag from ai_utils.py
+        if response_text == "INSUFFICIENT_FUNDS_ERROR":
+            return JsonResponse({
+                'error': True,
+                'error_type': 'insufficient_funds',
+                'message': "خطأ: نفد الرصيد المخصص لخدمة الذكاء الاصطناعي (OpenRouter Payment Required). يرجى شحن الرصيد للاستمرار في استخدام الخدمة."
+            }, status=402) # Payment Required
+
         return JsonResponse({'response': response_text})
 
     return render(request, 'students/ai_chat.html')

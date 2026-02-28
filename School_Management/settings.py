@@ -191,3 +191,11 @@ if DEBUG:
 # Increase Data Upload Limits to 10MB to handle large Base64 photo payloads
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
+
+# Caching Configuration (Local Memory)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-school-management',
+    }
+}
