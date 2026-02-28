@@ -95,4 +95,7 @@ urlpatterns = [
 
     # Reminders
     path('api/reminders/', reminder_views.check_reminders, name='check_reminders'),
+
+    # Analytics
+    path('analytics/', ui_views.analytics_dashboard, name='analytics_dashboard'),
 ]

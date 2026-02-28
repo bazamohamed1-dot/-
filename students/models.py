@@ -375,3 +375,22 @@ class SchoolMemory(models.Model):
     class Meta:
         verbose_name = "ذاكرة المؤسسة"
         verbose_name_plural = "ذاكرة المؤسسة"
+
+class Grade(models.Model):
+    """
+    Represents a student's grade for a specific subject in a specific term.
+    Imported from Excel files for AI analysis.
+    """
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='grades', verbose_name='التلميذ')
+    subject = models.CharField(max_length=100, verbose_name='المادة')
+    term = models.CharField(max_length=50, verbose_name='الفصل') # e.g. الفصل الأول
+    score = models.FloatField(verbose_name='العلامة')
+    academic_year = models.CharField(max_length=20, default='2023-2024', verbose_name='السنة الدراسية')
+
+    class Meta:
+        verbose_name = 'علامة التلميذ'
+        verbose_name_plural = 'علامات التلاميذ'
+        unique_together = ('student', 'subject', 'term', 'academic_year')
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.subject} ({self.term}): {self.score}"

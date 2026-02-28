@@ -64,6 +64,42 @@ class AIService:
             'claude': ['claude-3-haiku-20240307']
         }
 
+    def get_openrouter_balance(self):
+        """Fetches the current remaining credit balance from OpenRouter."""
+        if not self.openrouter_keys:
+            return None
+
+        # OpenRouter auth key endpoint caches results to avoid rate limits, so it's safe to call.
+        cache_key = "openrouter_balance"
+        cached_balance = cache.get(cache_key)
+        if cached_balance is not None:
+            return cached_balance
+
+        key = self.openrouter_keys[0]
+        try:
+            response = requests.get(
+                "https://openrouter.ai/api/v1/auth/key",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data:
+                    limit = data['data'].get('limit')
+                    usage = data['data'].get('usage')
+                    limit_remaining = data['data'].get('limit_remaining')
+
+                    if limit_remaining is not None:
+                        # Ensure it's returned as a float
+                        balance = round(float(limit_remaining), 4)
+                        # Cache for 5 minutes
+                        cache.set(cache_key, balance, timeout=300)
+                        return balance
+        except Exception as e:
+            logger.error(f"Failed to fetch OpenRouter balance: {e}")
+
+        return None
+
     def _load_keys(self, prefix):
         keys = []
         k1 = os.environ.get(prefix)
@@ -82,9 +118,15 @@ class AIService:
         context_text = "\n".join([f"[{m.category}] {m.title}: {m.content}" for m in matches[:3]])
         return context_text
 
-    def generate_response(self, system_instruction, user_query, rag_enabled=True, mode=None):
+    def generate_response(self, system_instruction, user_query, rag_enabled=True, mode=None, page_context=None):
         if mode == 'bot_helper':
-            return self._handle_bot_helper_local(user_query)
+            # Enhance system instruction for the bot helper specifically
+            enhanced_instruction = "أنت مساعد ذكي مدمج في واجهة تطبيق تسيير مدرسة جزائرية (مسار). هدفك هو إرشاد المستخدم ومساعدته في فهم الشاشة الحالية أو الإجابة على أسئلته باختصار ووضوح."
+            if page_context:
+                enhanced_instruction += f"\n\nالمستخدم يتواجد حالياً في الصفحة/الرابط التالي: {page_context}\nقدم إجابتك بناءً على هذا السياق إذا كان السؤال غير واضح."
+            system_instruction = enhanced_instruction
+            # Disable RAG for simple UI helper queries to save tokens unless specifically needed
+            rag_enabled = False
 
         context = ""
         if rag_enabled:

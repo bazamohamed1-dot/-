@@ -20,6 +20,29 @@
 </div>
 
 <div class="grid-4">
+    {% if is_director %}
+    <div class="card" style="border-right: 4px solid #10b981;">
+        <div style="font-size: 3rem; color: #10b981; margin-bottom: 10px;"><i class="fas fa-coins"></i></div>
+        <div style="font-size: 1.5rem; font-weight: bold; direction: ltr;">
+            {% if openrouter_balance is not None %}
+                ${{ openrouter_balance }}
+            {% else %}
+                N/A
+            {% endif %}
+        </div>
+        <div style="color: #64748b;">رصيد الذكاء الاصطناعي</div>
+        {% if openrouter_balance is not None %}
+        <div style="margin-top: 10px; font-size: 0.8rem; text-align: left; direction: ltr;">
+            <div style="background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden; width: 100%;">
+                {% widthratio openrouter_balance 5 100 as percentage %}
+                <div style="background: {% if openrouter_balance > 1 %}#10b981{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage|default:'0' }}%;"></div>
+            </div>
+            <span style="color: #94a3b8; display: block; margin-top: 3px;">Out of $5.00 limit</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="card" style="border-right: 4px solid var(--primary);">
         <div style="font-size: 3rem; color: var(--primary); margin-bottom: 10px;"><i class="fas fa-users"></i></div>
         <div style="font-size: 1.5rem; font-weight: bold;">{{ total_students }}</div>
