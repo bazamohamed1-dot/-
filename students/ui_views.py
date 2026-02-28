@@ -643,10 +643,10 @@ def import_hr_confirm(request):
             from .import_utils import parse_hr_file
             employees_data = parse_hr_file(temp_path, override_header_indices=override_indices)
 
-            count = process_hr_import_data(employees_data)
+            count, stats = process_hr_import_data(employees_data)
 
             if count > 0:
-                messages.success(request, f"تم استيراد/تحديث {count} موظف.")
+                messages.success(request, f"تم استيراد/تحديث {count} موظف بنجاح. (أساتذة: {stats['teacher']}، عمال: {stats['worker']}، إداريون: {stats['admin']})")
             else:
                 messages.warning(request, "لم يتم استيراد أي موظف. ربما الملف فارغ أو الأعمدة غير صحيحة.")
 
@@ -659,13 +659,18 @@ def import_hr_confirm(request):
 
     return redirect('hr_home')
 
+from django.db import transaction
+import time
+
 def process_hr_import_data(employees_data):
     count = 0
-    for emp in employees_data:
-        # Parse Rank: Use what's in the file, map to system keys
-        raw_rank = emp.get('rank', '').strip()
+    stats = {'teacher': 0, 'worker': 0, 'admin': 0}
+    with transaction.atomic():
+        for emp in employees_data:
+            # Parse Rank: Use what's in the file, map to system keys
+            raw_rank = emp.get('rank', '').strip()
 
-        sys_rank = 'admin' # Default to admin for general staff
+            sys_rank = 'admin' # Default to admin for general staff
 
         if 'أستاذ' in raw_rank:
             sys_rank = 'teacher'
@@ -730,10 +735,20 @@ def process_hr_import_data(employees_data):
                 setattr(existing, key, value)
             existing.save()
         else:
-            Employee.objects.create(employee_code=emp_code, **defaults)
+            # Fallback to prevent unique constraint errors if code is empty or duplicated in same batch
+            if not emp_code:
+                emp_code = f"{ln[:3]}{fn[:3]}{count}"
+
+            try:
+                Employee.objects.create(employee_code=emp_code, **defaults)
+            except Exception:
+                emp_code = f"{emp_code}_{int(time.time()*1000)}"
+                Employee.objects.create(employee_code=emp_code, **defaults)
 
         count += 1
-    return count
+        stats[sys_rank] += 1
+
+    return count, stats
 
 def hr_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
@@ -789,8 +804,11 @@ def hr_home(request):
                 from .import_utils import parse_hr_file
                 employees_data = parse_hr_file(temp_path)
 
-                count = process_hr_import_data(employees_data)
-                messages.success(request, f"تم استيراد/تحديث {count} موظف.")
+                count, stats = process_hr_import_data(employees_data)
+                if count > 0:
+                    messages.success(request, f"تم استيراد/تحديث {count} موظف بنجاح. (أساتذة: {stats['teacher']}، عمال: {stats['worker']}، إداريون: {stats['admin']})")
+                else:
+                    messages.warning(request, "لم يتم استيراد أي موظف.")
             except Exception as e:
                 messages.error(request, f"خطأ في الملف: {e}")
             finally:

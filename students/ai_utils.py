@@ -63,12 +63,12 @@ class AIService:
     def _load_keys(self, prefix):
         keys = []
         k1 = os.environ.get(prefix)
-        if k1: keys.append(k1)
+        if k1 and k1.strip(): keys.append(k1.strip().strip("'").strip('"'))
         i = 2
         while True:
             k = os.environ.get(f"{prefix}_{i}")
-            if not k: break
-            keys.append(k)
+            if not k or not k.strip(): break
+            keys.append(k.strip().strip("'").strip('"'))
             i += 1
         return keys
 
@@ -173,34 +173,44 @@ class AIService:
     def _try_openrouter(self, prompt):
         keys = list(self.openrouter_keys)
         random.shuffle(keys)
+        last_error = None
         for key in keys:
-            try:
-                for model in self.models_config['openrouter']:
-                    try:
-                        response = requests.post(
-                            url="https://openrouter.ai/api/v1/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {key}",
-                                "HTTP-Referer": "http://localhost", # Required by OpenRouter, can be any valid URL format
-                                "X-Title": "School Management Agent", # Required by OpenRouter
-                            },
-                            json={
-                                "model": model,
-                                "messages": [
-                                    {"role": "user", "content": prompt}
-                                ]
-                            }
-                        )
-                        if response.status_code == 200:
-                            data = response.json()
-                            if "choices" in data and len(data["choices"]) > 0:
-                                return data["choices"][0]["message"]["content"]
-                    except Exception as e:
-                        logger.warning(f"OpenRouter Fail ({model}): {e}")
-                        continue
-            except Exception as e:
-                logger.error(f"OpenRouter Client Error: {e}")
-                continue
+            for model in self.models_config['openrouter']:
+                try:
+                    response = requests.post(
+                        url="https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {key}",
+                            "HTTP-Referer": "http://localhost", # Required by OpenRouter, can be any valid URL format
+                            "X-Title": "School Management Agent", # Required by OpenRouter
+                        },
+                        json={
+                            "model": model,
+                            "messages": [
+                                {"role": "user", "content": prompt}
+                            ]
+                        },
+                        timeout=15 # Avoid hanging forever
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        if "choices" in data and len(data["choices"]) > 0:
+                            return data["choices"][0]["message"]["content"]
+                    else:
+                        last_error = f"HTTP {response.status_code}: {response.text}"
+                        print(f"OpenRouter Error ({model}): {last_error}")
+                        logger.warning(f"OpenRouter Error ({model}): {last_error}")
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"OpenRouter Request Exception ({model}): {e}")
+                    logger.warning(f"OpenRouter Request Exception ({model}): {e}")
+                    continue
+
+        # If we exhausted all keys and models, return detailed error for debugging
+        if last_error:
+            logger.error(f"All OpenRouter attempts failed. Last error: {last_error}")
+
         return None
 
     def _try_gemini_v1(self, prompt):
