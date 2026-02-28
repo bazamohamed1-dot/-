@@ -6,13 +6,13 @@ from PyPDF2 import PdfReader
 import re
 from datetime import datetime, date
 
-def extract_rows_from_file(file):
+def extract_rows_from_file(file, override_filename=None):
     """
     Extracts rows from any supported file type (Excel, Word, HTML, PDF).
     Returns a generator of lists.
     """
     file.seek(0)
-    filename = getattr(file, 'name', 'unknown').lower()
+    filename = override_filename.lower() if override_filename else getattr(file, 'name', 'unknown').lower()
 
     if filename.endswith('.xlsx'):
         try:
@@ -115,10 +115,7 @@ def parse_student_file(file_path, override_header_indices=None):
     Parses a student import file (Excel/HTML) and returns a list of dictionaries.
     """
     with open(file_path, 'rb') as f:
-        # Pass the filename onto the file object if missing so extract_rows_from_file can know the type
-        if not hasattr(f, 'name') or not f.name:
-            f.name = file_path
-        rows = list(extract_rows_from_file(f))
+        rows = list(extract_rows_from_file(f, override_filename=file_path))
 
     if not rows: return []
 

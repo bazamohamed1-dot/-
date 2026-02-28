@@ -1118,18 +1118,32 @@ def student_filters(request):
     Returns distinct Academic Years and Classes for dynamic dropdowns.
     Uses robust query to ensure all variations are captured.
     """
+    import re
     # Exclude empty or null values
-    levels = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct().order_by('academic_year'))
-    classes = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct().order_by('class_name'))
+    levels_raw = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
+    classes_raw = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct())
 
-    # Fallback: Extract levels from class names if levels are missing
-    if not levels:
-        derived_levels = set()
-        for c in classes:
-            parts = c.split()
-            if parts:
-                derived_levels.add(parts[0]) # Assume first part is level (e.g. "1AM 1")
-        levels = sorted(list(derived_levels))
+    # Fallback: Extract levels from class names if levels are missing or inconsistent
+    derived_levels = set(levels_raw)
+    for c in classes_raw:
+        parts = c.split()
+        if parts:
+            # Only add if it's a number or contains AM/AS/AP to avoid weird data
+            if parts[0].isdigit() or re.match(r'^\d+[a-zA-Z]+$', parts[0]):
+                 derived_levels.add(parts[0])
+            elif not levels_raw:
+                 derived_levels.add(parts[0])
+
+    # Sort logically
+    def custom_sort(item):
+        # Extract leading number for logical sorting (e.g., '1', '2', '1AM', '2AM')
+        match = re.search(r'\d+', item)
+        if match:
+            return (int(match.group()), item)
+        return (999, item) # Put non-numbered items at the end
+
+    levels = sorted(list(derived_levels), key=custom_sort)
+    classes = sorted(list(classes_raw), key=custom_sort)
 
     return Response({
         'levels': levels,
