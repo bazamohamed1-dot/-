@@ -27,7 +27,9 @@ def process_grades_file(file_path, term):
             if match:
                 class_name_raw = cell_str
                 lvl = match.group(1) # e.g., 'أولى'
-                cls = match.group(2) # e.g., '1'
+                cls = match.group(2) # e.g., '01'
+                # Strip leading zeros so '01' becomes '1'
+                cls = str(int(cls))
                 break
         if lvl and cls:
             break

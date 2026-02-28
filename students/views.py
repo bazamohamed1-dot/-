@@ -254,7 +254,8 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Director sees all, users see their own
+        # Allow operations on the endpoint regardless of 'status' for Director,
+        # but default to pending
         if hasattr(self.request.user, 'profile') and (self.request.user.profile.role == 'director' or self.request.user.is_superuser):
             return PendingUpdate.objects.all()
         # Regular users see their own pending updates to reflect in UI
