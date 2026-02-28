@@ -230,6 +230,39 @@
         td { padding: 15px; border-bottom: 1px solid #e2e8f0; }
         tr:hover td { background: #f8fafc; }
 
+        /* Scrollbar styles to make horizontal scrolling obvious */
+        .table-responsive, .table-container, div[style*="overflow-x: auto"] {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 10px; /* Space for scrollbar */
+        }
+
+        /* Webkit scrollbar styling for tables/containers */
+        .table-responsive::-webkit-scrollbar,
+        .table-container::-webkit-scrollbar,
+        div[style*="overflow-x: auto"]::-webkit-scrollbar {
+            height: 12px;
+        }
+        .table-responsive::-webkit-scrollbar-track,
+        .table-container::-webkit-scrollbar-track,
+        div[style*="overflow-x: auto"]::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+        .table-responsive::-webkit-scrollbar-thumb,
+        .table-container::-webkit-scrollbar-thumb,
+        div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb {
+            background-color: #94a3b8;
+            border-radius: 6px;
+            border: 2px solid #f1f5f9;
+        }
+        .table-responsive::-webkit-scrollbar-thumb:hover,
+        .table-container::-webkit-scrollbar-thumb:hover,
+        div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b;
+        }
+
         /* Utilities */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }

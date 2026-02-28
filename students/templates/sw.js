@@ -49,6 +49,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+    // Ignore non-HTTP(S) schemes (like chrome-extension://) to prevent Cache API TypeError
+    if (!event.request.url.startsWith('http')) {
+        return;
+    }
+
     // 1. Handle Navigation Requests (HTML Pages)
     if (event.request.mode === 'navigate') {
         event.respondWith(
