@@ -89,10 +89,15 @@ class AIService:
                     usage = data['data'].get('usage')
                     limit_remaining = data['data'].get('limit_remaining')
 
+                    balance = None
                     if limit_remaining is not None:
-                        # Ensure it's returned as a float
-                        balance = round(float(limit_remaining), 4)
-                        # Cache for 5 minutes
+                        balance = float(limit_remaining)
+                    elif limit is not None and usage is not None:
+                        # Some OpenRouter API versions return limit and usage instead of limit_remaining
+                        balance = float(limit) - float(usage)
+
+                    if balance is not None:
+                        balance = round(balance, 4)
                         cache.set(cache_key, balance, timeout=300)
                         return balance
         except Exception as e:

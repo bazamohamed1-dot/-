@@ -12,28 +12,42 @@ def process_grades_file(file_path, term):
     if not rows or len(rows) < 7:
         return 0, 'الملف فارغ أو لا يحتوي على بنية علامات صحيحة'
 
-    # Extract class name from row 4, col 0 (index 3)
-    class_name_raw = str(rows[3][0]) if len(rows[3]) > 0 else ''
+    # Robust Class Extraction: Scan the first 10 rows for patterns like 'أولى متوسط 1'
+    lvl, cls = None, None
+    class_name_raw = ""
 
-    # Try to clean it. e.g. '... أولى متوسط 1 ...' -> 'أولى 1'
-    # Actually, we can pass it directly to resolve_class_alias if it's exact,
-    # but the image says 'أولى متوسط 1'. Let's do some cleaning.
-    class_name_clean = class_name_raw
-    if 'متوسط' in class_name_clean:
-        class_name_clean = class_name_clean.replace('متوسط', '').strip()
-        # Remove multiple spaces
-        class_name_clean = re.sub(r'\s+', ' ', class_name_clean)
+    # Regex to capture Level (أولى/ثانية/ثالثة/رابعة) and Class Number (\d+)
+    # It handles cases like "قسم: أولى متوسط 1", "أولى 1", etc.
+    pattern = re.compile(r'(أولى|ثانية|ثالثة|رابعة)(?:\s+متوسط)?\s+(\d+)')
 
-    # Let's resolve the class alias
-    lvl, cls = resolve_class_alias(class_name_clean)
+    for r_idx in range(min(10, len(rows))):
+        for cell in rows[r_idx]:
+            cell_str = str(cell).strip()
+            match = pattern.search(cell_str)
+            if match:
+                class_name_raw = cell_str
+                lvl = match.group(1) # e.g., 'أولى'
+                cls = match.group(2) # e.g., '1'
+                break
+        if lvl and cls:
+            break
+
+    # If regex failed, maybe it's in a known Alias format (e.g., '1م1') in the first cell of row 4 or 5
     if not lvl or not cls:
-        # Fallback if the user hasn't mapped it, just try exact match
-        parts = class_name_clean.split()
-        if len(parts) >= 2:
-            lvl = parts[0]
-            cls = parts[1]
-        else:
-            return 0, f'تعذر تحديد القسم من الملف: {class_name_raw}'
+        possible_strings = []
+        if len(rows) > 3 and len(rows[3]) > 0: possible_strings.append(str(rows[3][0]))
+        if len(rows) > 4 and len(rows[4]) > 0: possible_strings.append(str(rows[4][0]))
+
+        for p_str in possible_strings:
+            class_name_raw = p_str
+            # Try to resolve using ClassAlias database
+            r_lvl, r_cls = resolve_class_alias(p_str.strip())
+            if r_lvl and r_cls:
+                lvl, cls = r_lvl, r_cls
+                break
+
+    if not lvl or not cls:
+        return 0, f'تعذر تحديد القسم (المستوى والرقم) من الملف. تأكد من وجود اسم القسم مثل "أولى متوسط 1". النص الذي تم قراءته: {class_name_raw}'
 
     # Ensure class exists in our DB
     students_in_class = Student.objects.filter(academic_year=lvl, class_name=cls)
