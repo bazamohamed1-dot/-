@@ -568,6 +568,17 @@ def assignment_matching_view(request):
                 import json
                 c['classes_json'] = json.dumps(c['classes'])
 
+            # Prepare an auto_select_assignment dictionary for HR Home (if user cancels or closes, but mostly when saving)
+            # Actually we just set it temporarily so if they go back to HR it pre-fills the AI suggestions
+            auto_select = {}
+            for c in candidates:
+                if 'suggested_id' in c:
+                    auto_select[c['suggested_id']] = {
+                        'subject': c.get('subject', '/'),
+                        'classes': c.get('classes', [])
+                    }
+            request.session['auto_select_assignment'] = auto_select
+
             context = {
                 'candidates': candidates,
                 'all_teachers': all_teachers,
@@ -947,7 +958,8 @@ def hr_home(request):
         lvl, cls = item
         l_match = re.search(r'\d+', str(lvl))
         c_match = re.search(r'\d+', str(cls))
-        l_num = int(l_match.group()) if l_match else 999
+        # Negative for descending level
+        l_num = -int(l_match.group()) if l_match else -999
         c_num = int(c_match.group()) if c_match else 999
         return (l_num, c_num, lvl, cls)
     db_combinations.sort(key=sort_key)
@@ -956,6 +968,19 @@ def hr_home(request):
 
     # Auto-Select Logic (If file was uploaded previously)
     auto_select_data = request.session.pop('auto_select_assignment', None)
+
+    if auto_select_data:
+        from .mapping_views import resolve_class_alias
+        # auto_select_data is { teacher_id: {'subject': 'xxx', 'classes': ['1م1', '2م1']} }
+        for tid, data in auto_select_data.items():
+            resolved_classes = []
+            for c_alias in data.get('classes', []):
+                canonical_lvl, canonical_cls = resolve_class_alias(c_alias)
+                if canonical_lvl and canonical_cls:
+                    resolved_classes.append(f"{canonical_lvl} {canonical_cls}")
+                else:
+                    resolved_classes.append(c_alias)
+            data['classes'] = resolved_classes
 
     context = {
         'employees': employees,
