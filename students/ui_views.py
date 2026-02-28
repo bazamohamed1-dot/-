@@ -88,7 +88,19 @@ def dashboard(request):
         # Remove duplicates
         teacher_classes = list(set(teacher_classes))
         if teacher_classes:
-            assigned_students = Student.objects.filter(class_name__in=teacher_classes).order_by('class_name', 'last_name')
+            # teacher_classes contains combinations like "أولى 1"
+            # We need to filter students matching these combinations
+            q_objects = Q()
+            for t_class in teacher_classes:
+                # Split "أولى 1" into level and class
+                parts = str(t_class).rsplit(' ', 1)
+                if len(parts) == 2:
+                    q_objects |= Q(academic_year=parts[0].strip(), class_name=parts[1].strip())
+                else:
+                    # Fallback if it's just a number
+                    q_objects |= Q(class_name=str(t_class).strip())
+
+            assigned_students = Student.objects.filter(q_objects).order_by('academic_year', 'class_name', 'last_name')
 
     # Detailed Stats for Dashboard Table
     from django.db.models import Count
@@ -475,8 +487,15 @@ def assignment_matching_view(request):
                     all_extracted_classes.add(cl)
 
             # 2. Check against DB
-            db_classes = set(Student.objects.values_list('class_name', flat=True).distinct())
-            aliases = dict(ClassAlias.objects.values_list('alias', 'canonical_class'))
+            # Get all valid level+class combinations
+            db_combinations = set()
+            for lvl, cls in Student.objects.exclude(academic_year__isnull=True).exclude(class_name__isnull=True).values_list('academic_year', 'class_name').distinct():
+                db_combinations.add(f"{lvl} {cls}")
+
+            # Get all aliases mapping to their level+class combinations
+            aliases = {}
+            for a in ClassAlias.objects.all():
+                aliases[a.alias] = f"{a.canonical_level} {a.canonical_class}".strip()
 
             unknown_classes = []
 
@@ -484,8 +503,10 @@ def assignment_matching_view(request):
             for c in candidates:
                 resolved_classes = []
                 for cl in c['classes']:
-                    if cl in db_classes:
+                    # Try to see if it's already a valid combination
+                    if cl in db_combinations:
                         resolved_classes.append(cl)
+                    # Else try to resolve via alias
                     elif cl in aliases:
                         resolved_classes.append(aliases[cl])
                     else:
@@ -498,7 +519,7 @@ def assignment_matching_view(request):
                 c['classes'] = list(set(resolved_classes))
 
             # 4. If unknowns exist, redirect to Mapping View (with warning)
-            if unknown_classes and db_classes: # Only if DB has classes to map to
+            if unknown_classes and db_combinations: # Only if DB has classes to map to
                  messages.warning(request, f"تم العثور على أقسام غير معروفة: {', '.join(unknown_classes[:5])}... يرجى ربطها أولاً.")
                  return redirect('class_mapping_view')
 
@@ -672,81 +693,81 @@ def process_hr_import_data(employees_data):
 
             sys_rank = 'admin' # Default to admin for general staff
 
-        if 'أستاذ' in raw_rank:
-            sys_rank = 'teacher'
-        elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
-             sys_rank = 'worker'
-        elif 'عون' in raw_rank:
-             if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
-                 sys_rank = 'admin'
-             else:
-                 sys_rank = 'admin'
+            if 'أستاذ' in raw_rank:
+                sys_rank = 'teacher'
+            elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
+                 sys_rank = 'worker'
+            elif 'عون' in raw_rank:
+                 if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
+                     sys_rank = 'admin'
+                 else:
+                     sys_rank = 'admin'
 
-        if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
-            continue
+            if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
+                continue
 
-        subject = emp.get('subject', '/')
-        if sys_rank != 'teacher':
-            subject = "/"
+            subject = emp.get('subject', '/')
+            if sys_rank != 'teacher':
+                subject = "/"
 
-        def parse_d(val):
-            if not val: return None
-            if isinstance(val, (date, datetime)): return val
-            try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
-            except: pass
-            try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
-            except: pass
-            return None
+            def parse_d(val):
+                if not val: return None
+                if isinstance(val, (date, datetime)): return val
+                try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
+                except: pass
+                try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
+                except: pass
+                return None
 
-        dob = parse_d(emp.get('date_of_birth'))
-        eff_date = parse_d(emp.get('effective_date'))
+            dob = parse_d(emp.get('date_of_birth'))
+            eff_date = parse_d(emp.get('effective_date'))
 
-        emp_code = emp.get('employee_code')
-        ln = emp.get('last_name', '')
-        fn = emp.get('first_name', '')
+            emp_code = emp.get('employee_code')
+            ln = emp.get('last_name', '')
+            fn = emp.get('first_name', '')
 
-        existing = None
-        if emp_code:
-            existing = Employee.objects.filter(employee_code=emp_code).first()
+            existing = None
+            if emp_code:
+                existing = Employee.objects.filter(employee_code=emp_code).first()
 
-        if not existing and ln and fn:
-            existing = Employee.objects.filter(
-                last_name=ln,
-                first_name=fn,
-                date_of_birth=dob
-            ).first()
+            if not existing and ln and fn:
+                existing = Employee.objects.filter(
+                    last_name=ln,
+                    first_name=fn,
+                    date_of_birth=dob
+                ).first()
 
-        defaults={
-            'last_name': ln,
-            'first_name': fn,
-            'full_name': f"{ln} {fn}",
-            'date_of_birth': dob,
-            'rank': sys_rank,
-            'role': raw_rank,
-            'subject': subject,
-            'grade': emp.get('grade', ''),
-            'effective_date': eff_date,
-            'phone': emp.get('phone', ''),
-            'email': emp.get('email', ''),
-        }
+            defaults={
+                'last_name': ln,
+                'first_name': fn,
+                'full_name': f"{ln} {fn}",
+                'date_of_birth': dob,
+                'rank': sys_rank,
+                'role': raw_rank,
+                'subject': subject,
+                'grade': emp.get('grade', ''),
+                'effective_date': eff_date,
+                'phone': emp.get('phone', ''),
+                'email': emp.get('email', ''),
+            }
 
-        if existing:
-            for key, value in defaults.items():
-                setattr(existing, key, value)
-            existing.save()
-        else:
-            # Fallback to prevent unique constraint errors if code is empty or duplicated in same batch
-            if not emp_code:
-                emp_code = f"{ln[:3]}{fn[:3]}{count}"
+            if existing:
+                for key, value in defaults.items():
+                    setattr(existing, key, value)
+                existing.save()
+            else:
+                # Fallback to prevent unique constraint errors if code is empty or duplicated in same batch
+                if not emp_code:
+                    emp_code = f"{ln[:3]}{fn[:3]}{count}"
 
-            try:
-                Employee.objects.create(employee_code=emp_code, **defaults)
-            except Exception:
-                emp_code = f"{emp_code}_{int(time.time()*1000)}"
-                Employee.objects.create(employee_code=emp_code, **defaults)
+                try:
+                    Employee.objects.create(employee_code=emp_code, **defaults)
+                except Exception:
+                    emp_code = f"{emp_code}_{int(time.time()*1000)}"
+                    Employee.objects.create(employee_code=emp_code, **defaults)
 
-        count += 1
-        stats[sys_rank] += 1
+            count += 1
+            stats[sys_rank] += 1
 
     return count, stats
 
@@ -915,9 +936,23 @@ def hr_home(request):
         'total': Employee.objects.count()
     }
 
-    # Get All Classes for Dropdown
-    all_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
-    all_classes.sort()
+    # Get All Classes for Dropdown (As Combinations)
+    db_combinations = list(
+        Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='')
+        .exclude(class_name__isnull=True).exclude(class_name__exact='')
+        .values_list('academic_year', 'class_name').distinct()
+    )
+    import re
+    def sort_key(item):
+        lvl, cls = item
+        l_match = re.search(r'\d+', str(lvl))
+        c_match = re.search(r'\d+', str(cls))
+        l_num = int(l_match.group()) if l_match else 999
+        c_num = int(c_match.group()) if c_match else 999
+        return (l_num, c_num, lvl, cls)
+    db_combinations.sort(key=sort_key)
+
+    all_classes = [f"{lvl} {cls}" for lvl, cls in db_combinations]
 
     # Auto-Select Logic (If file was uploaded previously)
     auto_select_data = request.session.pop('auto_select_assignment', None)
