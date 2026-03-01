@@ -387,8 +387,9 @@ class AIService:
 def analyze_assignment_document(a): pass
 def analyze_global_assignment(f): pass
 def analyze_global_assignment_content(f):
-    from students.utils_tools.smart_assignment_analyzer import extract_from_excel, extract_from_word
+    from students.utils_tools.smart_assignment_analyzer import extract_from_excel, extract_from_word, extract_from_pdf
     ext = os.path.splitext(f)[1].lower()
     if ext in ['.xlsx', '.xls']: return extract_from_excel(f)
     if ext == '.docx': return extract_from_word(f)
+    if ext == '.pdf': return extract_from_pdf(f)
     return []
