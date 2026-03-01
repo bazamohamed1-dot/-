@@ -15,11 +15,15 @@ def analyze_grades_locally(grades_qs: QuerySet):
 
     try:
         # 1. Convert QuerySet to Pandas DataFrame
-        data = list(grades_qs.values('student__full_name', 'student__class_name', 'subject', 'term', 'score'))
+        # Since full_name is a property and not a DB column, we must fetch last_name and first_name
+        data = list(grades_qs.values('student__last_name', 'student__first_name', 'student__class_name', 'subject', 'term', 'score'))
         df = pd.DataFrame(data)
 
+        # Reconstruct full_name in pandas
+        df['student_name'] = df['student__last_name'] + ' ' + df['student__first_name']
+
         # 2. Basic Stats
-        total_students = df['student__full_name'].nunique()
+        total_students = df['student_name'].nunique()
 
         # Average per subject
         subject_avgs = df.groupby('subject')['score'].mean().round(2).to_dict()
@@ -32,14 +36,14 @@ def analyze_grades_locally(grades_qs: QuerySet):
 
         # 3. Failures & Top Students (Based on General Average or overall scores)
         # Pivot the table to have one row per student, columns as subjects
-        pivot_df = df.pivot_table(index=['student__full_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()
+        pivot_df = df.pivot_table(index=['student_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()
 
         # Determine sorting column
         sort_col = 'المعدل العام' if 'المعدل العام' in pivot_df.columns else pivot_df.columns[-1]
 
         # Top 3
         top_students_df = pivot_df.sort_values(by=sort_col, ascending=False).head(3)
-        top_students = [f"{row['student__full_name']} ({row[sort_col]})" for _, row in top_students_df.iterrows()]
+        top_students = [f"{row['student_name']} ({row[sort_col]})" for _, row in top_students_df.iterrows()]
 
         # Failures (Score < 10)
         failures_count = pivot_df[pivot_df[sort_col] < 10].shape[0]
