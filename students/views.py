@@ -354,7 +354,13 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
         if not self._is_director_or_superuser():
              return Response({'error': 'Unauthorized'}, status=403)
 
-        update = self.get_object()
+        try:
+            # Bypass get_object() which relies on get_queryset() to ensure it finds it
+            # even if the queryset filtering might have an edge case.
+            update = PendingUpdate.objects.get(pk=pk)
+        except PendingUpdate.DoesNotExist:
+            return Response({'error': 'التحديث غير موجود أو تمت الموافقة عليه مسبقاً.'}, status=404)
+
         try:
             # Create notification
             if update.user:

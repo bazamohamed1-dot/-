@@ -74,8 +74,12 @@ def process_grades_file(file_path, term):
     name_idx = -1
 
     for idx, header in enumerate(headers):
-        if header == 'اللقب والاسم' or header == 'الاسم واللقب':
-            name_idx = idx
+        # The user image showed the header text might be split or contain spaces/newlines
+        clean_header = header.replace('\n', '').replace('\r', '').replace(' ', '')
+
+        if 'اللقبوالاسم' in clean_header or 'الاسمو' in clean_header or 'الاسم' in clean_header:
+            if name_idx == -1: # Only set once to avoid matching wrong columns later
+                name_idx = idx
         elif header.endswith(suffix):
             # E.g. 'اللغة العربية ف 1' -> 'اللغة العربية'
             subject_name = header.replace(suffix, '').strip()
@@ -83,8 +87,12 @@ def process_grades_file(file_path, term):
         elif header == avg_col_name:
             subject_indices['المعدل العام'] = idx
 
+    # Fallback to column index 1 (second column) as per user instruction if regex fails
     if name_idx == -1:
-        return 0, 'لم يتم العثور على عمود اللقب والاسم'
+        if len(headers) >= 2:
+            name_idx = 1
+        else:
+            return 0, 'لم يتم العثور على عمود اللقب والاسم'
 
     grades_created = 0
     # Process students starting from row index 6
