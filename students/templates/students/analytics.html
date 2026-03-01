@@ -32,23 +32,47 @@
                 </div>
             </div>
             <div style="padding: 20px; text-align: center; min-height: 300px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f8fafc;">
-                <!-- Placeholder for Chart.js -->
-                <i class="fas fa-chart-pie mb-3" style="font-size: 4rem; color: #cbd5e1;"></i>
-                <p style="color: #64748b; font-size: 1.1rem;">يرجى استيراد البيانات أولاً لعرض الرسوم البيانية الاستنتاجية.</p>
+                {% if local_stats %}
+                    <div style="display:flex; justify-content:space-around; width:100%; margin-bottom: 20px;">
+                        <div style="text-align:center;">
+                            <h2 style="color:var(--primary); margin:0;">{{ local_stats.total_students }}</h2>
+                            <p style="color:#64748b; margin:0;">عدد التلاميذ</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <h2 style="color:var(--success); margin:0;">{{ local_stats.general_avg }}</h2>
+                            <p style="color:#64748b; margin:0;">المتوسط العام</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <h2 style="color:var(--danger); margin:0;">{{ local_stats.failures_count }}</h2>
+                            <p style="color:#64748b; margin:0;">عدد المتعثرين</p>
+                        </div>
+                    </div>
+                    <!-- Future Chart.js canvas here -->
+                    <p style="color: #64748b; font-size: 0.9rem;">(تم حساب هذه المؤشرات محلياً وبشكل مجاني)</p>
+                {% else %}
+                    <i class="fas fa-chart-pie mb-3" style="font-size: 4rem; color: #cbd5e1;"></i>
+                    <p style="color: #64748b; font-size: 1.1rem;">يرجى استيراد البيانات أولاً لعرض الرسوم البيانية الاستنتاجية.</p>
+                {% endif %}
             </div>
         </div>
 
         <div class="grid-2">
             <div class="card" style="border-radius: 12px;">
-                <h4 style="color: #16a34a;"><i class="fas fa-arrow-trend-up"></i> نقاط القوة</h4>
+                <h4 style="color: #16a34a;"><i class="fas fa-medal"></i> الأوائل (محلي)</h4>
                 <ul style="color: #475569; padding-right: 20px;">
-                    <li>يرجى طلب التحليل من الذكاء الاصطناعي...</li>
+                    {% if local_stats and local_stats.top_students %}
+                        {% for student in local_stats.top_students %}
+                            <li>{{ student }}</li>
+                        {% endfor %}
+                    {% else %}
+                        <li>لا توجد بيانات كافية</li>
+                    {% endif %}
                 </ul>
             </div>
             <div class="card" style="border-radius: 12px;">
-                <h4 style="color: #dc2626;"><i class="fas fa-arrow-trend-down"></i> مجالات التحسين</h4>
-                <ul style="color: #475569; padding-right: 20px;">
-                    <li>يرجى طلب التحليل من الذكاء الاصطناعي...</li>
+                <h4 style="color: #dc2626;"><i class="fas fa-chart-line"></i> التحليل المتقدم (AI)</h4>
+                <ul style="color: #475569; padding-right: 20px;" id="aiInsightsList">
+                    <li>اضغط على "إطلاق تحليل معمق" للحصول على استنتاجات ذكية وتوجيهات تربوية من DeepSeek.</li>
                 </ul>
             </div>
         </div>
@@ -71,13 +95,13 @@
             </div>
 
             <div style="padding: 15px; border-top: 1px solid #e2e8f0; background: white; border-radius: 0 0 12px 12px;">
-                <button class="btn btn-warning w-100 mb-2" style="font-weight: bold; color: #78350f;" onclick="alert('سيتم إطلاق تحليل معمق للبيانات قريباً بعد رفع الملفات.')">
+                <button class="btn btn-warning w-100 mb-2" style="font-weight: bold; color: #78350f;" onclick="triggerDeepAnalysis()">
                     <i class="fas fa-magic"></i> إطلاق تحليل معمق للنتائج
                 </button>
                 <div style="display: flex; gap: 5px;">
-                    <button class="btn btn-outline-secondary"><i class="fas fa-microphone"></i></button>
-                    <input type="text" class="form-control" placeholder="اطلب تحليل لقسم معين...">
-                    <button class="btn btn-primary"><i class="fas fa-paper-plane"></i></button>
+                    <button class="btn btn-outline-secondary" onclick="alert('ميزة الصوت قريباً')"><i class="fas fa-microphone"></i></button>
+                    <input type="text" id="aiQueryInput" class="form-control" placeholder="اطلب تحليل لقسم معين...">
+                    <button class="btn btn-primary" onclick="sendAiQuery()"><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
@@ -113,4 +137,92 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const tokenCost = {{ token_cost|default:"0" }};
+
+    function triggerDeepAnalysis() {
+        if (tokenCost === 0) {
+            alert("يرجى استيراد بعض بيانات العلامات أولاً لتتمكن من تحليلها.");
+            return;
+        }
+
+        if (confirm(`بناءً على حجم البيانات الحالية، سيكلف هذا التحليل المعمق حوالي $${tokenCost} من رصيد الذكاء الاصطناعي. هل تريد الاستمرار؟`)) {
+            sendToAI("الرجاء تحليل هذه البيانات المعطاة (العلامات) وتقديم: 1. الأسباب المحتملة للتعثر إن وجد، 2. نقاط القوة، 3. خطة دعم تربوية مقترحة باختصار.");
+        }
+    }
+
+    function sendAiQuery() {
+        const input = document.getElementById('aiQueryInput');
+        const text = input.value.trim();
+        if(!text) return;
+        input.value = '';
+        sendToAI(text);
+    }
+
+    function sendToAI(query) {
+        const chatBox = document.getElementById('aiAnalyticsChat');
+
+        // Add User message
+        chatBox.innerHTML += `
+            <div class="chat-message user" style="margin-bottom: 15px; display: flex; gap: 10px; flex-direction: row-reverse;">
+                <div style="background: #e2e8f0; color: #475569; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><i class="fas fa-user"></i></div>
+                <div style="background: #38bdf8; color: #0f172a; padding: 10px 15px; border-radius: 12px; font-size: 0.95rem; text-align: right;">
+                    ${query}
+                </div>
+            </div>
+        `;
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // Add Loading
+        const loadingId = 'loading-' + Date.now();
+        chatBox.innerHTML += `
+            <div id="${loadingId}" class="chat-message ai" style="margin-bottom: 15px; display: flex; gap: 10px;">
+                <div style="background: #e0e7ff; color: #4f46e5; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><i class="fas fa-brain"></i></div>
+                <div style="background: white; padding: 10px 15px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.95rem; color: #64748b;">
+                    <i class="fas fa-spinner fa-spin"></i> جاري التحليل المعمق (DeepSeek)...
+                </div>
+            </div>
+        `;
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        const formData = new FormData();
+        formData.append('query', query);
+        formData.append('mode', 'analytics');
+
+        fetch("{% url 'ai_chat_view' %}", {
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById(loadingId).remove();
+            if(data.error) {
+                alert(data.message || data.error);
+                return;
+            }
+
+            // Format markdown response basic (bolding and linebreaks)
+            let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
+
+            chatBox.innerHTML += `
+                <div class="chat-message ai" style="margin-bottom: 15px; display: flex; gap: 10px;">
+                    <div style="background: #e0e7ff; color: #4f46e5; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><i class="fas fa-brain"></i></div>
+                    <div style="background: white; padding: 10px 15px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.95rem;">
+                        ${formattedText}
+                    </div>
+                </div>
+            `;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        })
+        .catch(err => {
+            document.getElementById(loadingId).remove();
+            alert("حدث خطأ أثناء الاتصال بخادم الذكاء الاصطناعي.");
+        });
+    }
+</script>
 {% endblock %}

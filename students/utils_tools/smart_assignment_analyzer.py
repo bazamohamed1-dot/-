@@ -87,6 +87,40 @@ def extract_from_excel(file_path):
 
     return candidates
 
+def extract_from_pdf(file_path):
+    """
+    Extracts assignment candidates from a PDF document using pdfplumber.
+    It reads the text layout to find Teacher Names, Subjects, and Classes.
+    This saves massive AI tokens by doing local text processing.
+    """
+    candidates = []
+    try:
+        import pdfplumber
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                # Try extracting tables first
+                tables = page.extract_tables()
+                for table in tables:
+                    for row in table:
+                        # row is a list of strings
+                        row_text = " ".join([str(cell).strip() for cell in row if cell])
+                        extracted = _extract_candidate_from_text(row_text)
+                        if extracted:
+                            _merge_candidate(candidates, extracted)
+
+                # Also try normal text extraction line by line in case it's not a standard table
+                text = page.extract_text()
+                if text:
+                    for line in text.split('\n'):
+                        extracted = _extract_candidate_from_text(line)
+                        if extracted:
+                            _merge_candidate(candidates, extracted)
+
+    except Exception as e:
+        logger.error(f"PDF Extraction Failed: {e}")
+
+    return candidates
+
 def extract_from_word(file_path):
     """
     Extracts assignment candidates from a Word document.

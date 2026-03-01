@@ -1150,9 +1150,9 @@ def ai_chat_view(request):
             if requested_mode != 'bot_helper':
                 return JsonResponse({'error': 'Unauthorized mode for this user role.'}, status=403)
 
-        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous, except for bot_helper
+        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous, except for bot_helper and analytics
         if (hasattr(request.user, 'profile') and request.user.profile.role == 'director') or request.user.is_superuser:
-            if not requested_mode or (requested_mode == 'rag' and requested_mode != 'bot_helper'):
+            if not requested_mode or (requested_mode == 'rag' and requested_mode not in ['bot_helper', 'analytics']):
                  requested_mode = 'gemini_full'
 
         # Pass current user for permission check
@@ -1160,6 +1160,13 @@ def ai_chat_view(request):
 
         # System instructions base (overridden by mode logic in generate_response)
         sys_instr = "أنت مساعد مدير المدرسة."
+
+        if requested_mode == 'analytics':
+            sys_instr = "أنت خبير تربوي ومحلل بيانات للنتائج المدرسية. قم بتحليل البيانات المقدمة بذكاء، واستخرج الاستنتاجات والنصائح التربوية المباشرة والمختصرة."
+            # Append markdown to query
+            markdown_data = request.session.get('analytics_markdown', '')
+            if markdown_data:
+                query = f"{query}\n\nإليك جدول العلامات (الأسماء والأقسام والمواد):\n\n{markdown_data}"
 
         rag_enabled = (requested_mode == 'rag' or requested_mode is None)
 
@@ -1241,5 +1248,40 @@ def analytics_dashboard(request):
 
             return redirect('analytics_dashboard')
 
-    context = {}
+    from .models import Grade
+    from .analytics_utils import analyze_grades_locally
+
+    # Optional: Filter by term if provided in GET
+    selected_term = request.GET.get('term', 'الفصل الأول')
+    grades_qs = Grade.objects.filter(term=selected_term)
+
+    local_stats = analyze_grades_locally(grades_qs)
+
+    # Token Estimation for Deep Analysis
+    token_cost = 0
+    if local_stats and local_stats.get('markdown_data'):
+        # Store markdown in session so AI can use it when user requests deep analysis
+        request.session['analytics_markdown'] = local_stats['markdown_data']
+
+        try:
+            import tiktoken
+            # Use cl100k_base as it's the standard for modern models including DeepSeek approximation
+            encoding = tiktoken.get_encoding("cl100k_base")
+            num_tokens = len(encoding.encode(local_stats['markdown_data']))
+
+            # DeepSeek Pricing approx: $0.14 per 1M input tokens
+            # We add ~500 tokens for system prompt overhead
+            total_tokens = num_tokens + 500
+            token_cost = (total_tokens / 1000000) * 0.14
+            # Format to 4 decimal places, or minimally 0.0001
+            token_cost = max(0.0001, round(token_cost, 4))
+        except Exception as e:
+            print(f"Token calculation error: {e}")
+            token_cost = 0.01
+
+    context = {
+        'local_stats': local_stats,
+        'selected_term': selected_term,
+        'token_cost': token_cost
+    }
     return render(request, 'students/analytics.html', context)
