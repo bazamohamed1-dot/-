@@ -36,6 +36,10 @@ class Student(models.Model):
     guardian_phone = models.CharField(max_length=20, null=True, blank=True, verbose_name="رقم هاتف الولي")
     photo = models.ImageField(upload_to=student_photo_path, null=True, blank=True, verbose_name="الصورة")
 
+    @property
+    def full_name(self):
+        return f"{self.last_name} {self.first_name}"
+
     def save(self, *args, **kwargs):
         # Handle Force Photo Replacement and Renaming
         if self.pk:
