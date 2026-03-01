@@ -27,8 +27,7 @@ def sync_photos_view(request):
 
 def pending_updates_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-        return redirect('dashboard')
+    pass
 
     updates = PendingUpdate.objects.all().order_by('-timestamp')
     context = {
@@ -88,19 +87,7 @@ def dashboard(request):
         # Remove duplicates
         teacher_classes = list(set(teacher_classes))
         if teacher_classes:
-            # teacher_classes contains combinations like "أولى 1"
-            # We need to filter students matching these combinations
-            q_objects = Q()
-            for t_class in teacher_classes:
-                # Split "أولى 1" into level and class
-                parts = str(t_class).rsplit(' ', 1)
-                if len(parts) == 2:
-                    q_objects |= Q(academic_year=parts[0].strip(), class_name=parts[1].strip())
-                else:
-                    # Fallback if it's just a number
-                    q_objects |= Q(class_name=str(t_class).strip())
-
-            assigned_students = Student.objects.filter(q_objects).order_by('academic_year', 'class_name', 'last_name')
+            assigned_students = Student.objects.filter(class_name__in=teacher_classes).order_by('class_name', 'last_name')
 
     # Detailed Stats for Dashboard Table
     from django.db.models import Count
@@ -127,15 +114,6 @@ def dashboard(request):
     # Convert to sorted list
     detailed_stats = sorted(stats_map.values(), key=lambda x: x['level'])
 
-    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
-
-    # Fetch OpenRouter balance if Director
-    openrouter_balance = None
-    if is_director:
-        from .ai_utils import AIService
-        ai = AIService(user=request.user)
-        openrouter_balance = ai.get_openrouter_balance()
-
     context = {
         'total_students': Student.objects.count(),
         'half_board_count': Student.objects.filter(attendance_system='نصف داخلي').count(),
@@ -145,9 +123,8 @@ def dashboard(request):
         'detailed_stats': detailed_stats,
         'assigned_students': assigned_students,
         'teacher_classes': teacher_classes,
-        'openrouter_balance': openrouter_balance,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
-        'is_director': is_director
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
     return render(request, 'students/dashboard.html', context)
 
@@ -210,10 +187,7 @@ def import_eleve_view(request):
                     'الاسم واللقب': 'full_name', 'تاريخ الميلاد': 'date_of_birth',
                     'القسم': 'class_name', 'المستوى': 'academic_year',
                     'نظام التمدرس': 'attendance_system', 'رقم القيد': 'enrollment_number',
-                    'تاريخ التسجيل': 'enrollment_date', 'تاريخ الخروج': 'exit_date',
-                    'اسم الولي': 'guardian_name', 'اسم الأم': 'mother_name',
-                    'هاتف الولي': 'guardian_phone', 'العنوان': 'address',
-                    'مكان الميلاد': 'place_of_birth', 'الجنس': 'gender'
+                    'تاريخ التسجيل': 'enrollment_date', 'اسم الولي': 'guardian_name'
                 }
                 suggested_mapping, _ = detect_headers(preview_rows, HEADER_MAP)
 
@@ -238,12 +212,8 @@ def import_eleve_view(request):
                 # Check for update flag
                 update_existing = request.POST.get('update_existing') == 'on'
 
-                # Gather all possible headers from ALL rows to avoid missing fields if the first row has empty cells
-                all_headers = set()
-                for row in raw_data:
-                    all_headers.update(row.keys())
-                headers = list(all_headers)
-
+                # 2. Create Dataset for django-import-export
+                headers = list(raw_data[0].keys())
                 dataset = Dataset(headers=headers)
 
                 # Fetch existing IDs if we shouldn't update them, to prevent Unique Constraint errors
@@ -255,11 +225,7 @@ def import_eleve_view(request):
                     sid = str(row.get('student_id_number', '')).strip()
                     if not update_existing and sid in existing_ids:
                         continue # Skip existing to prevent Unique Constraint errors
-
-                    # Ensure all headers exist in the row.
-                    # Use empty string instead of None to prevent NOT NULL constraint failures
-                    # for fields like academic_year that might just be empty text.
-                    dataset.append([row.get(h, '') if row.get(h) is not None else '' for h in headers])
+                    dataset.append([row[h] for h in headers])
 
                 if len(dataset) == 0:
                      messages.warning(request, "كل التلاميذ في الملف موجودون مسبقاً في قاعدة البيانات (لم تقم باختيار 'تحديث').")
@@ -336,15 +302,11 @@ def import_eleve_confirm(request):
             if not raw_data:
                  messages.error(request, "فشل تحليل البيانات بالأعمدة المحددة.")
             else:
-                # Import: dynamically get all unique headers to prevent missing fields due to empty cells in row 0
-                all_headers = set()
-                for row in raw_data:
-                    all_headers.update(row.keys())
-                headers = list(all_headers)
-
+                # Import
+                headers = list(raw_data[0].keys())
                 dataset = Dataset(headers=headers)
                 for row in raw_data:
-                    dataset.append([row.get(h, '') if row.get(h) is not None else '' for h in headers])
+                    dataset.append([row[h] for h in headers])
 
                 resource = StudentResource()
                 result = resource.import_data(dataset, dry_run=False, raise_errors=True)
@@ -497,15 +459,8 @@ def assignment_matching_view(request):
                     all_extracted_classes.add(cl)
 
             # 2. Check against DB
-            # Get all valid level+class combinations
-            db_combinations = set()
-            for lvl, cls in Student.objects.exclude(academic_year__isnull=True).exclude(class_name__isnull=True).values_list('academic_year', 'class_name').distinct():
-                db_combinations.add(f"{lvl} {cls}")
-
-            # Get all aliases mapping to their level+class combinations
-            aliases = {}
-            for a in ClassAlias.objects.all():
-                aliases[a.alias] = f"{a.canonical_level} {a.canonical_class}".strip()
+            db_classes = set(Student.objects.values_list('class_name', flat=True).distinct())
+            aliases = dict(ClassAlias.objects.values_list('alias', 'canonical_class'))
 
             unknown_classes = []
 
@@ -513,10 +468,8 @@ def assignment_matching_view(request):
             for c in candidates:
                 resolved_classes = []
                 for cl in c['classes']:
-                    # Try to see if it's already a valid combination
-                    if cl in db_combinations:
+                    if cl in db_classes:
                         resolved_classes.append(cl)
-                    # Else try to resolve via alias
                     elif cl in aliases:
                         resolved_classes.append(aliases[cl])
                     else:
@@ -529,17 +482,13 @@ def assignment_matching_view(request):
                 c['classes'] = list(set(resolved_classes))
 
             # 4. If unknowns exist, redirect to Mapping View (with warning)
-            if unknown_classes and db_combinations: # Only if DB has classes to map to
+            if unknown_classes and db_classes: # Only if DB has classes to map to
                  messages.warning(request, f"تم العثور على أقسام غير معروفة: {', '.join(unknown_classes[:5])}... يرجى ربطها أولاً.")
                  return redirect('class_mapping_view')
 
             # --- END MAPPING STEP ---
 
-            from .models import TeacherAlias
             all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
-
-            # Load known Teacher Aliases
-            teacher_aliases = {a.alias_name: a.employee for a in TeacherAlias.objects.all()}
 
             # Improved Fuzzy Matching
             def get_similarity(s1, s2):
@@ -552,30 +501,24 @@ def assignment_matching_view(request):
                 c_norm = c['name'].strip()
 
                 # AUTOMATIC MATCHING LOGIC
-                # 1. Check direct Alias first
-                if c_norm in teacher_aliases:
-                    best_match = teacher_aliases[c_norm]
-                    best_score = 1.0
-                else:
-                    # 2. Fuzzy match against actual teachers
-                    for t in all_teachers:
-                        t_full = f"{t.last_name} {t.first_name}"
-                        t_rev = f"{t.first_name} {t.last_name}"
+                for t in all_teachers:
+                    t_full = f"{t.last_name} {t.first_name}"
+                    t_rev = f"{t.first_name} {t.last_name}"
 
-                        if t.last_name in c_norm and t.first_name in c_norm:
-                            score = 1.0
-                        elif t.last_name in c_norm and len(t.last_name) > 3:
-                            score = 0.8
-                        else:
-                            score = max(
-                                get_similarity(c_norm, t_full),
-                                get_similarity(c_norm, t_rev),
-                                get_similarity(c_norm, t.last_name)
-                            )
+                    if t.last_name in c_norm and t.first_name in c_norm:
+                        score = 1.0
+                    elif t.last_name in c_norm and len(t.last_name) > 3:
+                        score = 0.8
+                    else:
+                        score = max(
+                            get_similarity(c_norm, t_full),
+                            get_similarity(c_norm, t_rev),
+                            get_similarity(c_norm, t.last_name)
+                        )
 
-                        if score > best_score:
-                            best_score = score
-                            best_match = t
+                    if score > best_score:
+                        best_score = score
+                        best_match = t
 
                 if best_score >= 0.6 and best_match:
                     c['suggested_id'] = best_match.id
@@ -587,17 +530,6 @@ def assignment_matching_view(request):
 
                 import json
                 c['classes_json'] = json.dumps(c['classes'])
-
-            # Prepare an auto_select_assignment dictionary for HR Home (if user cancels or closes, but mostly when saving)
-            # Actually we just set it temporarily so if they go back to HR it pre-fills the AI suggestions
-            auto_select = {}
-            for c in candidates:
-                if 'suggested_id' in c:
-                    auto_select[c['suggested_id']] = {
-                        'subject': c.get('subject', '/'),
-                        'classes': c.get('classes', [])
-                    }
-            request.session['auto_select_assignment'] = auto_select
 
             context = {
                 'candidates': candidates,
@@ -615,7 +547,6 @@ def assignment_matching_view(request):
     elif request.method == 'POST':
         try:
             import json
-            from .models import TeacherAlias
             count = 0
 
             # Iterate through form fields
@@ -641,8 +572,6 @@ def assignment_matching_view(request):
                             last_name=ln, first_name=fn,
                             full_name=name, rank='teacher', subject=subject
                         )
-                        # Save mapping
-                        TeacherAlias.objects.get_or_create(alias_name=name.strip(), defaults={'employee': teacher})
                     else:
                         # Existing ID
                         teacher = Employee.objects.get(id=action)
@@ -650,25 +579,15 @@ def assignment_matching_view(request):
                             teacher.subject = subject
                             teacher.save()
 
-                        # Learn the mapping for future imports!
-                        if name.strip():
-                            TeacherAlias.objects.get_or_create(alias_name=name.strip(), defaults={'employee': teacher})
-
-                    # Check if an assignment already exists for this teacher and subject
-                    # We should update it rather than duplicating it (since user might re-upload files)
-                    final_subj = subject or teacher.subject or "عام"
-                    assign, created = TeacherAssignment.objects.get_or_create(
+                    # Save Assignment
+                    TeacherAssignment.objects.create(
                         teacher=teacher,
-                        subject=final_subj
+                        subject=subject or teacher.subject or "عام",
+                        classes=classes
                     )
-
-                    # Merge classes or overwrite? Let's overwrite since the imported file is the source of truth
-                    assign.classes = classes
-                    assign.save()
-
                     count += 1
 
-            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ (وتحديث قاعدة التعلم للأسماء المستعارة).")
+            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ.")
 
             # Clean up temp file
             temp_path = request.POST.get('file_path')
@@ -685,136 +604,6 @@ def assignment_matching_view(request):
 
         return redirect('hr_home')
 
-def import_hr_confirm(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
-
-    if request.method == 'POST':
-        temp_path = request.POST.get('temp_file_path')
-        if not temp_path or not os.path.exists(temp_path):
-            messages.error(request, "انتهت صلاحية الملف المؤقت. يرجى الرفع مجدداً.")
-            return redirect('hr_home')
-
-        try:
-            override_indices = {}
-            for key, value in request.POST.items():
-                if key.startswith('col_') and value:
-                    idx = int(key.split('_')[1])
-                    override_indices[value] = idx
-
-            if not override_indices:
-                messages.error(request, "لم يتم تحديد أي عمود!")
-                return redirect('hr_home')
-
-            from .import_utils import parse_hr_file
-            employees_data = parse_hr_file(temp_path, override_header_indices=override_indices)
-
-            count, stats = process_hr_import_data(employees_data)
-
-            if count > 0:
-                messages.success(request, f"تم استيراد/تحديث {count} موظف بنجاح. (أساتذة: {stats['teacher']}، عمال: {stats['worker']}، إداريون: {stats['admin']})")
-            else:
-                messages.warning(request, "لم يتم استيراد أي موظف. ربما الملف فارغ أو الأعمدة غير صحيحة.")
-
-        except Exception as e:
-            messages.error(request, f"خطأ أثناء الاستيراد: {e}")
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                try: os.remove(temp_path)
-                except: pass
-
-    return redirect('hr_home')
-
-from django.db import transaction
-import time
-
-def process_hr_import_data(employees_data):
-    count = 0
-    stats = {'teacher': 0, 'worker': 0, 'admin': 0}
-    with transaction.atomic():
-        for emp in employees_data:
-            # Parse Rank: Use what's in the file, map to system keys
-            raw_rank = emp.get('rank', '').strip()
-
-            sys_rank = 'admin' # Default to admin for general staff
-
-            if 'أستاذ' in raw_rank:
-                sys_rank = 'teacher'
-            elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
-                 sys_rank = 'worker'
-            elif 'عون' in raw_rank:
-                 if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
-                     sys_rank = 'admin'
-                 else:
-                     sys_rank = 'admin'
-
-            if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
-                continue
-
-            subject = emp.get('subject', '/')
-            if sys_rank != 'teacher':
-                subject = "/"
-
-            def parse_d(val):
-                if not val: return None
-                if isinstance(val, (date, datetime)): return val
-                try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
-                except: pass
-                try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
-                except: pass
-                return None
-
-            dob = parse_d(emp.get('date_of_birth'))
-            eff_date = parse_d(emp.get('effective_date'))
-
-            emp_code = emp.get('employee_code')
-            ln = emp.get('last_name', '')
-            fn = emp.get('first_name', '')
-
-            existing = None
-            if emp_code:
-                existing = Employee.objects.filter(employee_code=emp_code).first()
-
-            if not existing and ln and fn:
-                existing = Employee.objects.filter(
-                    last_name=ln,
-                    first_name=fn,
-                    date_of_birth=dob
-                ).first()
-
-            defaults={
-                'last_name': ln,
-                'first_name': fn,
-                'full_name': f"{ln} {fn}",
-                'date_of_birth': dob,
-                'rank': sys_rank,
-                'role': raw_rank,
-                'subject': subject,
-                'grade': emp.get('grade', ''),
-                'effective_date': eff_date,
-                'phone': emp.get('phone', ''),
-                'email': emp.get('email', ''),
-            }
-
-            if existing:
-                for key, value in defaults.items():
-                    setattr(existing, key, value)
-                existing.save()
-            else:
-                # Fallback to prevent unique constraint errors if code is empty or duplicated in same batch
-                if not emp_code:
-                    emp_code = f"{ln[:3]}{fn[:3]}{count}"
-
-                try:
-                    Employee.objects.create(employee_code=emp_code, **defaults)
-                except Exception:
-                    emp_code = f"{emp_code}_{int(time.time()*1000)}"
-                    Employee.objects.create(employee_code=emp_code, **defaults)
-
-            count += 1
-            stats[sys_rank] += 1
-
-    return count, stats
-
 def hr_home(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
@@ -825,7 +614,6 @@ def hr_home(request):
 
         if action == 'import_file' and request.FILES.get('file'):
             file = request.FILES['file']
-            force_manual = request.POST.get('manual_mapping') == 'on'
             # Save strictly to disk for processing
             temp_path = None
             try:
@@ -835,45 +623,104 @@ def hr_home(request):
                         tmp.write(chunk)
                     temp_path = tmp.name
 
-                if force_manual:
-                    from .import_utils import extract_rows_from_file, detect_headers
-                    with open(temp_path, 'rb') as f:
-                        all_rows = list(extract_rows_from_file(f, override_filename=temp_path))
-
-                    if not all_rows:
-                        messages.error(request, "الملف فارغ أو غير قابل للقراءة.")
-                        os.remove(temp_path)
-                        return redirect('hr_home')
-
-                    preview_rows = all_rows[:5]
-
-                    HEADER_MAP = {
-                        'اللقب': 'last_name', 'الاسم': 'first_name',
-                        'الاسم واللقب': 'full_name', 'تاريخ الازدياد': 'date_of_birth',
-                        'مكان الازدياد': 'place_of_birth', 'الرتبة': 'rank', 'الصفة': 'rank',
-                        'المادة': 'subject', 'الدرجة': 'grade', 'تاريخ السريان': 'effective_date',
-                        'الهاتف': 'phone', 'البريد': 'email', 'رقم': 'employee_code',
-                        'الرمز الوظيفي': 'employee_code'
-                    }
-                    suggested_mapping, _ = detect_headers(preview_rows, HEADER_MAP)
-                    inv_map = {v: k for k, v in suggested_mapping.items()}
-
-                    context = {
-                        'temp_file_path': temp_path,
-                        'preview_rows': preview_rows,
-                        'num_columns': range(len(preview_rows[0])) if preview_rows else [],
-                        'suggested_mapping': inv_map
-                    }
-                    return render(request, 'students/hr_import_preview.html', context)
-
                 from .import_utils import parse_hr_file
                 employees_data = parse_hr_file(temp_path)
 
-                count, stats = process_hr_import_data(employees_data)
-                if count > 0:
-                    messages.success(request, f"تم استيراد/تحديث {count} موظف بنجاح. (أساتذة: {stats['teacher']}، عمال: {stats['worker']}، إداريون: {stats['admin']})")
-                else:
-                    messages.warning(request, "لم يتم استيراد أي موظف.")
+                count = 0
+                for emp in employees_data:
+                    # Parse Rank: Use what's in the file, map to system keys
+                    raw_rank = emp.get('rank', '').strip()
+
+                    # Logic: If 'أستاذ' is in rank, it's a teacher.
+                    # If 'عامل مهني' is in rank, it's a worker.
+                    # Everything else (Director, Admin, Steward, Data Entry) is 'admin'.
+
+                    sys_rank = 'admin' # Default to admin for general staff
+
+                    # Improved Classification Logic based on User Feedback
+                    if 'أستاذ' in raw_rank:
+                        sys_rank = 'teacher'
+                    # Explicitly catch "Aoun Khidma" (Service Agent) regardless of level (1, 2, 3...)
+                    elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
+                         # "Service Agent", "Prevention Agent", "Worker", "Cleaner", "Guard" -> Worker
+                         sys_rank = 'worker'
+                    elif 'عون' in raw_rank:
+                         # "Agent" alone (Admin Agent, Office Agent, Data Entry Agent) -> Admin
+                         # Check if explicitly admin-related keywords follow "Agent"
+                         if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
+                             sys_rank = 'admin'
+                         else:
+                             # Default fallback for generic "Agent" to Admin as per "First point" in request
+                             sys_rank = 'admin'
+
+                    # Validation: Filter out header rows that might have slipped through
+                    # If 'rank' literally contains "الرتبة" or "rank", skip
+                    if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
+                        continue
+
+                    # Handle Subject
+                    subject = emp.get('subject', '/')
+                    if sys_rank != 'teacher':
+                        subject = "/"
+
+                    # Dates Parsing
+                    def parse_d(val):
+                        if not val: return None
+                        if isinstance(val, (date, datetime)): return val
+                        try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
+                        except: pass
+                        try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
+                        except: pass
+                        return None
+
+                    dob = parse_d(emp.get('date_of_birth'))
+                    eff_date = parse_d(emp.get('effective_date'))
+
+                    # Duplicate Prevention Logic:
+                    # 1. Try to find by unique Employee Code if present
+                    # 2. Try to find by Name + DOB if Code is generic/missing
+
+                    emp_code = emp.get('employee_code')
+                    ln = emp.get('last_name', '')
+                    fn = emp.get('first_name', '')
+
+                    # Search for existing
+                    existing = None
+                    if emp_code:
+                        existing = Employee.objects.filter(employee_code=emp_code).first()
+
+                    if not existing and ln and fn:
+                        existing = Employee.objects.filter(
+                            last_name=ln,
+                            first_name=fn,
+                            date_of_birth=dob
+                        ).first()
+
+                    # Data dict
+                    defaults={
+                        'last_name': ln,
+                        'first_name': fn,
+                        'full_name': f"{ln} {fn}",
+                        'date_of_birth': dob,
+                        'rank': sys_rank,
+                        'role': raw_rank,
+                        'subject': subject,
+                        'grade': emp.get('grade', ''),
+                        'effective_date': eff_date,
+                        'phone': emp.get('phone', ''),
+                        'email': emp.get('email', ''),
+                    }
+
+                    if existing:
+                        for key, value in defaults.items():
+                            setattr(existing, key, value)
+                        existing.save()
+                    else:
+                        Employee.objects.create(employee_code=emp_code, **defaults)
+
+                    count += 1
+
+                messages.success(request, f"تم استيراد/تحديث {count} موظف.")
             except Exception as e:
                 messages.error(request, f"خطأ في الملف: {e}")
             finally:
@@ -980,40 +827,12 @@ def hr_home(request):
         'total': Employee.objects.count()
     }
 
-    # Get All Classes for Dropdown (As Combinations)
-    db_combinations = list(
-        Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='')
-        .exclude(class_name__isnull=True).exclude(class_name__exact='')
-        .values_list('academic_year', 'class_name').distinct()
-    )
-    import re
-    def sort_key(item):
-        lvl, cls = item
-        l_match = re.search(r'\d+', str(lvl))
-        c_match = re.search(r'\d+', str(cls))
-        # Negative for descending level
-        l_num = -int(l_match.group()) if l_match else -999
-        c_num = int(c_match.group()) if c_match else 999
-        return (l_num, c_num, lvl, cls)
-    db_combinations.sort(key=sort_key)
-
-    all_classes = [f"{lvl} {cls}" for lvl, cls in db_combinations]
+    # Get All Classes for Dropdown
+    all_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
+    all_classes.sort()
 
     # Auto-Select Logic (If file was uploaded previously)
     auto_select_data = request.session.pop('auto_select_assignment', None)
-
-    if auto_select_data:
-        from .mapping_views import resolve_class_alias
-        # auto_select_data is { teacher_id: {'subject': 'xxx', 'classes': ['1م1', '2م1']} }
-        for tid, data in auto_select_data.items():
-            resolved_classes = []
-            for c_alias in data.get('classes', []):
-                canonical_lvl, canonical_cls = resolve_class_alias(c_alias)
-                if canonical_lvl and canonical_cls:
-                    resolved_classes.append(f"{canonical_lvl} {canonical_cls}")
-                else:
-                    resolved_classes.append(c_alias)
-            data['classes'] = resolved_classes
 
     context = {
         'employees': employees,
@@ -1122,19 +941,13 @@ def guidance_home(request):
 
 def ai_manual_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-        return redirect('dashboard')
+    pass
 
     return render(request, 'students/ai_manual.html')
 
 def ai_chat_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-
-    # Allow all authenticated users to use the floating bot helper.
-    # We check requested mode inside the POST block.
-    if request.method != 'POST':
-        if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-            return redirect('dashboard')
+    pass
 
     if request.method == 'POST':
         from .ai_utils import AIService
@@ -1143,16 +956,10 @@ def ai_chat_view(request):
         query = request.POST.get('query')
         # Mode requested by UI (will be checked against permissions inside AIService)
         requested_mode = request.POST.get('mode', None)
-        page_context = request.POST.get('page_context', None)
 
-        # If it's a regular user, force mode to bot_helper and ensure they can't access full chat
-        if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-            if requested_mode != 'bot_helper':
-                return JsonResponse({'error': 'Unauthorized mode for this user role.'}, status=403)
-
-        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous, except for bot_helper and analytics
+        # Set Director Default to 'gemini_full' if mode is not specified or ambiguous
         if (hasattr(request.user, 'profile') and request.user.profile.role == 'director') or request.user.is_superuser:
-            if not requested_mode or (requested_mode == 'rag' and requested_mode not in ['bot_helper', 'analytics']):
+            if not requested_mode or requested_mode == 'rag':
                  requested_mode = 'gemini_full'
 
         # Pass current user for permission check
@@ -1161,25 +968,9 @@ def ai_chat_view(request):
         # System instructions base (overridden by mode logic in generate_response)
         sys_instr = "أنت مساعد مدير المدرسة."
 
-        if requested_mode == 'analytics':
-            sys_instr = "أنت خبير تربوي ومحلل بيانات للنتائج المدرسية. قم بتحليل البيانات المقدمة بذكاء، واستخرج الاستنتاجات والنصائح التربوية المباشرة والمختصرة."
-            # Append markdown to query
-            markdown_data = request.session.get('analytics_markdown', '')
-            if markdown_data:
-                query = f"{query}\n\nإليك جدول العلامات (الأسماء والأقسام والمواد):\n\n{markdown_data}"
-
         rag_enabled = (requested_mode == 'rag' or requested_mode is None)
 
-        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode, page_context=page_context)
-
-        # Check for our specific insufficient funds error flag from ai_utils.py
-        if response_text == "INSUFFICIENT_FUNDS_ERROR":
-            return JsonResponse({
-                'error': True,
-                'error_type': 'insufficient_funds',
-                'message': "خطأ: نفد الرصيد المخصص لخدمة الذكاء الاصطناعي (OpenRouter Payment Required). يرجى شحن الرصيد للاستمرار في استخدام الخدمة."
-            }, status=402) # Payment Required
-
+        response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode)
         return JsonResponse({'response': response_text})
 
     return render(request, 'students/ai_chat.html')
@@ -1216,10 +1007,6 @@ def ai_control_panel(request):
 
 
 def analytics_dashboard(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
-    if hasattr(request.user, 'profile') and request.user.profile.role != 'director' and not request.user.is_superuser:
-        return redirect('dashboard')
-
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'import_grades' and request.FILES.get('file'):
@@ -1248,40 +1035,38 @@ def analytics_dashboard(request):
 
             return redirect('analytics_dashboard')
 
-    from .models import Grade
+    from .models import Grade, Student
     from .analytics_utils import analyze_grades_locally
 
-    # Optional: Filter by term if provided in GET
-    selected_term = request.GET.get('term', 'الفصل الأول')
-    grades_qs = Grade.objects.filter(term=selected_term)
+    available_classes = Student.objects.values_list('class_name', flat=True).distinct().order_by('class_name')
+    available_classes = [c for c in available_classes if c]
+
+    selected_term = request.GET.get('term', '')
+    selected_class = request.GET.get('class_name', '')
+
+    grades_qs = Grade.objects.all()
+    if selected_term:
+        grades_qs = grades_qs.filter(term=selected_term)
+    if selected_class:
+        grades_qs = grades_qs.filter(student__class_name=selected_class)
 
     local_stats = analyze_grades_locally(grades_qs)
 
-    # Token Estimation for Deep Analysis
     token_cost = 0
     if local_stats and local_stats.get('markdown_data'):
-        # Store markdown in session so AI can use it when user requests deep analysis
         request.session['analytics_markdown'] = local_stats['markdown_data']
 
         try:
             import tiktoken
-            # Use cl100k_base as it's the standard for modern models including DeepSeek approximation
             encoding = tiktoken.get_encoding("cl100k_base")
-            num_tokens = len(encoding.encode(local_stats['markdown_data']))
-
-            # DeepSeek Pricing approx: $0.14 per 1M input tokens
-            # We add ~500 tokens for system prompt overhead
-            total_tokens = num_tokens + 500
-            token_cost = (total_tokens / 1000000) * 0.14
-            # Format to 4 decimal places, or minimally 0.0001
-            token_cost = max(0.0001, round(token_cost, 4))
-        except Exception as e:
-            print(f"Token calculation error: {e}")
-            token_cost = 0.01
+            token_cost = len(encoding.encode(local_stats['markdown_data']))
+        except Exception:
+            token_cost = len(local_stats['markdown_data']) // 4
 
     context = {
+        'page_title': 'تحليل النتائج',
         'local_stats': local_stats,
-        'selected_term': selected_term,
+        'available_classes': available_classes,
         'token_cost': token_cost
     }
     return render(request, 'students/analytics.html', context)
