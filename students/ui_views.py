@@ -1038,8 +1038,7 @@ def analytics_dashboard(request):
 
     from .models import Grade, Student
     from .analytics_utils import analyze_grades_locally
-
-    from .utils import custom_sort
+    import re
 
     # Get distinct academic years (levels) and classes
     levels = list(Student.objects.values_list('academic_year', flat=True).distinct())
@@ -1056,8 +1055,15 @@ def analytics_dashboard(request):
             class_map[lvl].append(cls)
 
     # Sort classes using custom logic (e.g. numerical order)
+    def custom_sort(item):
+        if not item: return (999, item)
+        match = re.search(r'\d+', item)
+        if match:
+            return (int(match.group()), item)
+        return (999, item)
+
     for lvl in class_map:
-        class_map[lvl] = custom_sort(class_map[lvl])
+        class_map[lvl] = sorted(class_map[lvl], key=custom_sort)
 
     selected_term = request.GET.get('term', '')
     selected_level = request.GET.get('level', '')
