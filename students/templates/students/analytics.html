@@ -241,7 +241,7 @@
             formData.append('mode', 'analytics');
             formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
-            const response = await fetch("{% url 'ai_chat' %}", {
+            const response = await fetch("{% url 'ai_chat_view' %}", {
                 method: 'POST',
                 body: formData
             });
