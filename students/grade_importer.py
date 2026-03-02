@@ -12,13 +12,14 @@ def process_grades_file(file_path, term):
     if not rows or len(rows) < 7:
         return 0, 'الملف فارغ أو لا يحتوي على بنية علامات صحيحة'
 
+    import os
     # Robust Class Extraction: Scan the first 10 rows for patterns like 'أولى متوسط 1'
     lvl, cls = None, None
     class_name_raw = ""
 
     # Regex to capture Level (أولى/ثانية/ثالثة/رابعة) and Class Number (\d+)
-    # It handles cases like "قسم: أولى متوسط 1", "أولى 1", etc.
-    pattern = re.compile(r'(أولى|ثانية|ثالثة|رابعة)(?:\s+متوسط)?\s+(\d+)')
+    # It handles cases like "قسم: أولى متوسط 1", "أولى 1", "رابعة متوسط 01" etc.
+    pattern = re.compile(r'(أولى|ثانية|ثالثة|رابعة)(?:\s+متوسط)?\s*[-_]?\s*(\d+)')
 
     for r_idx in range(min(10, len(rows))):
         for cell in rows[r_idx]:
@@ -33,6 +34,15 @@ def process_grades_file(file_path, term):
                 break
         if lvl and cls:
             break
+
+    # If not found in the file content, try to extract from the filename
+    if not lvl or not cls:
+        filename = os.path.basename(file_path)
+        match = pattern.search(filename)
+        if match:
+            class_name_raw = filename
+            lvl = match.group(1)
+            cls = str(int(match.group(2)))
 
     # If regex failed, maybe it's in a known Alias format (e.g., '1م1') in the first cell of row 4 or 5
     if not lvl or not cls:

@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import logout
+from django.http import JsonResponse
 from django.core.management import call_command
 from .models import Student, CanteenAttendance, SchoolSettings, Employee, SystemMessage, Survey, PendingUpdate, Task, SchoolMemory, UserRole
 from datetime import date, datetime
@@ -1038,15 +1039,35 @@ def analytics_dashboard(request):
     from .models import Grade, Student
     from .analytics_utils import analyze_grades_locally
 
-    available_classes = Student.objects.values_list('class_name', flat=True).distinct().order_by('class_name')
-    available_classes = [c for c in available_classes if c]
+    from .utils import custom_sort
+
+    # Get distinct academic years (levels) and classes
+    levels = list(Student.objects.values_list('academic_year', flat=True).distinct())
+    levels = [lvl for lvl in levels if lvl]
+
+    classes_qs = Student.objects.values('academic_year', 'class_name').distinct()
+    class_map = {}
+    for item in classes_qs:
+        lvl = item['academic_year'] or 'غير محدد'
+        cls = item['class_name']
+        if cls:
+            if lvl not in class_map:
+                class_map[lvl] = []
+            class_map[lvl].append(cls)
+
+    # Sort classes using custom logic (e.g. numerical order)
+    for lvl in class_map:
+        class_map[lvl] = custom_sort(class_map[lvl])
 
     selected_term = request.GET.get('term', '')
+    selected_level = request.GET.get('level', '')
     selected_class = request.GET.get('class_name', '')
 
     grades_qs = Grade.objects.all()
     if selected_term:
         grades_qs = grades_qs.filter(term=selected_term)
+    if selected_level:
+        grades_qs = grades_qs.filter(student__academic_year=selected_level)
     if selected_class:
         grades_qs = grades_qs.filter(student__class_name=selected_class)
 
@@ -1066,7 +1087,38 @@ def analytics_dashboard(request):
     context = {
         'page_title': 'تحليل النتائج',
         'local_stats': local_stats,
-        'available_classes': available_classes,
+        'levels': levels,
+        'class_map': class_map,
         'token_cost': token_cost
     }
     return render(request, 'students/analytics.html', context)
+
+def upload_grades_ajax(request):
+    """Handles bulk uploading of multiple grade files with AJAX progress"""
+    if request.method == 'POST' and request.FILES.get('file'):
+        file = request.FILES['file']
+        term = request.POST.get('term')
+
+        import tempfile
+        import os
+        from .grade_importer import process_grades_file
+
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
+                for chunk in file.chunks():
+                    tmp.write(chunk)
+                temp_path = tmp.name
+
+            count, msg = process_grades_file(temp_path, term)
+            success = count > 0
+            return JsonResponse({'success': success, 'message': msg, 'count': count})
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f"خطأ: {str(e)}", 'count': 0})
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+
+    return JsonResponse({'success': False, 'message': 'طلب غير صالح'})

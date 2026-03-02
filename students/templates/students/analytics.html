@@ -6,6 +6,155 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<style>
+    @media print {
+        /* Hide everything by default in print mode */
+        body * {
+            visibility: hidden;
+        }
+
+        /* Show only the print section */
+        #printSection, #printSection * {
+            visibility: visible;
+        }
+
+        /* Position the print section at the top */
+        #printSection {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            display: block !important;
+        }
+
+        /* Hide UI elements that shouldn't be printed */
+        .d-print-none {
+            display: none !important;
+        }
+
+        /* Custom Table Styling for Print */
+        #printSection table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        #printSection th, #printSection td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+        }
+
+        #printSection th {
+            background-color: #f3f4f6 !important;
+            -webkit-print-color-adjust: exact;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 1.5cm;
+        }
+    }
+</style>
+
+<!-- Hidden Print Section (Only visible during window.print()) -->
+{% if request.GET.class_name and local_stats %}
+<div id="printSection" style="display: none; direction: rtl;">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <h3 style="margin: 0; font-weight: bold;">الجمهورية الجزائرية الديمقراطية الشعبية</h3>
+        <h3 style="margin: 0; font-weight: bold;">وزارة التربية الوطنية</h3>
+        <hr style="width: 50%; margin: 10px auto; border-top: 1px solid #000;">
+        <h2 style="margin: 15px 0; font-weight: bold;">محضر مجلس قسم {{ request.GET.class_name }}</h2>
+        <h4 style="margin: 0;">{{ request.GET.term|default:"جميع الفصول" }} - السنة الدراسية: {{ request.GET.level|default:"غير محدد" }}</h4>
+    </div>
+
+    <!-- Statistical Tables -->
+    <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px;">الإحصائيات العامة:</h4>
+    <table>
+        <tr>
+            <th>تعداد التلاميذ</th>
+            <th>المتوسط العام للقسم</th>
+            <th>نسبة النجاح</th>
+            <th>عدد الناجحين</th>
+            <th>عدد المتعثرين</th>
+        </tr>
+        <tr>
+            <td>{{ local_stats.total_students }}</td>
+            <td>{{ local_stats.general_avg }}</td>
+            <td>{{ local_stats.success_rate }}%</td>
+            <td>{{ local_stats.success_count }}</td>
+            <td>{{ local_stats.failures_count }}</td>
+        </tr>
+    </table>
+
+    <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px;">تصنيف الفئات:</h4>
+    <table>
+        <tr>
+            <th>ممتاز (>=16)</th>
+            <th>جيد (14-15.99)</th>
+            <th>متوسط (10-13.99)</th>
+            <th>متعثر (<10)</th>
+        </tr>
+        <tr>
+            <td>{{ local_stats.categories.ممتاز|default:"0" }}</td>
+            <td>{{ local_stats.categories.جيد|default:"0" }}</td>
+            <td>{{ local_stats.categories.متوسط|default:"0" }}</td>
+            <td>{{ local_stats.categories.متعثر|default:"0" }}</td>
+        </tr>
+    </table>
+
+    <!-- Subject Averages Table -->
+    <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px;">متوسطات المواد:</h4>
+    <table>
+        <tr>
+            {% for subject, avg in local_stats.subject_avgs.items %}
+            <th>{{ subject }}</th>
+            {% endfor %}
+        </tr>
+        <tr>
+            {% for subject, avg in local_stats.subject_avgs.items %}
+            <td>{{ avg }}</td>
+            {% endfor %}
+        </tr>
+    </table>
+
+    <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px; page-break-before: always;">ترتيب التلاميذ:</h4>
+    <table>
+        <thead>
+            <tr>
+                <th>الرتبة</th>
+                <th>اسم التلميذ</th>
+                <th>المعدل</th>
+                <th>الملاحظة</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in local_stats.ranking_list %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ student.student_name }}</td>
+                <td><strong>{{ student.score }}</strong></td>
+                <td>
+                    {% if student.score >= 16 %}تهنئة{% elif student.score >= 14 %}تشجيع{% elif student.score >= 12 %}لوحة شرف{% elif student.score >= 10 %}ينتقل{% else %}إنذار{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+        <div style="text-align: center; width: 30%;">
+            <h4>الأستاذ الرئيسي</h4>
+            <p>..................</p>
+        </div>
+        <div style="text-align: center; width: 30%;">
+            <h4>المدير</h4>
+            <p>..................</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="card mb-4" style="background: linear-gradient(135deg, #1e293b, #334155); color: white; border-radius: 12px; border: none;">
     <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; flex-wrap: wrap; gap: 15px;">
         <div>
@@ -13,12 +162,15 @@
             <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <form method="GET" action="" style="display: flex; gap: 10px;">
-                <select name="class_name" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
-                    <option value="" style="color: black;">جميع الأقسام</option>
-                    {% for c in available_classes %}
-                        <option value="{{ c }}" {% if request.GET.class_name == c %}selected{% endif %} style="color: black;">{{ c }}</option>
+            <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select name="level" id="levelFilter" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="updateClassDropdown()">
+                    <option value="" style="color: black;">كل المستويات</option>
+                    {% for lvl in levels %}
+                        <option value="{{ lvl }}" {% if request.GET.level == lvl %}selected{% endif %} style="color: black;">{{ lvl }}</option>
                     {% endfor %}
+                </select>
+                <select name="class_name" id="classFilter" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
+                    <option value="" style="color: black;">جميع الأقسام</option>
                 </select>
                 <select name="term" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
                     <option value="" style="color: black;">جميع الفصول</option>
@@ -28,14 +180,80 @@
                 </select>
                 <button type="submit" class="btn btn-outline-light"><i class="fas fa-filter"></i> تصفية</button>
             </form>
-            <button class="btn" style="background: #38bdf8; color: #0f172a; font-weight: bold;" onclick="document.getElementById('importGradesModal').style.display='block'">
+            <button class="btn" style="background: #38bdf8; color: #0f172a; font-weight: bold;" onclick="document.getElementById('importGradesModal').style.display='flex'">
                 <i class="fas fa-cloud-upload-alt"></i> استيراد العلامات
             </button>
         </div>
+
+        <script>
+            // Dynamic class filtering script
+            const classMap = {{ class_map|safe|default:"{}" }};
+            const currentClass = "{{ request.GET.class_name|escapejs }}";
+
+            function updateClassDropdown() {
+                const levelFilter = document.getElementById('levelFilter');
+                const classFilter = document.getElementById('classFilter');
+                const selectedLvl = levelFilter.value;
+
+                // Keep "All Classes" option
+                classFilter.innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
+
+                let classesToShow = [];
+                if (selectedLvl) {
+                    classesToShow = classMap[selectedLvl] || [];
+                } else {
+                    // If no level selected, show all classes
+                    Object.values(classMap).forEach(arr => {
+                        classesToShow = classesToShow.concat(arr);
+                    });
+                }
+
+                // Remove duplicates and sort
+                classesToShow = [...new Set(classesToShow)].sort((a, b) => {
+                     const numA = parseInt(a.replace(/\D/g, '')) || 0;
+                     const numB = parseInt(b.replace(/\D/g, '')) || 0;
+                     return numA - numB;
+                });
+
+                classesToShow.forEach(cls => {
+                    const opt = document.createElement('option');
+                    opt.value = cls;
+                    opt.textContent = cls;
+                    opt.style.color = "black";
+                    if (cls === currentClass) {
+                        opt.selected = true;
+                    }
+                    classFilter.appendChild(opt);
+                });
+            }
+
+            // Initialize dropdown on page load
+            document.addEventListener('DOMContentLoaded', updateClassDropdown);
+        </script>
     </div>
 </div>
 
 {% if local_stats %}
+
+<!-- Current Scope Info -->
+<div class="row mb-4" style="padding: 0 15px;">
+    <div class="col-12 p-0">
+        <div class="alert shadow-sm" style="background-color: white; border-right: 5px solid #38bdf8; color: #333; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; padding: 15px;">
+            <div>
+                <h5 class="mb-1" style="color: #0f172a; margin: 0 0 5px 0;"><i class="fas fa-info-circle me-2" style="color:#38bdf8;"></i> نطاق التحليل الحالي</h5>
+                <p class="mb-0 text-muted" style="margin: 0; font-size: 0.95rem;">
+                    المستوى: <strong style="color: #38bdf8;">{{ request.GET.level|default:"الكل" }}</strong> |
+                    القسم: <strong style="color: #38bdf8;">{{ request.GET.class_name|default:"الكل" }}</strong> |
+                    الفصل: <strong style="color: #38bdf8;">{{ request.GET.term|default:"الكل" }}</strong>
+                </p>
+            </div>
+            {% if request.GET.class_name or request.GET.level or request.GET.term %}
+            <a href="{% url 'analytics_dashboard' %}" class="btn btn-sm btn-outline-secondary" style="border-radius: 6px;">إعادة ضبط</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <!-- KPIs -->
 <div class="row mb-4" style="display: flex; gap: 20px; padding: 0 15px;">
     <div class="card" style="flex: 1; border-radius: 12px; border-left: 5px solid #38bdf8; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
@@ -91,10 +309,15 @@
 </div>
 
 <!-- Ranking Table & Deep Analysis Request -->
-<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;">
+<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;" id="rankingSection">
     <div class="card col-md-8" style="flex: 2; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px;">
-        <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-medal text-warning"></i> ترتيب التلاميذ</h4>
-        <div style="max-height: 400px; overflow-y: auto;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 style="color: #334155; margin: 0;"><i class="fas fa-medal text-warning"></i> ترتيب التلاميذ</h4>
+            {% if request.GET.class_name %}
+            <button class="btn btn-sm btn-outline-primary d-print-none" onclick="window.print()"><i class="fas fa-print"></i> طباعة محضر القسم</button>
+            {% endif %}
+        </div>
+        <div style="max-height: 400px; overflow-y: auto;" id="rankingTableContainer">
             <table class="table table-hover table-bordered" style="text-align: center;">
                 <thead style="position: sticky; top: 0; background: white; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1);">
                     <tr>
@@ -149,7 +372,15 @@
         // Prepare Data from Django
         const distData = {{ local_stats.distribution|safe|default:"{}" }};
         const catData = {{ local_stats.categories|safe|default:"{}" }};
-        const subjectData = {{ local_stats.subject_avgs|safe|default:"{}" }};
+        const subjectDataStr = '{{ local_stats.subject_avgs|escapejs }}';
+        let subjectData = {};
+        try {
+            // Need to handle Python dict string vs valid JSON string if safe doesn't work correctly with dicts
+            // To fix Python dict to JSON, replace single quotes with double quotes
+            const cleanStr = subjectDataStr.replace(/'/g, '"');
+            subjectData = cleanStr ? JSON.parse(cleanStr) : {};
+        } catch(e) { console.error("Could not parse subjectData", e); }
+
         const classData = {{ local_stats.class_avgs|safe|default:"{}" }};
         const termData = {{ local_stats.term_avgs|safe|default:"{}" }};
 
@@ -274,30 +505,209 @@
 
 <!-- Import Grades Modal -->
 <div id="importGradesModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:#fff; width:90%; max-width:500px; padding:20px; border-radius:12px; margin: 10% auto;">
-        <h3 style="margin-top:0;">استيراد العلامات</h3>
-        <form action="{% url 'analytics_dashboard' %}" method="POST" enctype="multipart/form-data">
+    <div class="modal-content" style="background:#fff; width:90%; max-width:550px; padding:25px; border-radius:12px;">
+        <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">استيراد العلامات <small style="font-size:0.5em; color:#64748b;">(ملف واحد أو عدة ملفات)</small></h3>
+        <form id="bulkImportForm" enctype="multipart/form-data">
             {% csrf_token %}
-            <input type="hidden" name="action" value="import_grades">
-            <div class="form-group mb-3">
-                <label>ملف الإكسل (يجب أن يحتوي على: اسم التلميذ، القسم، المواد، العلامات)</label>
-                <input type="file" name="file" class="form-control" accept=".xls,.xlsx" required>
+            <div class="form-group mb-3 mt-3">
+                <label style="font-weight:bold; color:#334155;">ملفات الإكسل (يمكنك تحديد عدة ملفات للأقسام)</label>
+                <input type="file" id="importFiles" name="files" class="form-control mt-1" accept=".xls,.xlsx" multiple required>
+                <small class="text-muted d-block mt-1">يجب أن يحتوي الملف على اسم التلميذ والمواد والعلامات.</small>
             </div>
-            <div class="form-group mb-3">
-                <label>الفصل الدراسي</label>
-                <select name="term" class="form-control" required>
+            <div class="form-group mb-4">
+                <label style="font-weight:bold; color:#334155;">الفصل الدراسي</label>
+                <select id="importTerm" name="term" class="form-control mt-1" required>
                     <option value="الفصل الأول">الفصل الأول</option>
                     <option value="الفصل الثاني">الفصل الثاني</option>
                     <option value="الفصل الثالث">الفصل الثالث</option>
                 </select>
             </div>
-            <div style="display:flex; justify-content:flex-end; gap:10px;">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('importGradesModal').style.display='none'">إلغاء</button>
-                <button type="submit" class="btn btn-primary">استيراد</button>
+
+            <!-- Progress Area -->
+            <div id="importProgressArea" style="display:none; margin-bottom:15px;">
+                <h6 style="color:#334155;" id="progressText">جاري الاستيراد... (0/0)</h6>
+                <div class="progress" style="height: 20px;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                </div>
+                <ul id="importResultsList" class="mt-2" style="font-size:0.85em; max-height:100px; overflow-y:auto; list-style:none; padding-left:0; border:1px solid #e2e8f0; border-radius:4px; padding:5px;">
+                </ul>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:15px;">
+                <button type="button" class="btn btn-secondary" id="cancelImportBtn" onclick="closeImportModal()">إغلاق</button>
+                <button type="button" class="btn btn-primary" id="startImportBtn" onclick="startBulkImport()">بدء الاستيراد</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+    function closeImportModal() {
+        document.getElementById('importGradesModal').style.display = 'none';
+        document.getElementById('importProgressArea').style.display = 'none';
+        document.getElementById('importResultsList').innerHTML = '';
+        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('progressBar').textContent = '0%';
+        document.getElementById('bulkImportForm').reset();
+    }
+
+    async function startBulkImport() {
+        const filesInput = document.getElementById('importFiles');
+        const term = document.getElementById('importTerm').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        if (!filesInput.files || filesInput.files.length === 0) {
+            alert("يرجى اختيار ملف واحد على الأقل.");
+            return;
+        }
+
+        const files = Array.from(filesInput.files);
+        const totalFiles = files.length;
+
+        // Setup UI
+        document.getElementById('importProgressArea').style.display = 'block';
+        document.getElementById('startImportBtn').disabled = true;
+        document.getElementById('cancelImportBtn').disabled = true;
+        document.getElementById('importFiles').disabled = true;
+        document.getElementById('importTerm').disabled = true;
+
+        const resultsList = document.getElementById('importResultsList');
+        resultsList.innerHTML = '';
+
+        let completed = 0;
+        let totalGrades = 0;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            document.getElementById('progressText').textContent = `جاري معالجة: ${file.name} (${i+1}/${totalFiles})`;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('term', term);
+
+            try {
+                const response = await fetch("{% url 'upload_grades_ajax' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                const li = document.createElement('li');
+                li.style.padding = '3px';
+                li.style.borderBottom = '1px solid #f1f5f9';
+
+                if (data.success) {
+                    li.style.color = '#15803d'; // green
+                    li.innerHTML = `<i class="fas fa-check-circle"></i> ${file.name}: ${data.message}`;
+                    totalGrades += data.count;
+                } else {
+                    li.style.color = '#b91c1c'; // red
+                    li.innerHTML = `<i class="fas fa-times-circle"></i> ${file.name}: ${data.message}`;
+                }
+                resultsList.prepend(li); // add to top
+
+            } catch (error) {
+                const li = document.createElement('li');
+                li.style.color = '#b91c1c';
+                li.style.padding = '3px';
+                li.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${file.name}: خطأ في الاتصال بالخادم.`;
+                resultsList.prepend(li);
+            }
+
+            completed++;
+            const percent = Math.round((completed / totalFiles) * 100);
+            const pBar = document.getElementById('progressBar');
+            pBar.style.width = `${percent}%`;
+            pBar.textContent = `${percent}%`;
+            pBar.setAttribute('aria-valuenow', percent);
+        }
+
+        document.getElementById('progressText').textContent = `اكتمل الاستيراد! تم استيراد ${totalGrades} علامة إجمالاً.`;
+
+        // Re-enable close button and change its text
+        const closeBtn = document.getElementById('cancelImportBtn');
+        closeBtn.disabled = false;
+        closeBtn.textContent = 'إنهاء وتحديث الصفحة';
+        closeBtn.classList.remove('btn-secondary');
+        closeBtn.classList.add('btn-success');
+
+        closeBtn.onclick = function() {
+            window.location.reload();
+        };
+    }
+</script>
+
+<!-- Full Screen Toggle Button -->
+<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; bottom: 90px; left: 20px; width: 60px; height: 60px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: all 0.3s ease;" onclick="toggleFullScreen()">
+    <i class="fas fa-eye"></i>
+</button>
+
+<script>
+    function toggleFullScreen() {
+        const sidebar = document.querySelector('.sidebar');
+        const header = document.querySelector('.header');
+        const main = document.querySelector('.main');
+        const icon = document.querySelector('#toggleFullScreenBtn i');
+        const toggleBtn = document.getElementById('toggleFullScreenBtn');
+
+        if (sidebar && main) {
+            if (sidebar.style.display === 'none') {
+                // Exit full screen
+                sidebar.style.display = '';
+                if(header) header.style.display = '';
+
+                main.style.width = '';
+                main.style.height = '';
+                main.style.margin = '';
+                main.style.padding = '';
+                main.style.position = '';
+                main.style.top = '';
+                main.style.left = '';
+                main.style.right = '';
+                main.style.bottom = '';
+                main.style.zIndex = '';
+                main.style.backgroundColor = '';
+                main.style.overflowY = '';
+
+                icon.className = 'fas fa-eye';
+                toggleBtn.classList.remove('btn-light');
+                toggleBtn.classList.add('btn-dark');
+                toggleBtn.style.color = 'white';
+            } else {
+                // Enter full screen
+                sidebar.style.display = 'none';
+                if(header) header.style.display = 'none';
+
+                // Adjust layout to fill screen
+                main.style.width = '100vw';
+                main.style.height = '100vh';
+                main.style.margin = '0';
+                main.style.padding = '20px';
+                main.style.position = 'fixed';
+                main.style.top = '0';
+                main.style.left = '0';
+                main.style.right = '0';
+                main.style.bottom = '0';
+                main.style.zIndex = '9999';
+                main.style.backgroundColor = '#f8fafc';
+                main.style.overflowY = 'auto';
+
+                icon.className = 'fas fa-eye-slash';
+                toggleBtn.classList.remove('btn-dark');
+                toggleBtn.classList.add('btn-light');
+                toggleBtn.style.color = '#334155';
+            }
+        }
+
+        // Trigger chart resize
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+    }
+</script>
 
 {% endblock %}
 
