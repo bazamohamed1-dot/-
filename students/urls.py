@@ -96,4 +96,5 @@ urlpatterns = [
     path('api/reminders/', reminder_views.check_reminders, name='check_reminders'),
     path('analytics/', ui_views.analytics_dashboard, name='analytics_dashboard'),
     path('analytics_test/', ui_views.analytics_dashboard, name='analytics_test'),
+    path('analytics/upload_grades_ajax/', ui_views.upload_grades_ajax, name='upload_grades_ajax'),
 ]
