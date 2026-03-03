@@ -1120,10 +1120,29 @@ def advanced_analytics_view(request):
 
     # Basic logic for advanced stats (can be expanded later)
     # We will pass the raw query to Pandas and compute some basic predictive/inferential stats
-    df = pd.DataFrame(list(grades_qs.values('student__last_name', 'student__first_name', 'student__class_name', 'subject', 'term', 'score')))
+    df = pd.DataFrame(list(grades_qs.values('student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score')))
+
+    # Filter out absences
+    df = df[df['score'] > 0]
+
+    # 1. Gender Comparison
+    gender_stats = df.groupby('student__gender')['score'].mean().round(2).to_dict() if 'student__gender' in df.columns else {}
+
+    # 2. Terms Comparison
+    term_stats = df.groupby('term')['score'].mean().round(2).to_dict()
+
+    # 3. Level/Class Comparison
+    class_stats_by_level = {}
+    for level, group in df.groupby('student__academic_year'):
+        class_stats_by_level[level] = group.groupby('student__class_name')['score'].mean().round(2).to_dict()
+
+    import json
 
     context = {
-        'page_title': 'التحليل المعمق (إحصاء استدلالي وتنبؤي)'
+        'page_title': 'مختبر التحليل المتقدم',
+        'gender_stats_json': json.dumps(gender_stats),
+        'term_stats_json': json.dumps(term_stats),
+        'class_stats_by_level': class_stats_by_level,
     }
     return render(request, 'students/advanced_analytics.html', context)
 
