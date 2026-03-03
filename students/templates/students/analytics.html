@@ -207,8 +207,8 @@
                 {% if request.GET.class_name %}طباعة المحضر{% elif request.GET.level %}طباعة التقرير (مستوى){% else %}طباعة التقرير العام{% endif %}
             </button>
 
-            <a href="{% url 'advanced_analytics_view' %}" class="btn btn-outline-warning shadow">
-                <i class="fas fa-chart-area me-1"></i> التحليل المتقدم
+            <a href="{% url 'advanced_analytics_view' %}" class="btn btn-warning shadow fw-bold" style="color: #0f172a;">
+                <i class="fas fa-chart-area me-1"></i> مختبر التحليل المتقدم
             </a>
 
             <button class="btn" style="background: #38bdf8; color: #0f172a; font-weight: bold; margin-right: auto;" onclick="document.getElementById('importGradesModal').style.display='flex'">
@@ -410,7 +410,7 @@
         // The values are already JSON serialized strings from the backend, we can output them directly.
         const distData = {{ local_stats.distribution|safe|default:"{}" }};
         const catData = {{ local_stats.categories|safe|default:"{}" }};
-        const subjectData = {{ local_stats.subject_avgs|safe|default:"{}" }};
+        const detailedSubjectData = {{ local_stats.detailed_subject_stats_json|safe|default:"{}" }};
         const classData = {{ local_stats.class_avgs|safe|default:"{}" }};
         const termData = {{ local_stats.term_avgs|safe|default:"{}" }};
 
@@ -444,21 +444,93 @@
             options: { responsive: true, maintainAspectRatio: false }
         });
 
-        // 3. Subject Comparison Bar Chart
+        // 3. Subject Comparison Mixed Chart
         const subCtx = document.getElementById('subjectChart').getContext('2d');
+        const subjectLabels = Object.keys(detailedSubjectData);
+        const subjectAverages = subjectLabels.map(s => detailedSubjectData[s].avg_score);
+        const subjectSuccessPct = subjectLabels.map(s => detailedSubjectData[s].success_pct);
+        const subjectSuccessCount = subjectLabels.map(s => detailedSubjectData[s].count_above_10);
+
         new Chart(subCtx, {
             type: 'bar',
             data: {
-                labels: Object.keys(subjectData),
-                datasets: [{
-                    label: 'متوسط المادة',
-                    data: Object.values(subjectData),
-                    backgroundColor: '#8b5cf6',
-                    borderRadius: 4
-                }]
+                labels: subjectLabels,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: 'متوسط المادة',
+                        data: subjectAverages,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: '#8b5cf6',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        type: 'bar',
+                        label: 'نسبة النجاح %',
+                        data: subjectSuccessPct,
+                        backgroundColor: '#22c55e',
+                        borderRadius: 4,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        type: 'bar',
+                        label: 'عدد الناجحين',
+                        data: subjectSuccessCount,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4,
+                        yAxisID: 'y1'
+                    }
+                ]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 20 } } }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        beginAtZero: true,
+                        max: 20,
+                        title: { display: true, text: 'المتوسط (20)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'النسبة / العدد' }
+                    }
+                }
+            }
         });
+
+        // Plugin to draw data labels on top of bars
+        const dataLabelsPlugin = {
+            id: 'dataLabelsPlugin',
+            afterDatasetsDraw(chart, args, pluginOptions) {
+                const { ctx } = chart;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    if (meta.hidden) return;
+                    meta.data.forEach((element, index) => {
+                        ctx.fillStyle = '#334155';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const dataString = dataset.data[index];
+                        // Only draw if value is a valid number > 0
+                        if (dataString && Number(dataString) > 0) {
+                            ctx.fillText(dataString, element.x, element.y - 5);
+                        }
+                    });
+                });
+            }
+        };
 
         // 4. Trend Analysis (or Class Comparison) Line/Bar Chart
         // If termData has > 1 keys, show trend, else show class comparison
@@ -482,7 +554,13 @@
                     tension: 0.3
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 20 } } }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 20 } },
+                layout: { padding: { top: 20 } } // Give space for labels
+            },
+            plugins: [dataLabelsPlugin]
         });
     });
 

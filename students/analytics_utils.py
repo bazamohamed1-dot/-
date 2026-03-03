@@ -112,6 +112,7 @@ def analyze_grades_locally(grades_qs: QuerySet):
         categories_json = json.dumps(categories)
         class_avgs_json = json.dumps(class_avgs)
         term_avgs_json = json.dumps(term_avgs)
+        detailed_subject_stats_json = json.dumps(detailed_subject_stats)
 
         # Markdown representation for AI (only a sample or aggregated view to save tokens)
         pivot_df = df.pivot_table(index=['student_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()
@@ -130,6 +131,7 @@ def analyze_grades_locally(grades_qs: QuerySet):
             'categories': categories_json,
             'subject_avgs': subject_avgs_json,
             'detailed_subject_stats': detailed_subject_stats,
+            'detailed_subject_stats_json': detailed_subject_stats_json,
             'ranking_list': ranking_list,
             'markdown_data': markdown_table
         }
