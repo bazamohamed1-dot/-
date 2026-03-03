@@ -971,6 +971,12 @@ def ai_chat_view(request):
 
         rag_enabled = (requested_mode == 'rag' or requested_mode is None)
 
+        # Pass analytics data context if mode is analytics
+        if requested_mode == 'analytics':
+            analytics_data = request.session.get('analytics_markdown', '')
+            if analytics_data:
+                sys_instr += f"\n\nإليك بيانات الإحصائيات الحالية (Markdown Table):\n{analytics_data}\n\nيرجى قراءة هذه البيانات بدقة والإجابة على سؤال المستخدم بناءً عليها بصفة حصرية."
+
         response_text = ai.generate_response(sys_instr, query, rag_enabled=rag_enabled, mode=requested_mode)
         return JsonResponse({'response': response_text})
 
@@ -1098,6 +1104,28 @@ def analytics_dashboard(request):
         'token_cost': token_cost
     }
     return render(request, 'students/analytics.html', context)
+
+def advanced_analytics_view(request):
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
+
+    from .models import Grade
+    import pandas as pd
+
+    # Retrieve all active grades
+    grades_qs = Grade.objects.all()
+    if not grades_qs.exists():
+        messages.warning(request, "لا توجد علامات مسجلة للقيام بتحليل متقدم.")
+        return redirect('analytics_dashboard')
+
+    # Basic logic for advanced stats (can be expanded later)
+    # We will pass the raw query to Pandas and compute some basic predictive/inferential stats
+    df = pd.DataFrame(list(grades_qs.values('student__last_name', 'student__first_name', 'student__class_name', 'subject', 'term', 'score')))
+
+    context = {
+        'page_title': 'التحليل المعمق (إحصاء استدلالي وتنبؤي)'
+    }
+    return render(request, 'students/advanced_analytics.html', context)
 
 def upload_grades_ajax(request):
     """Handles bulk uploading of multiple grade files with AJAX progress"""
