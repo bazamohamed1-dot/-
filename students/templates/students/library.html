@@ -681,16 +681,29 @@ async function deleteReadersHistory() {
     try {
         const response = await fetch('/canteen/library/readers/', {
             method: 'DELETE',
-             headers: { 'X-CSRFToken': getCookie('baza_school_csrf_v2') } // Use the existing helper
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('baza_school_csrf_v2')
+            }
         });
+
         if(response.ok) {
             alert("تم حذف السجل بنجاح");
-            showReadersModal(); // Refresh list (should be empty)
+
+            // Immediately clear the table from the DOM to reflect the change visually
+            const tbody = document.querySelector('#readersTable tbody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">لا يوجد قراء حالياً</td></tr>';
+            }
+
             loadStats();
         } else {
-            alert("خطأ في الحذف");
+            alert("خطأ في الحذف، الرجاء المحاولة مرة أخرى");
         }
-    } catch(e) { console.error(e); }
+    } catch(e) {
+        console.error(e);
+        alert("خطأ في الاتصال بالخادم");
+    }
 }
 
 function showReportModal() {

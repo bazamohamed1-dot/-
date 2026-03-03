@@ -69,12 +69,31 @@ def analyze_grades_locally(grades_qs: QuerySet):
         cat_labels = ['متعثر', 'متوسط', 'جيد', 'ممتاز']
         categories = pd.cut(scores, bins=cat_bins, labels=cat_labels, right=True, include_lowest=True).value_counts().to_dict()
 
-        # Subject Averages Comparison
+        # Subject Averages Comparison & Detailed Stats for Print Layout
         # To calculate subject averages, we only consider scores > 0 to exclude absent records per subject
-        active_subjects_df = df[df['score'] > 0]
+        active_subjects_df = df[df['score'] > 0].copy()
+
         subject_avgs = active_subjects_df.groupby('subject')['score'].mean().round(2).to_dict()
         if 'المعدل العام' in subject_avgs:
             del subject_avgs['المعدل العام']
+
+        detailed_subject_stats = {}
+        for subject, group in active_subjects_df.groupby('subject'):
+            if subject == 'المعدل العام': continue
+
+            total_tested = len(group)
+            avg_score = round(group['score'].mean(), 2) if total_tested > 0 else 0
+            count_above_10 = len(group[group['score'] >= 10])
+            count_below_10 = len(group[group['score'] < 10])
+            success_pct = round((count_above_10 / total_tested) * 100, 2) if total_tested > 0 else 0
+
+            detailed_subject_stats[subject] = {
+                'total_tested': total_tested,
+                'avg_score': avg_score,
+                'count_above_10': count_above_10,
+                'success_pct': success_pct,
+                'count_below_10': count_below_10
+            }
 
         # Sorted students list (Ranking Table)
         # Average per student across all terms in the queryset
@@ -110,6 +129,7 @@ def analyze_grades_locally(grades_qs: QuerySet):
             'distribution': dist_counts_json,
             'categories': categories_json,
             'subject_avgs': subject_avgs_json,
+            'detailed_subject_stats': detailed_subject_stats,
             'ranking_list': ranking_list,
             'markdown_data': markdown_table
         }

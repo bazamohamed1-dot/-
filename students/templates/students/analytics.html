@@ -58,14 +58,22 @@
 </style>
 
 <!-- Hidden Print Section (Only visible during window.print()) -->
-{% if request.GET.class_name and local_stats %}
+{% if local_stats %}
 <div id="printSection" style="display: none; direction: rtl;">
     <div style="text-align: center; margin-bottom: 30px;">
         <h3 style="margin: 0; font-weight: bold;">الجمهورية الجزائرية الديمقراطية الشعبية</h3>
         <h3 style="margin: 0; font-weight: bold;">وزارة التربية الوطنية</h3>
         <hr style="width: 50%; margin: 10px auto; border-top: 1px solid #000;">
-        <h2 style="margin: 15px 0; font-weight: bold;">محضر مجلس قسم {{ request.GET.class_name }}</h2>
-        <h4 style="margin: 0;">{{ request.GET.term|default:"جميع الفصول" }} - السنة الدراسية: {{ request.GET.level|default:"غير محدد" }}</h4>
+        <h2 style="margin: 15px 0; font-weight: bold;">
+            {% if request.GET.class_name %}
+                محضر مجلس قسم {{ request.GET.class_name }}
+            {% elif request.GET.level %}
+                محضر مجلس مستوى {{ request.GET.level }}
+            {% else %}
+                التقرير العام للمؤسسة
+            {% endif %}
+        </h2>
+        <h4 style="margin: 0;">{{ request.GET.term|default:"جميع الفصول" }} - السنة الدراسية: {{ request.GET.level|default:"جميع المستويات" }}</h4>
     </div>
 
     <!-- Statistical Tables -->
@@ -103,19 +111,29 @@
         </tr>
     </table>
 
-    <!-- Subject Averages Table -->
-    <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px;">متوسطات المواد:</h4>
+    <!-- Subject Detailed Table -->
+    <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px; page-break-before: always;">تحليل نتائج المواد:</h4>
     <table>
-        <tr>
-            {% for subject, avg in local_stats.subject_avgs.items %}
-            <th>{{ subject }}</th>
+        <thead>
+            <tr>
+                <th>المادة</th>
+                <th>المعدل العام</th>
+                <th>عدد التلاميذ (>=10)</th>
+                <th>نسبة النجاح</th>
+                <th>عدد المتعثرين (<10)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for subject, stats in local_stats.detailed_subject_stats.items %}
+            <tr>
+                <td><strong>{{ subject }}</strong></td>
+                <td>{{ stats.avg_score }}</td>
+                <td>{{ stats.count_above_10 }}</td>
+                <td>{{ stats.success_pct }}%</td>
+                <td>{{ stats.count_below_10 }}</td>
+            </tr>
             {% endfor %}
-        </tr>
-        <tr>
-            {% for subject, avg in local_stats.subject_avgs.items %}
-            <td>{{ avg }}</td>
-            {% endfor %}
-        </tr>
+        </tbody>
     </table>
 
     <h4 style="border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px; page-break-before: always;">ترتيب التلاميذ:</h4>
@@ -184,11 +202,14 @@
                 </select>
             </form>
 
-            {% if request.GET.class_name %}
             <button class="btn btn-outline-light shadow" onclick="window.print()">
-                <i class="fas fa-print me-1"></i> طباعة محضر القسم
+                <i class="fas fa-print me-1"></i>
+                {% if request.GET.class_name %}طباعة المحضر{% elif request.GET.level %}طباعة التقرير (مستوى){% else %}طباعة التقرير العام{% endif %}
             </button>
-            {% endif %}
+
+            <a href="{% url 'advanced_analytics_view' %}" class="btn btn-outline-warning shadow">
+                <i class="fas fa-chart-area me-1"></i> التحليل المتقدم
+            </a>
 
             <button class="btn" style="background: #38bdf8; color: #0f172a; font-weight: bold; margin-right: auto;" onclick="document.getElementById('importGradesModal').style.display='flex'">
                 <i class="fas fa-cloud-upload-alt"></i> استيراد العلامات
@@ -385,12 +406,13 @@
 <script>
     // Chart.js Configuration
     document.addEventListener('DOMContentLoaded', function() {
-        // Prepare Data from Django (Passed as JSON strings from backend)
-        const distData = JSON.parse('{{ local_stats.distribution|escapejs }}' || '{}');
-        const catData = JSON.parse('{{ local_stats.categories|escapejs }}' || '{}');
-        const subjectData = JSON.parse('{{ local_stats.subject_avgs|escapejs }}' || '{}');
-        const classData = JSON.parse('{{ local_stats.class_avgs|escapejs }}' || '{}');
-        const termData = JSON.parse('{{ local_stats.term_avgs|escapejs }}' || '{}');
+        // Prepare Data from Django
+        // The values are already JSON serialized strings from the backend, we can output them directly.
+        const distData = {{ local_stats.distribution|safe|default:"{}" }};
+        const catData = {{ local_stats.categories|safe|default:"{}" }};
+        const subjectData = {{ local_stats.subject_avgs|safe|default:"{}" }};
+        const classData = {{ local_stats.class_avgs|safe|default:"{}" }};
+        const termData = {{ local_stats.term_avgs|safe|default:"{}" }};
 
         // 1. Histogram (Distribution)
         const histCtx = document.getElementById('histogramChart').getContext('2d');
@@ -661,8 +683,8 @@
 </script>
 
 <!-- Full Screen Toggle Button -->
-<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; bottom: 30px; left: 30px; width: 60px; height: 60px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: all 0.3s ease;" onclick="toggleFullScreen()" title="وضع ملء الشاشة">
-    <i class="fas fa-expand"></i>
+<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; top: 20px; left: 20px; width: 50px; height: 50px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s ease;" onclick="toggleFullScreen()" title="وضع ملء الشاشة">
+    <i class="fas fa-eye"></i>
 </button>
 
 <script>
@@ -692,7 +714,7 @@
                 main.style.backgroundColor = '';
                 main.style.overflowY = '';
 
-                icon.className = 'fas fa-expand';
+                icon.className = 'fas fa-eye';
                 toggleBtn.classList.remove('btn-light');
                 toggleBtn.classList.add('btn-dark');
                 toggleBtn.style.color = 'white';
@@ -715,7 +737,7 @@
                 main.style.backgroundColor = '#f8fafc';
                 main.style.overflowY = 'auto';
 
-                icon.className = 'fas fa-compress';
+                icon.className = 'fas fa-eye-slash';
                 toggleBtn.classList.remove('btn-dark');
                 toggleBtn.classList.add('btn-light');
                 toggleBtn.style.color = '#334155';
