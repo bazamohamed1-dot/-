@@ -81,13 +81,13 @@ def analyze_grades_locally(grades_qs: QuerySet):
         for subject, group in active_subjects_df.groupby('subject'):
             if subject == 'المعدل العام': continue
 
-            total_tested = len(group)
-            avg_score = round(group['score'].mean(), 2) if total_tested > 0 else 0
-            count_above_10 = len(group[group['score'] >= 10])
-            count_below_10 = len(group[group['score'] < 10])
-            success_pct = round((count_above_10 / total_tested) * 100, 2) if total_tested > 0 else 0
+            total_tested = int(len(group))
+            avg_score = float(round(group['score'].mean(), 2)) if total_tested > 0 else 0.0
+            count_above_10 = int(len(group[group['score'] >= 10]))
+            count_below_10 = int(len(group[group['score'] < 10]))
+            success_pct = float(round((count_above_10 / total_tested) * 100, 2)) if total_tested > 0 else 0.0
 
-            detailed_subject_stats[subject] = {
+            detailed_subject_stats[str(subject)] = {
                 'total_tested': total_tested,
                 'avg_score': avg_score,
                 'count_above_10': count_above_10,

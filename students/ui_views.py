@@ -1125,16 +1125,31 @@ def advanced_analytics_view(request):
     # Filter out absences
     df = df[df['score'] > 0]
 
+    # Function to get detailed stats per group
+    def get_detailed_stats(group_df, group_col):
+        stats = {}
+        for name, g in group_df.groupby(group_col):
+            total = len(g)
+            avg = float(round(g['score'].mean(), 2)) if total > 0 else 0.0
+            count_above_10 = int(len(g[g['score'] >= 10]))
+            success_pct = float(round((count_above_10 / total) * 100, 2)) if total > 0 else 0.0
+            stats[str(name)] = {
+                'avg': avg,
+                'count': total,
+                'success_pct': success_pct
+            }
+        return stats
+
     # 1. Gender Comparison
-    gender_stats = df.groupby('student__gender')['score'].mean().round(2).to_dict() if 'student__gender' in df.columns else {}
+    gender_stats = get_detailed_stats(df, 'student__gender') if 'student__gender' in df.columns else {}
 
     # 2. Terms Comparison
-    term_stats = df.groupby('term')['score'].mean().round(2).to_dict()
+    term_stats = get_detailed_stats(df, 'term')
 
     # 3. Level/Class Comparison
     class_stats_by_level = {}
     for level, group in df.groupby('student__academic_year'):
-        class_stats_by_level[level] = group.groupby('student__class_name')['score'].mean().round(2).to_dict()
+        class_stats_by_level[str(level)] = get_detailed_stats(group, 'student__class_name')
 
     import json
 
@@ -1142,7 +1157,7 @@ def advanced_analytics_view(request):
         'page_title': 'مختبر التحليل المتقدم',
         'gender_stats_json': json.dumps(gender_stats),
         'term_stats_json': json.dumps(term_stats),
-        'class_stats_by_level': class_stats_by_level,
+        'class_stats_by_level_json': json.dumps(class_stats_by_level),
     }
     return render(request, 'students/advanced_analytics.html', context)
 
