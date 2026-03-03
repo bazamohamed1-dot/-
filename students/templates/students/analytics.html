@@ -34,9 +34,9 @@
 
         /* Custom Table Styling for Print */
         #printSection table {
-            width: 100%;
+            width: 95%;
+            margin: 0 auto 20px auto;
             border-collapse: collapse;
-            margin-bottom: 20px;
         }
 
         #printSection th, #printSection td {
@@ -133,10 +133,14 @@
             <tr>
                 <td>{{ forloop.counter }}</td>
                 <td>{{ student.student_name }}</td>
+                {% if student.is_absent %}
+                <td colspan="2" style="color: #64748b; font-style: italic;">تلميذ(ة) غائب(ة)</td>
+                {% else %}
                 <td><strong>{{ student.score }}</strong></td>
                 <td>
                     {% if student.score >= 16 %}تهنئة{% elif student.score >= 14 %}تشجيع{% elif student.score >= 12 %}لوحة شرف{% elif student.score >= 10 %}ينتقل{% else %}إنذار{% endif %}
                 </td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
@@ -161,26 +165,32 @@
             <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
             <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
         </div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <select name="level" id="levelFilter" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="updateClassDropdown()">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;" id="analyticsFilterForm">
+                <select name="level" id="levelFilter" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="updateClassDropdown(true)">
                     <option value="" style="color: black;">كل المستويات</option>
                     {% for lvl in levels %}
                         <option value="{{ lvl }}" {% if request.GET.level == lvl %}selected{% endif %} style="color: black;">{{ lvl }}</option>
                     {% endfor %}
                 </select>
-                <select name="class_name" id="classFilter" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
+                <select name="class_name" id="classFilter" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="document.getElementById('analyticsFilterForm').submit();">
                     <option value="" style="color: black;">جميع الأقسام</option>
                 </select>
-                <select name="term" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
+                <select name="term" class="form-select" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="document.getElementById('analyticsFilterForm').submit();">
                     <option value="" style="color: black;">جميع الفصول</option>
                     <option value="الفصل الأول" {% if request.GET.term == 'الفصل الأول' %}selected{% endif %} style="color: black;">الفصل الأول</option>
                     <option value="الفصل الثاني" {% if request.GET.term == 'الفصل الثاني' %}selected{% endif %} style="color: black;">الفصل الثاني</option>
                     <option value="الفصل الثالث" {% if request.GET.term == 'الفصل الثالث' %}selected{% endif %} style="color: black;">الفصل الثالث</option>
                 </select>
-                <button type="submit" class="btn btn-outline-light"><i class="fas fa-filter"></i> تصفية</button>
             </form>
-            <button class="btn" style="background: #38bdf8; color: #0f172a; font-weight: bold;" onclick="document.getElementById('importGradesModal').style.display='flex'">
+
+            {% if request.GET.class_name %}
+            <button class="btn btn-outline-light shadow" onclick="window.print()">
+                <i class="fas fa-print me-1"></i> طباعة محضر القسم
+            </button>
+            {% endif %}
+
+            <button class="btn" style="background: #38bdf8; color: #0f172a; font-weight: bold; margin-right: auto;" onclick="document.getElementById('importGradesModal').style.display='flex'">
                 <i class="fas fa-cloud-upload-alt"></i> استيراد العلامات
             </button>
         </div>
@@ -190,7 +200,7 @@
             const classMap = {{ class_map|safe|default:"{}" }};
             const currentClass = "{{ request.GET.class_name|escapejs }}";
 
-            function updateClassDropdown() {
+            function updateClassDropdown(submitAfter = false) {
                 const levelFilter = document.getElementById('levelFilter');
                 const classFilter = document.getElementById('classFilter');
                 const selectedLvl = levelFilter.value;
@@ -220,15 +230,20 @@
                     opt.value = cls;
                     opt.textContent = cls;
                     opt.style.color = "black";
-                    if (cls === currentClass) {
+                    if (cls === currentClass && !submitAfter) {
                         opt.selected = true;
                     }
                     classFilter.appendChild(opt);
                 });
+
+                if (submitAfter) {
+                    // Auto submit when level changes
+                    document.getElementById('analyticsFilterForm').submit();
+                }
             }
 
-            // Initialize dropdown on page load
-            document.addEventListener('DOMContentLoaded', updateClassDropdown);
+            // Initialize dropdown on page load without submitting
+            document.addEventListener('DOMContentLoaded', () => updateClassDropdown(false));
         </script>
     </div>
 </div>
@@ -313,9 +328,6 @@
     <div class="card col-md-8" style="flex: 2; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px;">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 style="color: #334155; margin: 0;"><i class="fas fa-medal text-warning"></i> ترتيب التلاميذ</h4>
-            {% if request.GET.class_name %}
-            <button class="btn btn-sm btn-outline-primary d-print-none" onclick="window.print()"><i class="fas fa-print"></i> طباعة محضر القسم</button>
-            {% endif %}
         </div>
         <div style="max-height: 400px; overflow-y: auto;" id="rankingTableContainer">
             <table class="table table-hover table-bordered" style="text-align: center;">
@@ -329,11 +341,15 @@
                 </thead>
                 <tbody>
                     {% for student in local_stats.ranking_list %}
-                    <tr {% if student.score < 10 %}class="table-danger"{% elif student.score >= 16 %}class="table-success"{% endif %}>
+                    <tr {% if student.is_absent %}class="table-secondary"{% elif student.score < 10 %}class="table-danger"{% elif student.score >= 16 %}class="table-success"{% endif %}>
                         <td>{{ forloop.counter }}</td>
                         <td>{{ student.student_name }}</td>
                         <td>{{ student.student__class_name }}</td>
+                        {% if student.is_absent %}
+                        <td style="color: #64748b; font-style: italic;">تلميذ(ة) غائب(ة)</td>
+                        {% else %}
                         <td><strong>{{ student.score }}</strong></td>
+                        {% endif %}
                     </tr>
                     {% empty %}
                     <tr><td colspan="4">لا توجد بيانات</td></tr>
@@ -369,20 +385,12 @@
 <script>
     // Chart.js Configuration
     document.addEventListener('DOMContentLoaded', function() {
-        // Prepare Data from Django
-        const distData = {{ local_stats.distribution|safe|default:"{}" }};
-        const catData = {{ local_stats.categories|safe|default:"{}" }};
-        const subjectDataStr = '{{ local_stats.subject_avgs|escapejs }}';
-        let subjectData = {};
-        try {
-            // Need to handle Python dict string vs valid JSON string if safe doesn't work correctly with dicts
-            // To fix Python dict to JSON, replace single quotes with double quotes
-            const cleanStr = subjectDataStr.replace(/'/g, '"');
-            subjectData = cleanStr ? JSON.parse(cleanStr) : {};
-        } catch(e) { console.error("Could not parse subjectData", e); }
-
-        const classData = {{ local_stats.class_avgs|safe|default:"{}" }};
-        const termData = {{ local_stats.term_avgs|safe|default:"{}" }};
+        // Prepare Data from Django (Passed as JSON strings from backend)
+        const distData = JSON.parse('{{ local_stats.distribution|escapejs }}' || '{}');
+        const catData = JSON.parse('{{ local_stats.categories|escapejs }}' || '{}');
+        const subjectData = JSON.parse('{{ local_stats.subject_avgs|escapejs }}' || '{}');
+        const classData = JSON.parse('{{ local_stats.class_avgs|escapejs }}' || '{}');
+        const termData = JSON.parse('{{ local_stats.term_avgs|escapejs }}' || '{}');
 
         // 1. Histogram (Distribution)
         const histCtx = document.getElementById('histogramChart').getContext('2d');
@@ -468,7 +476,7 @@
 
         try {
             const formData = new FormData();
-            formData.append('prompt', prompt);
+            formData.append('query', prompt);
             formData.append('mode', 'analytics');
             formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
@@ -479,11 +487,21 @@
 
             const data = await response.json();
 
-            if (data.status === 'success') {
-                resultDiv.innerHTML = marked.parse(data.response);
+            if (data.response) {
+                // If the library 'marked' is loaded, use it. Otherwise, simple formatting.
+                if (typeof marked !== 'undefined') {
+                    resultDiv.innerHTML = marked.parse(data.response);
+                } else {
+                    let text = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    text = text.replace(/\n/g, '<br>');
+                    resultDiv.innerHTML = text;
+                }
+                resultDiv.style.display = 'block';
+            } else if (data.error) {
+                resultDiv.innerHTML = '<span style="color:red;">خطأ: ' + (data.error || 'حدث خطأ غير معروف') + '</span>';
                 resultDiv.style.display = 'block';
             } else {
-                resultDiv.innerHTML = '<span style="color:red;">خطأ: ' + (data.message || 'حدث خطأ غير معروف') + '</span>';
+                resultDiv.innerHTML = '<span style="color:red;">خطأ: استجابة غير صالحة من الخادم</span>';
                 resultDiv.style.display = 'block';
             }
         } catch (error) {
@@ -643,8 +661,8 @@
 </script>
 
 <!-- Full Screen Toggle Button -->
-<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; bottom: 90px; left: 20px; width: 60px; height: 60px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: all 0.3s ease;" onclick="toggleFullScreen()">
-    <i class="fas fa-eye"></i>
+<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; bottom: 30px; left: 30px; width: 60px; height: 60px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: all 0.3s ease;" onclick="toggleFullScreen()" title="وضع ملء الشاشة">
+    <i class="fas fa-expand"></i>
 </button>
 
 <script>
@@ -674,7 +692,7 @@
                 main.style.backgroundColor = '';
                 main.style.overflowY = '';
 
-                icon.className = 'fas fa-eye';
+                icon.className = 'fas fa-expand';
                 toggleBtn.classList.remove('btn-light');
                 toggleBtn.classList.add('btn-dark');
                 toggleBtn.style.color = 'white';
@@ -697,7 +715,7 @@
                 main.style.backgroundColor = '#f8fafc';
                 main.style.overflowY = 'auto';
 
-                icon.className = 'fas fa-eye-slash';
+                icon.className = 'fas fa-compress';
                 toggleBtn.classList.remove('btn-dark');
                 toggleBtn.classList.add('btn-light');
                 toggleBtn.style.color = '#334155';
