@@ -107,11 +107,12 @@ def analyze_grades_locally(grades_qs: QuerySet):
         ranking_list = student_ranking_df.to_dict('records')
 
         # Safely dump dictionaries to JSON strings to pass to template to avoid JS parsing issues with quotes
-        subject_avgs_json = json.dumps(subject_avgs)
-        dist_counts_json = json.dumps(dist_counts)
-        categories_json = json.dumps(categories)
-        class_avgs_json = json.dumps(class_avgs)
-        term_avgs_json = json.dumps(term_avgs)
+        # We explicitly cast keys and values to avoid Pandas/Numpy types that break json.dumps silently
+        subject_avgs_json = json.dumps({str(k): float(v) for k, v in subject_avgs.items()})
+        dist_counts_json = json.dumps({str(k): int(v) for k, v in dist_counts.items()})
+        categories_json = json.dumps({str(k): int(v) for k, v in categories.items()})
+        class_avgs_json = json.dumps({str(k): float(v) for k, v in class_avgs.items()})
+        term_avgs_json = json.dumps({str(k): float(v) for k, v in term_avgs.items()})
         detailed_subject_stats_json = json.dumps(detailed_subject_stats)
 
         # Markdown representation for AI (only a sample or aggregated view to save tokens)

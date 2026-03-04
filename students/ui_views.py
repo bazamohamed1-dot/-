@@ -948,7 +948,8 @@ def ai_manual_view(request):
 
 def ai_chat_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    pass
+    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_chat')):
+        return redirect('dashboard')
 
     if request.method == 'POST':
         from .ai_utils import AIService
@@ -986,6 +987,8 @@ def ai_chat_view(request):
 
 def tasks_view(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_tasks')):
+        return redirect('dashboard')
 
     # Simple permission check: must be logged in
     # Director sees dashboard for managing tasks
@@ -1002,9 +1005,8 @@ def tasks_view(request):
 
 def ai_control_panel(request):
     if not request.user.is_authenticated: return redirect('canteen_landing')
-    is_director = request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
-
-    if not is_director: return redirect('dashboard')
+    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_control')):
+        return redirect('dashboard')
 
     context = {
         'is_director': True,
@@ -1014,6 +1016,11 @@ def ai_control_panel(request):
 
 
 def analytics_dashboard(request):
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
+    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_analytics')):
+        return redirect('dashboard')
+
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'import_grades' and request.FILES.get('file'):
@@ -1096,11 +1103,12 @@ def analytics_dashboard(request):
         except Exception:
             token_cost = len(local_stats['markdown_data']) // 4
 
+    import json
     context = {
         'page_title': 'تحليل النتائج',
         'local_stats': local_stats,
         'levels': levels,
-        'class_map': class_map,
+        'class_map_json': json.dumps(class_map),
         'token_cost': token_cost
     }
     return render(request, 'students/analytics.html', context)
@@ -1108,6 +1116,8 @@ def analytics_dashboard(request):
 def advanced_analytics_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
+    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_advanced_analytics')):
+        return redirect('dashboard')
 
     from .models import Grade
     import pandas as pd

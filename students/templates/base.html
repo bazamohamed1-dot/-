@@ -307,11 +307,13 @@
                     <i class="fas fa-home"></i> الرئيسية
                 </a>
             </li>
+            {% if request.user|has_perm:'access_analytics' or request.user.is_superuser or request.user.username == 'director' %}
             <li class="nav-item">
                 <a href="{% url 'analytics_dashboard' %}" class="nav-link {% if 'analytics' in request.path %}active{% endif %}">
                     <i class="fas fa-chart-line"></i> لوحة تحليل النتائج (AI)
                 </a>
             </li>
+            {% endif %}
             <li class="nav-item">
                 <a href="{% url 'students_management' %}" class="nav-link {% if 'management' in request.path %}active{% endif %}">
                     <i class="fas fa-user-graduate"></i> تسيير التلاميذ
@@ -357,11 +359,13 @@
             {% endif %}
 
             <!-- Shared Links for Tasks (Moved to main list) -->
+            {% if request.user|has_perm:'access_tasks' or request.user.is_superuser or request.user.username == 'director' %}
             <li class="nav-item">
                 <a href="{% url 'tasks_view' %}" class="nav-link {% if 'tasks' in request.path %}active{% endif %}">
                     <i class="fas fa-list-check"></i> المهام
                 </a>
             </li>
+            {% endif %}
 
             <li class="nav-item" style="margin-top: auto;">
                 <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
@@ -375,16 +379,20 @@
                     <span id="navUpdateBadge" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; display: none;">0</span>
                 </a>
             </li>
+            {% if request.user|has_perm:'access_ai_control' or request.user.is_superuser or request.user.username == 'director' %}
             <li class="nav-item">
                 <a href="{% url 'ai_control_panel' %}" class="nav-link {% if 'ai/control' in request.path %}active{% endif %}">
                     <i class="fas fa-brain"></i> التحكم في AI
                 </a>
             </li>
+            {% endif %}
+            {% if request.user|has_perm:'access_ai_chat' or request.user.is_superuser or request.user.username == 'director' %}
             <li class="nav-item">
                 <a href="{% url 'ai_chat_view' %}" class="nav-link {% if 'ai/chat' in request.path %}active{% endif %}">
                     <i class="fas fa-comments"></i> محادثة AI
                 </a>
             </li>
+            {% endif %}
             <li class="nav-item">
                 <a href="{% url 'ai_manual_view' %}" class="nav-link {% if 'ai/manual' in request.path %}active{% endif %}" style="color: #fbbf24;">
                     <i class="fas fa-info-circle"></i> شرح الذكاء الاصطناعي
