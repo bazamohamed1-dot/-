@@ -1202,6 +1202,7 @@ def advanced_analytics_view(request):
         'gender_stats_json': json.dumps(gender_stats),
         'term_stats_json': json.dumps(term_stats),
         'class_stats_by_level_json': json.dumps(class_stats_by_level),
+        'class_stats_by_level': class_stats_by_level,
         'advanced_stats': advanced_stats,
     }
     return render(request, 'students/advanced_analytics.html', context)

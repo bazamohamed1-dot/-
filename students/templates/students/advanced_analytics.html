@@ -7,7 +7,15 @@
 
 <div class="container-fluid mt-4 px-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+
+<div style="text-align: center; margin-bottom: 20px;">
+    <button onclick="toggleFullscreen()" class="btn btn-outline-primary" style="border-radius: 50%; width: 50px; height: 50px; display: inline-flex; justify-content: center; align-items: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" title="تكبير / تصغير">
+        <i class="fas fa-eye" id="fullscreenIcon" style="font-size: 1.5rem;"></i>
+    </button>
+</div>
+<div id="fullscreenWrapper" style="background: #f8fafc; padding: 20px; border-radius: 12px; transition: all 0.3s ease; overflow-y: auto;">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 style="color: #0f172a; margin:0;"><i class="fas fa-brain text-warning me-2"></i> مختبر التحليل المتقدم</h2>
             <p class="text-muted mt-1 mb-0">مقارنات إحصائية دقيقة وتتبع الأداء</p>
@@ -288,89 +296,39 @@
     }
 </script>
 
-<!-- Full Screen Toggle Button -->
-<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 50px; height: 50px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s ease;" onclick="toggleFullScreen()" title="وضع ملء الشاشة">
-    <i class="fas fa-eye"></i>
-</button>
+
+
+</div>
 
 <script>
-    function toggleFullScreen() {
-        const doc = document.documentElement;
-        const icon = document.querySelector('#toggleFullScreenBtn i');
-        const toggleBtn = document.getElementById('toggleFullScreenBtn');
+    function toggleFullscreen() {
+        const elem = document.documentElement; // Make the whole page fullscreen to cover the entire screen
+        const icon = document.getElementById('fullscreenIcon');
 
-        if (!document.fullscreenElement && !document.mozFullScreenElement &&
-            !document.webkitFullscreenElement && !document.msFullscreenElement) {
-
-            // Enter Fullscreen
-            if (doc.requestFullscreen) {
-                doc.requestFullscreen();
-            } else if (doc.msRequestFullscreen) {
-                doc.msRequestFullscreen();
-            } else if (doc.mozRequestFullScreen) {
-                doc.mozRequestFullScreen();
-            } else if (doc.webkitRequestFullscreen) {
-                doc.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+        if (!document.fullscreenElement) {
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable fullscreen: ${err.message} (${err.name})`);
+                });
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
             }
-
-            icon.className = 'fas fa-eye-slash';
-            toggleBtn.classList.remove('btn-dark');
-            toggleBtn.classList.add('btn-light');
-            toggleBtn.style.color = '#334155';
-
-            // Additional styling to hide sidebar if needed when in full screen
-            if (document.querySelector('.sidebar')) document.querySelector('.sidebar').style.display = 'none';
-            if (document.querySelector('.header')) document.querySelector('.header').style.display = 'none';
-            if (document.querySelector('.main')) document.querySelector('.main').style.paddingTop = '80px';
-
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
         } else {
-            // Exit Fullscreen
             if (document.exitFullscreen) {
                 document.exitFullscreen();
-            } else if (document.msExitFullscreen) {
-                document.msExitFullscreen();
-            } else if (document.mozCancelFullScreen) {
-                document.mozCancelFullScreen();
-            } else if (document.webkitExitFullscreen) {
+            } else if (document.webkitExitFullscreen) { /* Safari */
                 document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
             }
-
-            icon.className = 'fas fa-eye';
-            toggleBtn.classList.remove('btn-light');
-            toggleBtn.classList.add('btn-dark');
-            toggleBtn.style.color = 'white';
-
-            if (document.querySelector('.sidebar')) document.querySelector('.sidebar').style.display = '';
-            if (document.querySelector('.header')) document.querySelector('.header').style.display = '';
-            if (document.querySelector('.main')) document.querySelector('.main').style.paddingTop = '';
-        }
-
-        // Trigger chart resize
-        setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
-    }
-
-    // Listen for Escape key or manual browser exit
-    document.addEventListener('fullscreenchange', exitHandler);
-    document.addEventListener('webkitfullscreenchange', exitHandler);
-    document.addEventListener('mozfullscreenchange', exitHandler);
-    document.addEventListener('MSFullscreenChange', exitHandler);
-
-    function exitHandler() {
-        if (!document.fullscreenElement && !document.webkitIsFullScreen && !document.mozFullScreen && !document.msFullscreenElement) {
-            const icon = document.querySelector('#toggleFullScreenBtn i');
-            const toggleBtn = document.getElementById('toggleFullScreenBtn');
-
-            icon.className = 'fas fa-eye';
-            toggleBtn.classList.remove('btn-light');
-            toggleBtn.classList.add('btn-dark');
-            toggleBtn.style.color = 'white';
-
-            if (document.querySelector('.sidebar')) document.querySelector('.sidebar').style.display = '';
-            if (document.querySelector('.header')) document.querySelector('.header').style.display = '';
-            if (document.querySelector('.main')) document.querySelector('.main').style.paddingTop = '';
-
-            setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
         }
     }
 </script>
+
 {% endblock %}
