@@ -113,7 +113,18 @@ def analyze_grades_locally(grades_qs: QuerySet):
         categories_json = json.dumps({str(k): int(v) for k, v in categories.items()})
         class_avgs_json = json.dumps({str(k): float(v) for k, v in class_avgs.items()})
         term_avgs_json = json.dumps({str(k): float(v) for k, v in term_avgs.items()})
-        detailed_subject_stats_json = json.dumps(detailed_subject_stats)
+
+        # Ensure deep conversion to native types for detailed stats
+        clean_detailed_stats = {}
+        for k, v in detailed_subject_stats.items():
+            clean_detailed_stats[str(k)] = {
+                'total_tested': int(v['total_tested']),
+                'avg_score': float(v['avg_score']),
+                'count_above_10': int(v['count_above_10']),
+                'success_pct': float(v['success_pct']),
+                'count_below_10': int(v['count_below_10'])
+            }
+        detailed_subject_stats_json = json.dumps(clean_detailed_stats)
 
         # Markdown representation for AI (only a sample or aggregated view to save tokens)
         pivot_df = df.pivot_table(index=['student_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()

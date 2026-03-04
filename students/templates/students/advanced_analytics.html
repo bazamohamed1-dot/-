@@ -23,6 +23,69 @@
         <strong>ملاحظة:</strong> التحليلات التنبؤية (مثل توقع النقاط) ومقارنات الأساتذة قيد التطوير وسيتم تفعيلها بمجرد استكمال بنية بيانات إسناد المواد للأساتذة. يمكنك حالياً استخدام المقارنات الوصفية الأساسية.
     </div>
 
+    <!-- 0. Central Tendency and Dispersion measures -->
+    <div class="row mt-4 mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; border-top: 5px solid #8b5cf6 !important;">
+                <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
+                    <h5 class="m-0" style="color: #334155;"><i class="fas fa-chart-area text-purple me-2" style="color: #8b5cf6;"></i> مقاييس النزعة المركزية والتشتت</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">المتوسط الحسابي (Mean)</h6>
+                                <h3 class="m-0" style="color: #0f172a; font-weight: bold;">{{ advanced_stats.mean }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">الوسيط (Median)</h6>
+                                <h3 class="m-0" style="color: #0f172a; font-weight: bold;">{{ advanced_stats.median }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">المنوال (Mode)</h6>
+                                <h3 class="m-0" style="color: #0f172a; font-weight: bold;">{{ advanced_stats.mode }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">الانحراف المعياري (Std Dev)</h6>
+                                <h3 class="m-0" style="color: #0f172a; font-weight: bold;">{{ advanced_stats.std_dev }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">التباين (Variance)</h6>
+                                <h3 class="m-0" style="color: #0f172a; font-weight: bold;">{{ advanced_stats.variance }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">المدى (Range)</h6>
+                                <h3 class="m-0" style="color: #0f172a; font-weight: bold;">{{ advanced_stats.range }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">أعلى نقطة (Max)</h6>
+                                <h3 class="m-0" style="color: #22c55e; font-weight: bold;">{{ advanced_stats.max }}</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="text-muted mb-1">أدنى نقطة (Min)</h6>
+                                <h3 class="m-0" style="color: #ef4444; font-weight: bold;">{{ advanced_stats.min }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row mt-4">
         <!-- 1. Gender Comparison -->
         <div class="col-md-6 mb-4">
@@ -218,69 +281,88 @@
 </script>
 
 <!-- Full Screen Toggle Button -->
-<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; top: 20px; left: 20px; width: 50px; height: 50px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s ease;" onclick="toggleFullScreen()" title="وضع ملء الشاشة">
+<button id="toggleFullScreenBtn" class="btn btn-dark shadow-lg rounded-circle d-print-none" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 50px; height: 50px; z-index: 1050; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s ease;" onclick="toggleFullScreen()" title="وضع ملء الشاشة">
     <i class="fas fa-eye"></i>
 </button>
 
 <script>
     function toggleFullScreen() {
-        const sidebar = document.querySelector('.sidebar');
-        const header = document.querySelector('.header');
-        const main = document.querySelector('.main');
+        const doc = document.documentElement;
         const icon = document.querySelector('#toggleFullScreenBtn i');
         const toggleBtn = document.getElementById('toggleFullScreenBtn');
 
-        if (sidebar && main) {
-            if (sidebar.style.display === 'none') {
-                // Exit full screen
-                sidebar.style.display = '';
-                if(header) header.style.display = '';
+        if (!document.fullscreenElement && !document.mozFullScreenElement &&
+            !document.webkitFullscreenElement && !document.msFullscreenElement) {
 
-                main.style.width = '';
-                main.style.height = '';
-                main.style.margin = '';
-                main.style.padding = '';
-                main.style.position = '';
-                main.style.top = '';
-                main.style.left = '';
-                main.style.right = '';
-                main.style.bottom = '';
-                main.style.zIndex = '';
-                main.style.backgroundColor = '';
-                main.style.overflowY = '';
-
-                icon.className = 'fas fa-eye';
-                toggleBtn.classList.remove('btn-light');
-                toggleBtn.classList.add('btn-dark');
-                toggleBtn.style.color = 'white';
-            } else {
-                // Enter full screen
-                sidebar.style.display = 'none';
-                if(header) header.style.display = 'none';
-
-                // Adjust layout to fill screen
-                main.style.width = '100vw';
-                main.style.height = '100vh';
-                main.style.margin = '0';
-                main.style.padding = '20px';
-                main.style.position = 'fixed';
-                main.style.top = '0';
-                main.style.left = '0';
-                main.style.right = '0';
-                main.style.bottom = '0';
-                main.style.zIndex = '9999';
-                main.style.backgroundColor = '#f8fafc';
-                main.style.overflowY = 'auto';
-
-                icon.className = 'fas fa-eye-slash';
-                toggleBtn.classList.remove('btn-dark');
-                toggleBtn.classList.add('btn-light');
-                toggleBtn.style.color = '#334155';
+            // Enter Fullscreen
+            if (doc.requestFullscreen) {
+                doc.requestFullscreen();
+            } else if (doc.msRequestFullscreen) {
+                doc.msRequestFullscreen();
+            } else if (doc.mozRequestFullScreen) {
+                doc.mozRequestFullScreen();
+            } else if (doc.webkitRequestFullscreen) {
+                doc.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
             }
+
+            icon.className = 'fas fa-eye-slash';
+            toggleBtn.classList.remove('btn-dark');
+            toggleBtn.classList.add('btn-light');
+            toggleBtn.style.color = '#334155';
+
+            // Additional styling to hide sidebar if needed when in full screen
+            if (document.querySelector('.sidebar')) document.querySelector('.sidebar').style.display = 'none';
+            if (document.querySelector('.header')) document.querySelector('.header').style.display = 'none';
+            if (document.querySelector('.main')) document.querySelector('.main').style.paddingTop = '80px';
+
+        } else {
+            // Exit Fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+
+            icon.className = 'fas fa-eye';
+            toggleBtn.classList.remove('btn-light');
+            toggleBtn.classList.add('btn-dark');
+            toggleBtn.style.color = 'white';
+
+            if (document.querySelector('.sidebar')) document.querySelector('.sidebar').style.display = '';
+            if (document.querySelector('.header')) document.querySelector('.header').style.display = '';
+            if (document.querySelector('.main')) document.querySelector('.main').style.paddingTop = '';
         }
 
         // Trigger chart resize
         setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+    }
+
+    // Listen for Escape key or manual browser exit
+    document.addEventListener('fullscreenchange', exitHandler);
+    document.addEventListener('webkitfullscreenchange', exitHandler);
+    document.addEventListener('mozfullscreenchange', exitHandler);
+    document.addEventListener('MSFullscreenChange', exitHandler);
+
+    function exitHandler() {
+        if (!document.fullscreenElement && !document.webkitIsFullScreen && !document.mozFullScreen && !document.msFullscreenElement) {
+            const icon = document.querySelector('#toggleFullScreenBtn i');
+            const toggleBtn = document.getElementById('toggleFullScreenBtn');
+
+            icon.className = 'fas fa-eye';
+            toggleBtn.classList.remove('btn-light');
+            toggleBtn.classList.add('btn-dark');
+            toggleBtn.style.color = 'white';
+
+            if (document.querySelector('.sidebar')) document.querySelector('.sidebar').style.display = '';
+            if (document.querySelector('.header')) document.querySelector('.header').style.display = '';
+            if (document.querySelector('.main')) document.querySelector('.main').style.paddingTop = '';
+
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+        }
     }
 </script>
 {% endblock %}

@@ -1158,16 +1158,51 @@ def advanced_analytics_view(request):
 
     # 3. Level/Class Comparison
     class_stats_by_level = {}
-    for level, group in df.groupby('student__academic_year'):
-        class_stats_by_level[str(level)] = get_detailed_stats(group, 'student__class_name')
+
+    # Try to infer level from class if academic_year is missing
+    def infer_level(row):
+        ay = str(row['student__academic_year']).strip()
+        if ay and ay != 'None' and ay != 'nan':
+            return ay
+        # Fallback to class name inference
+        c_name = str(row['student__class_name']).strip()
+        import re
+        match = re.search(r'(\d+)\s*(متوسط|م)', c_name)
+        if match:
+            num = match.group(1)
+            return f"{num} متوسط"
+        return "غير محدد"
+
+    df['computed_level'] = df.apply(infer_level, axis=1)
+
+    for level, group in df.groupby('computed_level'):
+        # Filter out empty or unidentifiable levels
+        lvl_str = str(level).strip()
+        if not lvl_str or lvl_str == 'None' or lvl_str == 'nan':
+            lvl_str = "غير محدد"
+        class_stats_by_level[lvl_str] = get_detailed_stats(group, 'student__class_name')
 
     import json
+
+    # 4. Central Tendency and Dispersion measures
+    scores = df['score'].dropna()
+    advanced_stats = {
+        'mean': round(scores.mean(), 2) if not scores.empty else 0,
+        'median': round(scores.median(), 2) if not scores.empty else 0,
+        'mode': round(scores.mode()[0], 2) if not scores.empty and not scores.mode().empty else 0,
+        'variance': round(scores.var(), 2) if len(scores) > 1 else 0,
+        'std_dev': round(scores.std(), 2) if len(scores) > 1 else 0,
+        'range': round(scores.max() - scores.min(), 2) if not scores.empty else 0,
+        'min': round(scores.min(), 2) if not scores.empty else 0,
+        'max': round(scores.max(), 2) if not scores.empty else 0,
+    }
 
     context = {
         'page_title': 'مختبر التحليل المتقدم',
         'gender_stats_json': json.dumps(gender_stats),
         'term_stats_json': json.dumps(term_stats),
         'class_stats_by_level_json': json.dumps(class_stats_by_level),
+        'advanced_stats': advanced_stats,
     }
     return render(request, 'students/advanced_analytics.html', context)
 
