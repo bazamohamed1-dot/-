@@ -14,7 +14,7 @@ def analyze_grades_locally(grades_qs: QuerySet):
 
     try:
         # 1. Convert QuerySet to Pandas DataFrame
-        data = list(grades_qs.values('student__last_name', 'student__first_name', 'student__class_name', 'student__academic_year', 'subject', 'term', 'score'))
+        data = list(grades_qs.values('student__last_name', 'student__first_name', 'student__class_name', 'student__academic_year', 'student__gender', 'student__is_repeater', 'student__date_of_birth', 'subject', 'term', 'score'))
         if not data:
             return None
         df = pd.DataFrame(data)
@@ -23,6 +23,7 @@ def analyze_grades_locally(grades_qs: QuerySet):
         df['student_name'] = df['student__last_name'].fillna('') + ' ' + df['student__first_name'].fillna('')
 
         import json
+        from datetime import date
 
         # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
         has_general_avg = 'المعدل العام' in df['subject'].values
@@ -41,6 +42,27 @@ def analyze_grades_locally(grades_qs: QuerySet):
         # 2. General Stats (Calculated ONLY on active students)
         total_students = general_avg_df['student_name'].nunique()
         active_students_count = active_students_df['student_name'].nunique()
+
+        # Demographics
+        unique_students_df = df.drop_duplicates(subset=['student_name'])
+        total_males = unique_students_df[unique_students_df['student__gender'] == 'ذكر'].shape[0]
+        total_females = unique_students_df[unique_students_df['student__gender'] == 'أنثى'].shape[0]
+        total_repeaters = unique_students_df[unique_students_df['student__is_repeater'] == True].shape[0]
+
+        # Average Age
+        today = date.today()
+        def calc_age(dob):
+            if pd.isna(dob): return None
+            # Handle string or date objects
+            try:
+                if isinstance(dob, str): dob = pd.to_datetime(dob).date()
+                return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            except:
+                return None
+
+        unique_students_df['age'] = unique_students_df['student__date_of_birth'].apply(calc_age)
+        avg_age = unique_students_df['age'].mean()
+        avg_age = round(avg_age, 1) if not pd.isna(avg_age) else 0
 
         general_avg = active_students_df['score'].mean()
         general_avg = round(general_avg, 2) if not pd.isna(general_avg) else 0
@@ -132,6 +154,10 @@ def analyze_grades_locally(grades_qs: QuerySet):
 
         return {
             'total_students': total_students,
+            'total_males': total_males,
+            'total_females': total_females,
+            'total_repeaters': total_repeaters,
+            'avg_age': avg_age,
             'general_avg': general_avg,
             'success_rate': success_rate,
             'failures_count': failures_count,

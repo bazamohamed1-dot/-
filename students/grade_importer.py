@@ -82,6 +82,7 @@ def process_grades_file(file_path, term):
     # Map Subject Name -> Column Index
     subject_indices = {}
     name_idx = -1
+    repeater_idx = -1
 
     for idx, header in enumerate(headers):
         # The user image showed the header text might be split or contain spaces/newlines
@@ -90,6 +91,8 @@ def process_grades_file(file_path, term):
         if 'اللقبوالاسم' in clean_header or 'الاسمو' in clean_header or 'الاسم' in clean_header:
             if name_idx == -1: # Only set once to avoid matching wrong columns later
                 name_idx = idx
+        elif 'الإعادة' in clean_header or 'الاعادة' in clean_header:
+            repeater_idx = idx
         elif header.endswith(suffix):
             # E.g. 'اللغة العربية ف 1' -> 'اللغة العربية'
             subject_name = header.replace(suffix, '').strip()
@@ -97,12 +100,30 @@ def process_grades_file(file_path, term):
         elif header == avg_col_name:
             subject_indices['المعدل العام'] = idx
 
+    # If it's Term 1 and subjects don't have suffix, or if no subjects matched, read from F6 to S6 (indices 5 to 18)
+    if len(subject_indices) == 0:
+        for idx in range(5, min(19, len(headers))):
+            header = headers[idx]
+            clean_header = header.replace('\n', ' ').strip()
+            # Try to remove any suffix if present
+            clean_header = re.sub(r'ف\s*\d+', '', clean_header).strip()
+
+            # Map average column correctly
+            if 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
+                subject_indices['المعدل العام'] = idx
+            elif clean_header and clean_header != '':
+                subject_indices[clean_header] = idx
+
     # Fallback to column index 1 (second column) as per user instruction if regex fails
     if name_idx == -1:
         if len(headers) >= 2:
             name_idx = 1
         else:
             return 0, 'لم يتم العثور على عمود اللقب والاسم'
+
+    # Fallback for repeater index to column E (index 4) if not found by header
+    if repeater_idx == -1 and len(headers) >= 5:
+        repeater_idx = 4
 
     grades_created = 0
     # Process students starting from row index 6
@@ -130,6 +151,14 @@ def process_grades_file(file_path, term):
                         break
 
         if student:
+            # Update Repeater Status
+            if repeater_idx != -1 and len(row) > repeater_idx:
+                rep_val = str(row[repeater_idx]).strip()
+                is_repeater = bool(rep_val and rep_val not in ['0', 'لا', 'False', 'false', 'غ'])
+                if student.is_repeater != is_repeater:
+                    student.is_repeater = is_repeater
+                    student.save(update_fields=['is_repeater'])
+
             for subject, col_idx in subject_indices.items():
                 if len(row) > col_idx:
                     try:
