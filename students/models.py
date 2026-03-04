@@ -26,6 +26,7 @@ class Student(models.Model):
     place_of_birth = models.CharField(max_length=100, verbose_name="مكان الميلاد")
     academic_year = models.CharField(max_length=20, verbose_name="المستوى") # مثال: أولى
     class_name = models.CharField(max_length=20, verbose_name="القسم") # مثال: أولى 1
+    is_repeater = models.BooleanField(default=False, verbose_name="معيد")
     attendance_system = models.CharField(max_length=50, verbose_name="نظام التمدرس")
     enrollment_number = models.CharField(max_length=50, verbose_name="رقم القيد")
     enrollment_date = models.DateField(verbose_name="تاريخ التسجيل")

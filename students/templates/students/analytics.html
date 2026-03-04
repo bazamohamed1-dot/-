@@ -300,31 +300,51 @@
 </div>
 
 <!-- KPIs -->
-<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 15px; padding: 0 15px;">
-    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #38bdf8; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-        <h3 style="color: #64748b; font-size: 1rem; margin-bottom: 10px;">المتوسط العام</h3>
-        <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.general_avg }}</h1>
-    </div>
-    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #64748b; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-        <h3 style="color: #64748b; font-size: 1rem; margin-bottom: 10px;">تعداد التلاميذ</h3>
+<!-- Row 1: Demographics -->
+<div class="row mb-3" style="display: flex; flex-wrap: wrap; gap: 15px; padding: 0 15px;">
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #64748b; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">تعداد التلاميذ</h3>
         <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.total_students }}</h1>
     </div>
-    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #f59e0b; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-        <h3 style="color: #64748b; font-size: 1rem; margin-bottom: 10px;">المتحصلين على المعدل</h3>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #3b82f6; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">الذكور</h3>
+        <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.total_males }}</h1>
+    </div>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #ec4899; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">الإناث</h3>
+        <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.total_females }}</h1>
+    </div>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #f97316; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">المعيدين</h3>
+        <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.total_repeaters }}</h1>
+    </div>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #14b8a6; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">متوسط الأعمار</h3>
+        <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.avg_age }}</h1>
+    </div>
+</div>
+
+<!-- Row 2: Performance -->
+<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 15px; padding: 0 15px;">
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #38bdf8; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">المتوسط العام</h3>
+        <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.general_avg }}</h1>
+    </div>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #f59e0b; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">المتحصلين على المعدل</h3>
         <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.success_count }}</h1>
     </div>
-    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #22c55e; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-        <h3 style="color: #64748b; font-size: 1rem; margin-bottom: 10px;">نسبة النجاح</h3>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #22c55e; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">نسبة النجاح</h3>
         <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.success_rate }}%</h1>
     </div>
-    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #ef4444; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-        <h3 style="color: #64748b; font-size: 1rem; margin-bottom: 10px;">التلاميذ المتعثرين</h3>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #ef4444; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">المتعثرين</h3>
         <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.failures_count }}</h1>
     </div>
-    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #8b5cf6; text-align: center; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-        <h3 style="color: #64748b; font-size: 1rem; margin-bottom: 10px;">الانحراف المعياري</h3>
+    <div class="card" style="flex: 1; min-width: 15%; border-radius: 12px; border-left: 5px solid #8b5cf6; text-align: center; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+        <h3 style="color: #64748b; font-size: 0.95rem; margin-bottom: 5px;">الانحراف المعياري</h3>
         <h1 style="color: #0f172a; margin: 0; font-weight: bold;">{{ local_stats.std_dev }}</h1>
-        <small style="color: #94a3b8; font-size: 0.75rem;">مدى التباين</small>
     </div>
 </div>
 
