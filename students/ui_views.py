@@ -1183,6 +1183,8 @@ def advanced_analytics_view(request):
         class_stats_by_level[lvl_str] = get_detailed_stats(group, 'student__class_name')
 
     import json
+    import numpy as np
+    import scipy.stats as stats
 
     # 4. Central Tendency and Dispersion measures
     scores = df['score'].dropna()
@@ -1197,6 +1199,31 @@ def advanced_analytics_view(request):
         'max': round(scores.max(), 2) if not scores.empty else 0,
     }
 
+    # 5. Gauss Normal Distribution Data
+    gauss_data = {}
+    if len(scores) > 1:
+        mean = advanced_stats['mean']
+        std = advanced_stats['std_dev']
+
+        # Create bins for actual data (from 0 to 20, step 1)
+        bins = np.arange(0, 22, 1)
+        hist, bin_edges = np.histogram(scores, bins=bins, density=True)
+
+        # Create continuous x values for the theoretical curve
+        x = np.linspace(0, 20, 100)
+        y = stats.norm.pdf(x, mean, std) if std > 0 else np.zeros_like(x)
+
+        # We need to pass discrete points to Chart.js for the theoretical curve
+        # to align somewhat with the actual distribution bar chart
+        discrete_x = np.arange(0, 21, 1)
+        discrete_y = stats.norm.pdf(discrete_x, mean, std) if std > 0 else np.zeros_like(discrete_x)
+
+        gauss_data = {
+            'x': [int(val) for val in discrete_x],
+            'y': [float(val) for val in discrete_y],
+            'actual': [float(val) for val in hist] # Density values of actual scores
+        }
+
     context = {
         'page_title': 'مختبر التحليل المتقدم',
         'gender_stats_json': json.dumps(gender_stats),
@@ -1204,6 +1231,7 @@ def advanced_analytics_view(request):
         'class_stats_by_level_json': json.dumps(class_stats_by_level),
         'class_stats_by_level': class_stats_by_level,
         'advanced_stats': advanced_stats,
+        'gauss_data_json': json.dumps(gauss_data),
     }
     return render(request, 'students/advanced_analytics.html', context)
 
