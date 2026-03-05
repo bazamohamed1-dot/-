@@ -36,3 +36,4 @@ pdfplumber
 tiktoken
 groq
 anthropic
+scipy==1.15.1

@@ -105,7 +105,10 @@
     <div class="row mt-4">
         <!-- 1. Gender Comparison -->
         <div class="col-md-6 mb-4">
-            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px; position: relative;">
+                <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
+                    <i class="fas fa-expand"></i>
+                </button>
                 <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
                     <h5 class="m-0" style="color: #334155;"><i class="fas fa-venus-mars text-primary me-2"></i> مقارنة: الذكور والإناث</h5>
                 </div>
@@ -117,7 +120,10 @@
 
         <!-- 2. Terms Comparison -->
         <div class="col-md-6 mb-4">
-            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px; position: relative;">
+                <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
+                    <i class="fas fa-expand"></i>
+                </button>
                 <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
                     <h5 class="m-0" style="color: #334155;"><i class="fas fa-calendar-alt text-success me-2"></i> مقارنة: الفصول الدراسية</h5>
                 </div>
@@ -132,7 +138,10 @@
     <!-- 3. Level/Classes Comparison -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card shadow-sm border-0" style="border-radius: 12px;">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; position: relative;">
+                <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
+                    <i class="fas fa-expand"></i>
+                </button>
                 <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <h5 class="m-0" style="color: #334155;"><i class="fas fa-layer-group text-warning me-2"></i> مقارنة: أقسام المستوى الواحد</h5>
@@ -150,6 +159,26 @@
         </div>
     </div>
 
+    <!-- 4. Inferential Statistics: Normal Distribution (Gauss Curve) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; position: relative;">
+                <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h5 class="m-0" style="color: #334155;"><i class="fas fa-chart-area text-danger me-2"></i> التحليل الاستدلالي: منحنى غاوس (التوزيع الطبيعي)</h5>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small text-center mb-3">يقارن هذا المخطط التوزيع الفعلي لدرجات التلاميذ مع منحنى التوزيع الطبيعي النظري (Gauss Curve) لتحديد ما إذا كانت النتائج تتركز حول المتوسط أم تتوزع بشكل متباين.</p>
+                    <canvas id="gaussChart" style="max-height: 400px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -157,6 +186,29 @@
     const termData = JSON.parse('{{ term_stats_json|escapejs }}' || '{}');
 
     const classStatsByLevel = JSON.parse('{{ class_stats_by_level_json|escapejs }}' || '{}');
+    const gaussData = JSON.parse('{{ gauss_data_json|escapejs }}' || '{}');
+
+    function toggleChartFullscreen(container) {
+        if (!document.fullscreenElement) {
+            if (container.requestFullscreen) {
+                container.requestFullscreen();
+            } else if (container.webkitRequestFullscreen) { /* Safari */
+                container.webkitRequestFullscreen();
+            } else if (container.msRequestFullscreen) { /* IE11 */
+                container.msRequestFullscreen();
+            }
+            container.style.backgroundColor = "white"; // Ensure background is solid white
+            container.style.overflow = "auto";
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            }
+        }
+    }
 
     document.addEventListener('DOMContentLoaded', function() {
 
@@ -236,6 +288,61 @@
 
         // Init Class Chart
         updateClassChart();
+
+        // --- 4. Gauss Normal Distribution Chart ---
+        if (gaussData.x && gaussData.x.length > 0) {
+            const gCtx = document.getElementById('gaussChart').getContext('2d');
+            new Chart(gCtx, {
+                type: 'line',
+                data: {
+                    labels: gaussData.x,
+                    datasets: [
+                        {
+                            label: 'التوزيع الفعلي',
+                            data: gaussData.actual,
+                            borderColor: '#38bdf8',
+                            backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                            fill: true,
+                            tension: 0.4,
+                            type: 'bar', // Overlay bar chart for actuals
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0
+                        },
+                        {
+                            label: 'منحنى غاوس (توزيع نظري)',
+                            data: gaussData.y,
+                            borderColor: '#ef4444',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { font: { family: 'Tajawal' } } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            titleFont: { family: 'Tajawal' },
+                            bodyFont: { family: 'Tajawal' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'العلامة', font: { family: 'Tajawal' } }
+                        },
+                        y: {
+                            title: { display: true, text: 'الكثافة الاحتمالية / التكرار', font: { family: 'Tajawal' } },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
     });
 
     let classChartInstance = null;
