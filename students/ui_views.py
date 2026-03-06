@@ -1079,13 +1079,16 @@ def analytics_dashboard(request):
 
     classes_qs = Student.objects.values('academic_year', 'class_name').distinct()
     class_map = {}
+    from .analytics_utils import format_class_name
     for item in classes_qs:
         lvl = item['academic_year'] or 'غير محدد'
-        cls = item['class_name']
-        if cls:
+        raw_cls = item['class_name']
+        if raw_cls:
+            cls = format_class_name(lvl, raw_cls)
             if lvl not in class_map:
                 class_map[lvl] = []
-            class_map[lvl].append(cls)
+            if cls not in class_map[lvl]:
+                class_map[lvl].append(cls)
 
     # Sort classes using custom logic (e.g. numerical order)
     def custom_sort(item):
@@ -1262,11 +1265,11 @@ def advanced_analytics_view(request):
 
         conclusion = "غير محدد"
         if not pd.isna(std) and not pd.isna(mean):
-            if std < 2.0:
+            if std < 1.5:
                 conclusion = "متجانس جداً (متقارب)"
-            elif std < 4.0:
+            elif std < 2.5:
                 conclusion = "متجانس (توزيع طبيعي)"
-            elif std < 6.0:
+            elif std < 3.5:
                 conclusion = "متجانس قليلاً (تشتت مقبول)"
             else:
                 conclusion = "مشتت (تفاوت كبير في المستويات)"
@@ -1286,13 +1289,16 @@ def advanced_analytics_view(request):
 
     classes_qs = Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values('academic_year', 'class_name').distinct()
     class_map = {}
+    from .analytics_utils import format_class_name
     for item in classes_qs:
         lvl = item['academic_year'] or 'غير محدد'
-        cls = item['class_name']
-        if cls:
+        raw_cls = item['class_name']
+        if raw_cls:
+            cls = format_class_name(lvl, raw_cls)
             if lvl not in class_map:
                 class_map[lvl] = []
-            class_map[lvl].append(cls)
+            if cls not in class_map[lvl]:
+                class_map[lvl].append(cls)
 
     context = {
         'page_title': 'مختبر التحليل المتقدم',
@@ -1449,11 +1455,11 @@ def get_gauss_data(request):
 
     conclusion = "غير محدد"
     if not pd.isna(std) and not pd.isna(mean):
-        if std < 2.0:
+        if std < 1.5:
             conclusion = "متجانس جداً (متقارب)"
-        elif std < 4.0:
+        elif std < 2.5:
             conclusion = "متجانس (توزيع طبيعي)"
-        elif std < 6.0:
+        elif std < 3.5:
             conclusion = "متجانس قليلاً (تشتت مقبول)"
         else:
             conclusion = "مشتت (تفاوت كبير في المستويات)"
