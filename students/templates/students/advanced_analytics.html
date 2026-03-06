@@ -134,46 +134,44 @@
         </div>
     </div>
 
-    <!-- 3. Level/Classes Comparison -->
-    <!-- 3. Level/Classes Comparison -->
+    <!-- 3. and 4. Layout redesign -->
     <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow-sm border-0" style="border-radius: 12px; position: relative;">
+        <!-- 3. Level/Classes Comparison -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px; position: relative;">
                 <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
                     <i class="fas fa-expand"></i>
                 </button>
                 <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <h5 class="m-0" style="color: #334155;"><i class="fas fa-layer-group text-warning me-2"></i> مقارنة: أقسام المستوى الواحد</h5>
-                        <select id="levelSelector" class="form-select form-select-sm shadow-sm" style="width: auto; min-width: 200px; font-weight: bold; font-size: 1rem;" onchange="updateClassChart()">
+                        <select id="levelSelector" class="form-select form-select-sm shadow-sm" style="width: auto; min-width: 150px; font-weight: bold; font-size: 1rem;" onchange="updateClassChart()">
                             {% for level, classes in class_stats_by_level.items %}
                                 <option value="{{ level }}">{{ level|default:"غير محدد" }}</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
-                <div class="card-body">
-                    <canvas id="classLevelChart" style="max-height: 400px;"></canvas>
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <canvas id="classLevelChart" style="max-height: 400px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- 4. Inferential Statistics: Normal Distribution (Gauss Curve) -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow-sm border-0" style="border-radius: 12px; position: relative;">
+        <!-- 4. Inferential Statistics: Normal Distribution (Gauss Curve) -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px; position: relative;">
                 <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
                     <i class="fas fa-expand"></i>
                 </button>
                 <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <h5 class="m-0" style="color: #334155;"><i class="fas fa-chart-area text-danger me-2"></i> التحليل الاستدلالي: منحنى غاوس (التوزيع الطبيعي)</h5>
+                        <h5 class="m-0" style="color: #334155;"><i class="fas fa-chart-area text-danger me-2"></i> منحنى غاوس (التوزيع الطبيعي)</h5>
                     </div>
                 </div>
-                <div class="card-body">
-                    <p class="text-muted small text-center mb-3">يقارن هذا المخطط التوزيع الفعلي لدرجات التلاميذ مع منحنى التوزيع الطبيعي النظري (Gauss Curve) لتحديد ما إذا كانت النتائج تتركز حول المتوسط أم تتوزع بشكل متباين.</p>
-                    <canvas id="gaussChart" style="max-height: 400px;"></canvas>
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <p class="text-muted small text-center mb-3">يقارن هذا المخطط التوزيع الفعلي لدرجات التلاميذ مع منحنى التوزيع الطبيعي النظري (Gauss Curve).</p>
+                    <canvas id="gaussChart" style="max-height: 400px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>

@@ -215,7 +215,7 @@
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <button class="btn btn-outline-light shadow" onclick="window.print()" style="white-space: nowrap;">
                     <i class="fas fa-print me-1"></i>
-                    {% if request.GET.class_name %}طباعة المحضر{% elif request.GET.level %}طباعة التقرير{% else %}طباعة التقرير العام{% endif %}
+                    طباعة محضر مجلس القسم/المستوى
                 </button>
 
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
@@ -253,11 +253,13 @@
                 let classesToShow = [];
                 if (selectedLvl) {
                     classesToShow = classMap[selectedLvl] || [];
+                    classFilter.disabled = false;
                 } else {
-                    // If no level selected, show all classes
+                    // If no level selected, show all classes but keep disabled
                     Object.values(classMap).forEach(arr => {
                         classesToShow = classesToShow.concat(arr);
                     });
+                    classFilter.disabled = true;
                 }
 
                 // Remove duplicates and sort logically
