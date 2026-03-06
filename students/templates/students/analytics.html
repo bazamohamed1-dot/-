@@ -588,7 +588,7 @@
                         data: subjectSuccessCount,
                         backgroundColor: '#3b82f6',
                         borderRadius: 4,
-                        yAxisID: 'y1'
+                        yAxisID: 'y2'
                     }
                 ]
             },
@@ -611,7 +611,15 @@
                         beginAtZero: true,
                         max: 100,
                         grid: { drawOnChartArea: false },
-                        title: { display: true, text: 'النسبة / العدد' }
+                        title: { display: true, text: 'النسبة (%)' }
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'عدد الناجحين' }
                     }
                 }
             }
