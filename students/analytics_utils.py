@@ -21,6 +21,19 @@ def format_class_name(level, class_name):
         return f"{level_match.group()}م{digits[0]}"
     return f"{level_match.group()}م{class_name}"
 
+def unformat_class_name(formatted_class):
+    """
+    Tries to map a formatted class string (like '1م5') back to its raw numeric part (like '5')
+    if it was originally a single digit. This is a best-effort helper for backend queries when
+    the DB stores raw numbers but the frontend passes back formatted strings.
+    """
+    if not formatted_class:
+        return formatted_class
+    digits = re.findall(r'\d+', str(formatted_class))
+    if len(digits) >= 2:
+        return digits[-1]
+    return formatted_class
+
 def analyze_grades_locally(grades_qs: QuerySet):
     """
     Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
@@ -46,10 +59,14 @@ def analyze_grades_locally(grades_qs: QuerySet):
         from datetime import date
 
         # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
-        has_general_avg = 'المعدل العام' in df['subject'].values
+        general_avg_subj = None
+        for subj in df['subject'].unique():
+            if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
+                general_avg_subj = subj
+                break
 
-        if has_general_avg:
-            general_avg_df = df[df['subject'] == 'المعدل العام'].copy()
+        if general_avg_subj:
+            general_avg_df = df[df['subject'] == general_avg_subj].copy()
         else:
             # If no explicit general average subject, we calculate it per student per term
             general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
@@ -116,12 +133,12 @@ def analyze_grades_locally(grades_qs: QuerySet):
         active_subjects_df = df[df['score'] > 0].copy()
 
         subject_avgs = active_subjects_df.groupby('subject')['score'].mean().round(2).to_dict()
-        if 'المعدل العام' in subject_avgs:
-            del subject_avgs['المعدل العام']
+        if general_avg_subj and general_avg_subj in subject_avgs:
+            del subject_avgs[general_avg_subj]
 
         detailed_subject_stats = {}
         for subject, group in active_subjects_df.groupby('subject'):
-            if subject == 'المعدل العام': continue
+            if subject == general_avg_subj: continue
 
             total_tested = int(len(group))
             avg_score = float(round(group['score'].mean(), 2)) if total_tested > 0 else 0.0

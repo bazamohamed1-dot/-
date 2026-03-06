@@ -1108,7 +1108,10 @@ def analytics_dashboard(request):
     if selected_level:
         grades_qs = grades_qs.filter(student__academic_year=selected_level)
     if selected_class:
-        grades_qs = grades_qs.filter(student__class_name=selected_class)
+        from .analytics_utils import unformat_class_name
+        import django.db.models as models
+        raw_class = unformat_class_name(selected_class)
+        grades_qs = grades_qs.filter(models.Q(student__class_name=selected_class) | models.Q(student__class_name=raw_class))
 
     local_stats = analyze_grades_locally(grades_qs)
 
@@ -1210,9 +1213,15 @@ def advanced_analytics_view(request):
     import scipy.stats as stats
 
     # 4. Central Tendency and Dispersion measures
-    # Calculate these specifically on the "General Average" (المعدل العام) to ensure Max/Min reflect true student averages and don't exceed 20
-    if 'المعدل العام' in df['subject'].values:
-        general_avg_df = df[df['subject'] == 'المعدل العام'].copy()
+    # Calculate these specifically on the "General Average" (المعدل العام) or "معدل الفصل X" to ensure Max/Min reflect true student averages and don't exceed 20
+    general_avg_subj = None
+    for subj in df['subject'].unique():
+        if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
+            general_avg_subj = subj
+            break
+
+    if general_avg_subj:
+        general_avg_df = df[df['subject'] == general_avg_subj].copy()
     else:
         general_avg_df = df.groupby(['student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
@@ -1251,13 +1260,25 @@ def advanced_analytics_view(request):
         discrete_x = np.arange(0, 21, 1)
         discrete_y = stats.norm.pdf(discrete_x, mean, std) if std > 0 else np.zeros_like(discrete_x)
 
+        conclusion = "غير محدد"
+        if not pd.isna(std) and not pd.isna(mean):
+            if std < 2.0:
+                conclusion = "متجانس جداً (متقارب)"
+            elif std < 4.0:
+                conclusion = "متجانس (توزيع طبيعي)"
+            elif std < 6.0:
+                conclusion = "متجانس قليلاً (تشتت مقبول)"
+            else:
+                conclusion = "مشتت (تفاوت كبير في المستويات)"
+
         gauss_data = {
             'x': [int(val) for val in discrete_x],
             'y': [float(val) for val in discrete_y],
             'actual': [float(val) for val in hist], # Density values of actual scores
             'mean': round(mean, 2),
             'std_dev': round(std, 2),
-            'count': len(active_scores)
+            'count': len(active_scores),
+            'conclusion': conclusion
         }
 
     # Add level and class lists for the dynamic Gauss curve
@@ -1388,15 +1409,26 @@ def get_gauss_data(request):
     if level:
         grades_qs = grades_qs.filter(student__academic_year=level)
     if class_name:
-        grades_qs = grades_qs.filter(student__class_name=class_name)
+        from .analytics_utils import unformat_class_name
+        import django.db.models as models
+        # Because we format the class on the frontend (e.g., '1م5'), but the DB might have '5' or '1م5',
+        # we try both just in case, or we use unformat.
+        raw_class = unformat_class_name(class_name)
+        grades_qs = grades_qs.filter(models.Q(student__class_name=class_name) | models.Q(student__class_name=raw_class))
 
     if not grades_qs.exists():
         return JsonResponse({'x': [], 'y': [], 'actual': [], 'mean': 0, 'std_dev': 0, 'count': 0})
 
     df = pd.DataFrame(list(grades_qs.values('subject', 'student__class_name', 'student__academic_year', 'term', 'score')))
 
-    if 'المعدل العام' in df['subject'].values:
-        general_avg_df = df[df['subject'] == 'المعدل العام'].copy()
+    general_avg_subj = None
+    for subj in df['subject'].unique():
+        if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
+            general_avg_subj = subj
+            break
+
+    if general_avg_subj:
+        general_avg_df = df[df['subject'] == general_avg_subj].copy()
     else:
         general_avg_df = df.groupby(['student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
@@ -1415,6 +1447,17 @@ def get_gauss_data(request):
     discrete_x = np.arange(0, 21, 1)
     discrete_y = stats.norm.pdf(discrete_x, mean, std) if std > 0 else np.zeros_like(discrete_x)
 
+    conclusion = "غير محدد"
+    if not pd.isna(std) and not pd.isna(mean):
+        if std < 2.0:
+            conclusion = "متجانس جداً (متقارب)"
+        elif std < 4.0:
+            conclusion = "متجانس (توزيع طبيعي)"
+        elif std < 6.0:
+            conclusion = "متجانس قليلاً (تشتت مقبول)"
+        else:
+            conclusion = "مشتت (تفاوت كبير في المستويات)"
+
     gauss_data = {
         'x': [int(val) for val in discrete_x],
         'y': [float(val) for val in discrete_y],
@@ -1428,6 +1471,7 @@ def get_gauss_data(request):
         'range': round(active_scores.max() - active_scores.min(), 2) if not active_scores.empty else 0,
         'min': round(active_scores.min(), 2) if not active_scores.empty else 0,
         'max': round(active_scores.max(), 2) if not active_scores.empty else 0,
+        'conclusion': conclusion
     }
     return JsonResponse(gauss_data)
 
