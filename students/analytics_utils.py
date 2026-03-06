@@ -9,6 +9,22 @@ def analyze_grades_locally(grades_qs: QuerySet):
     Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
     Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
     """
+import re
+def format_class_name(level, class_name):
+    if pd.isna(level) or pd.isna(class_name):
+        return f"{level} {class_name}"
+    level = str(level).strip()
+    class_name = str(class_name).strip()
+    level_match = re.search(r"\d+", level)
+    if not level_match:
+        return class_name
+    digits = re.findall(r"\d+", class_name)
+    if len(digits) >= 2:
+        return f"{digits[0]}م{digits[-1]}"
+    elif len(digits) == 1:
+        return f"{level_match.group()}م{digits[0]}"
+    return f"{level_match.group()}م{class_name}"
+
     if not grades_qs.exists():
         return None
 
@@ -21,6 +37,9 @@ def analyze_grades_locally(grades_qs: QuerySet):
 
         # Reconstruct full_name
         df['student_name'] = df['student__last_name'].fillna('') + ' ' + df['student__first_name'].fillna('')
+
+        # Format class names properly (e.g. 1م1 instead of just 1)
+        df['student__class_name'] = df.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
 
         import json
         from datetime import date

@@ -1152,6 +1152,9 @@ def advanced_analytics_view(request):
     # We will pass the raw query to Pandas and compute some basic predictive/inferential stats
     df = pd.DataFrame(list(grades_qs.values('student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score')))
 
+    from .analytics_utils import format_class_name
+    df['student__class_name'] = df.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
+
     # Filter out absences
     df = df[df['score'] > 0]
 
@@ -1207,16 +1210,26 @@ def advanced_analytics_view(request):
     import scipy.stats as stats
 
     # 4. Central Tendency and Dispersion measures
-    scores = df['score'].dropna()
+    # Calculate these specifically on the "General Average" (المعدل العام) to ensure Max/Min reflect true student averages and don't exceed 20
+    if 'المعدل العام' in df['subject'].values:
+        general_avg_df = df[df['subject'] == 'المعدل العام'].copy()
+    else:
+        general_avg_df = df.groupby(['student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+
+    active_scores = general_avg_df[general_avg_df['score'] > 0]['score'].dropna()
+
+    # Cap values to max 20 just in case
+    active_scores = active_scores.clip(upper=20.0)
+
     advanced_stats = {
-        'mean': round(scores.mean(), 2) if not scores.empty else 0,
-        'median': round(scores.median(), 2) if not scores.empty else 0,
-        'mode': round(scores.mode()[0], 2) if not scores.empty and not scores.mode().empty else 0,
-        'variance': round(scores.var(), 2) if len(scores) > 1 else 0,
-        'std_dev': round(scores.std(), 2) if len(scores) > 1 else 0,
-        'range': round(scores.max() - scores.min(), 2) if not scores.empty else 0,
-        'min': round(scores.min(), 2) if not scores.empty else 0,
-        'max': round(scores.max(), 2) if not scores.empty else 0,
+        'mean': round(active_scores.mean(), 2) if not active_scores.empty else 0,
+        'median': round(active_scores.median(), 2) if not active_scores.empty else 0,
+        'mode': round(active_scores.mode()[0], 2) if not active_scores.empty and not active_scores.mode().empty else 0,
+        'variance': round(active_scores.var(), 2) if len(active_scores) > 1 else 0,
+        'std_dev': round(active_scores.std(), 2) if len(active_scores) > 1 else 0,
+        'range': round(active_scores.max() - active_scores.min(), 2) if not active_scores.empty else 0,
+        'min': round(active_scores.min(), 2) if not active_scores.empty else 0,
+        'max': round(active_scores.max(), 2) if not active_scores.empty else 0,
     }
 
     # 5. Gauss Normal Distribution Data
@@ -1378,21 +1391,26 @@ def get_gauss_data(request):
         grades_qs = grades_qs.filter(student__class_name=class_name)
 
     if not grades_qs.exists():
-        return JsonResponse({'x': [], 'y': [], 'actual': []})
+        return JsonResponse({'x': [], 'y': [], 'actual': [], 'mean': 0, 'std_dev': 0, 'count': 0})
 
-    df = pd.DataFrame(list(grades_qs.values('score')))
-    df = df[df['score'] > 0]
+    df = pd.DataFrame(list(grades_qs.values('subject', 'student__class_name', 'student__academic_year', 'term', 'score')))
 
-    scores = df['score'].dropna()
+    if 'المعدل العام' in df['subject'].values:
+        general_avg_df = df[df['subject'] == 'المعدل العام'].copy()
+    else:
+        general_avg_df = df.groupby(['student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
-    if len(scores) <= 1:
-        return JsonResponse({'x': [], 'y': [], 'actual': []})
+    active_scores = general_avg_df[general_avg_df['score'] > 0]['score'].dropna()
+    active_scores = active_scores.clip(upper=20.0)
 
-    mean = scores.mean()
-    std = scores.std()
+    if len(active_scores) <= 1:
+        return JsonResponse({'x': [], 'y': [], 'actual': [], 'mean': 0, 'std_dev': 0, 'count': len(active_scores)})
+
+    mean = active_scores.mean()
+    std = active_scores.std()
 
     bins = np.arange(0, 22, 1)
-    hist, _ = np.histogram(scores, bins=bins, density=True)
+    hist, _ = np.histogram(active_scores, bins=bins, density=True)
 
     discrete_x = np.arange(0, 21, 1)
     discrete_y = stats.norm.pdf(discrete_x, mean, std) if std > 0 else np.zeros_like(discrete_x)
@@ -1403,13 +1421,13 @@ def get_gauss_data(request):
         'actual': [float(val) for val in hist],
         'mean': round(mean, 2) if not pd.isna(mean) else 0,
         'std_dev': round(std, 2) if not pd.isna(std) else 0,
-        'count': int(len(scores)),
-        'median': round(scores.median(), 2) if not scores.empty else 0,
-        'mode': round(scores.mode()[0], 2) if not scores.empty and not scores.mode().empty else 0,
-        'variance': round(scores.var(), 2) if len(scores) > 1 else 0,
-        'range': round(scores.max() - scores.min(), 2) if not scores.empty else 0,
-        'min': round(scores.min(), 2) if not scores.empty else 0,
-        'max': round(scores.max(), 2) if not scores.empty else 0,
+        'count': int(len(active_scores)),
+        'median': round(active_scores.median(), 2) if not active_scores.empty else 0,
+        'mode': round(active_scores.mode()[0], 2) if not active_scores.empty and not active_scores.mode().empty else 0,
+        'variance': round(active_scores.var(), 2) if len(active_scores) > 1 else 0,
+        'range': round(active_scores.max() - active_scores.min(), 2) if not active_scores.empty else 0,
+        'min': round(active_scores.min(), 2) if not active_scores.empty else 0,
+        'max': round(active_scores.max(), 2) if not active_scores.empty else 0,
     }
     return JsonResponse(gauss_data)
 
