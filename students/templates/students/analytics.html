@@ -189,9 +189,14 @@
 
 <div class="card mb-4" style="background: linear-gradient(135deg, #1e293b, #334155); color: white; border-radius: 12px; border: none;">
     <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; flex-wrap: wrap; gap: 15px;">
-        <div>
-            <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
-            <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <div>
+                <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
+                <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
+            </div>
+            <button class="btn btn-outline-light btn-sm" onclick="showStatsExplanation()" style="align-self: flex-start;">
+                <i class="fas fa-info-circle"></i> شرح المقاييس
+            </button>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%;">
             <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-grow: 1;" id="analyticsFilterForm">
@@ -419,13 +424,21 @@
         <canvas id="subjectChart" style="max-height: 300px;"></canvas>
     </div>
 
+</div>
+
+<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;">
+
     <!-- Trend Analysis Line Chart (or Class comparison if class is not selected) -->
-    <div class="card col-md" style="flex: 1; min-width: 45%; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; position: relative;">
+    <div class="card col-12" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; position: relative; width: 100%;">
         <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
             <i class="fas fa-expand"></i>
         </button>
-        <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chart-line text-info"></i> تحليل الاتجاهات (مقارنة)</h4>
-        <canvas id="trendChart" style="max-height: 300px;"></canvas>
+        <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chart-line text-info"></i> تحليل الاتجاهات (مقارنة الأقسام)</h4>
+        <div style="width: 100%; overflow-x: auto;">
+            <div style="min-width: 600px; height: 350px;">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
     </div>
 
 </div>
@@ -637,6 +650,16 @@
         let tLabelName = showTermTrend ? 'تطور المتوسط حسب الفصل' : 'مقارنة الأقسام';
         let tType = showTermTrend ? 'line' : 'bar';
 
+        // Add dynamic width based on the number of bars to make sure all bars fit correctly.
+        const dynamicWidth = tLabels.length * 50 + 100; // e.g. 50px per bar
+        const minWidth = 600;
+        const trendCanvasContainer = document.getElementById('trendChart').parentElement;
+        if (tType === 'bar') {
+            trendCanvasContainer.style.width = Math.max(dynamicWidth, minWidth) + 'px';
+        } else {
+            trendCanvasContainer.style.width = '100%';
+        }
+
         new Chart(trendCtx, {
             type: tType,
             data: {
@@ -644,17 +667,21 @@
                 datasets: [{
                     label: tLabelName,
                     data: tValues,
-                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    backgroundColor: tType === 'bar' ? '#38bdf8' : 'rgba(56, 189, 248, 0.2)',
                     borderColor: '#38bdf8',
                     borderWidth: 2,
                     fill: true,
-                    tension: 0.3
+                    tension: 0.3,
+                    borderRadius: tType === 'bar' ? 4 : 0
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, max: 20 } },
+                scales: {
+                    y: { beginAtZero: true, max: 20 },
+                    x: { ticks: { autoSkip: false } }
+                },
                 layout: { padding: { top: 20 } } // Give space for labels
             },
             plugins: [dataLabelsPlugin]
@@ -717,6 +744,34 @@
     <p>يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
 </div>
 {% endif %}
+
+<!-- Stats Explanation Modal -->
+<div id="statsExplanationModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+    <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height:80vh; overflow-y:auto;">
+        <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+            <i class="fas fa-info-circle text-primary"></i> شرح المقاييس الإحصائية
+        </h3>
+        <div style="line-height: 1.6; color: #334155; font-size: 0.95rem;">
+            <p><strong>المتوسط العام:</strong> هو مجموع علامات جميع التلاميذ مقسوماً على عددهم الإجمالي. يعطي فكرة عامة عن مستوى القسم أو المؤسسة.</p>
+            <p><strong>نسبة النجاح:</strong> هي النسبة المئوية للتلاميذ الذين تحصلوا على معدل أكبر من أو يساوي 10 من 20.</p>
+            <p><strong>الانحراف المعياري:</strong> يقيس مدى تشتت وتباعد علامات التلاميذ عن المتوسط العام. كلما كان كبيراً، دل ذلك على وجود تفاوت كبير بين مستويات التلاميذ (فوارق بين الممتازين والضعفاء). وكلما كان صغيراً، دل على تقارب مستويات التلاميذ وتجانس القسم.</p>
+            <p><strong>المنوال:</strong> هي العلامة الأكثر تكراراً بين التلاميذ. تدل على الفئة الغالبة في القسم.</p>
+            <p><strong>الوسيط:</strong> هي العلامة التي تقسم القسم إلى نصفين (50% أعلى منها و 50% أقل منها). يفيد في تجنب تأثير العلامات المتطرفة جداً مقارنة بالمتوسط.</p>
+            <p><strong>التباين:</strong> هو مربع الانحراف المعياري، ويستخدم إحصائياً كخطوة لحسابه وتأكيد التشتت.</p>
+            <p><strong>المدى:</strong> هو الفرق بين أعلى نقطة وأدنى نقطة في القسم.</p>
+            <p><strong>منحنى غاوس:</strong> المخطط يقارن التوزيع الفعلي للعلامات بالمنحنى النظري الطبيعي. إذا كان التوزيع مطابقاً لجرس غاوس، فهذا يعني أن الاختبار كان متوازناً ومستويات التلاميذ تتوزع بشكل طبيعي (أغلبية في الوسط وأقلية في الأطراف).</p>
+        </div>
+        <div style="display:flex; justify-content:flex-end; border-top:1px solid #e2e8f0; padding-top:15px; margin-top:15px;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('statsExplanationModal').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showStatsExplanation() {
+        document.getElementById('statsExplanationModal').style.display = 'flex';
+    }
+</script>
 
 <!-- Import Grades Modal -->
 <div id="importGradesModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">

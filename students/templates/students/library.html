@@ -518,8 +518,8 @@ async function loanBook() {
 
             document.getElementById('bookTitle').value = '';
             // Refresh student data (simulate scan)
-            scanCard(document.getElementById('studentIdDisplay').textContent);
-            loadStats();
+            await scanCard(document.getElementById('studentIdDisplay').textContent);
+            await loadStats();
         } else {
             try {
                 const errData = await response.json();
@@ -564,8 +564,8 @@ async function returnBook(loanId) {
         if (response.ok) {
             alert("تم الإرجاع بنجاح");
             // Refresh student data
-            scanCard(document.getElementById('studentIdDisplay').textContent);
-            loadStats();
+            await scanCard(document.getElementById('studentIdDisplay').textContent);
+            await loadStats();
         }
     } catch (error) {
         console.error(error);
@@ -577,16 +577,16 @@ async function loadStats() {
         const response = await fetch('/canteen/library/stats/');
         const data = await response.json();
 
-        document.getElementById('borrowersCount').textContent = data.borrowers_count;
-        document.getElementById('borrowersPercent').textContent = data.borrowers_percentage + '%';
+        document.getElementById('borrowersCount').textContent = data.borrowers_count || 0;
+        document.getElementById('borrowersPercent').textContent = (data.borrowers_percentage || 0) + '%';
         document.getElementById('overdueCount').textContent = (data.overdue_loans || []).length;
 
         if (data.stats) {
-            document.getElementById('statDaily').textContent = data.stats.daily;
-            document.getElementById('statWeekly').textContent = data.stats.weekly;
-            document.getElementById('statMonthly').textContent = data.stats.monthly;
-            document.getElementById('statQuarterly').textContent = data.stats.quarterly;
-            document.getElementById('statYearly').textContent = data.stats.yearly;
+            document.getElementById('statDaily').textContent = data.stats.daily || 0;
+            document.getElementById('statWeekly').textContent = data.stats.weekly || 0;
+            document.getElementById('statMonthly').textContent = data.stats.monthly || 0;
+            document.getElementById('statQuarterly').textContent = data.stats.quarterly || 0;
+            document.getElementById('statYearly').textContent = data.stats.yearly || 0;
         }
 
         const overdue = data.overdue_loans || [];

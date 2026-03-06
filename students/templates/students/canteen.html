@@ -521,9 +521,9 @@
                 // Remove from local list to avoid double add
                 allStudents = allStudents.filter(s => s.id !== id);
                 filterManualList();
-                updateStats();
-                updatePresentList();
-                showAlert("تم تسجيل " + data.student?.first_name + " يدوياً", 'success');
+                await updateStats();
+                await updatePresentList();
+                showAlert("تم تسجيل الدخول يدوياً", 'success');
             } else {
                 alert(data.error || "خطأ");
             }
