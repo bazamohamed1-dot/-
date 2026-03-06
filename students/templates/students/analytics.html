@@ -189,14 +189,9 @@
 
 <div class="card mb-4" style="background: linear-gradient(135deg, #1e293b, #334155); color: white; border-radius: 12px; border: none;">
     <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; flex-wrap: wrap; gap: 15px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-            <div>
-                <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
-                <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
-            </div>
-            <button class="btn btn-outline-light btn-sm" onclick="showStatsExplanation()" style="align-self: flex-start;">
-                <i class="fas fa-info-circle"></i> شرح المقاييس
-            </button>
+        <div>
+            <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
+            <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%;">
             <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-grow: 1;" id="analyticsFilterForm">
@@ -441,18 +436,17 @@
         <canvas id="subjectChart" style="max-height: 300px;"></canvas>
     </div>
 
-</div>
-
-<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;">
-
     <!-- Trend Analysis Line Chart (or Class comparison if class is not selected) -->
     <div class="card col-12" style="border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; position: relative; width: 100%;">
         <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
             <i class="fas fa-expand"></i>
         </button>
         <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chart-line text-info"></i> تحليل الاتجاهات (مقارنة الأقسام)</h4>
-        <div style="width: 100%; height: 350px; position: relative;">
-            <canvas id="trendChart"></canvas>
+        <!-- Make container dynamically expanding horizontally by removing fixed width constraints on inner elements -->
+        <div style="width: 100%; overflow-x: auto; padding-bottom: 10px;">
+            <div id="trendChartContainer" style="min-width: 100%; height: 350px; position: relative;">
+                <canvas id="trendChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -541,8 +535,7 @@
                     borderRadius: 4
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false },
-            plugins: [dataLabelsPlugin]
+            options: { responsive: true, maintainAspectRatio: false }
         });
 
         // 2. Pie Chart (Categories)
@@ -556,8 +549,7 @@
                     backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false },
-            plugins: [pieLabelsPlugin]
+            options: { responsive: true, maintainAspectRatio: false }
         });
 
         // 3. Subject Comparison Mixed Chart
@@ -596,7 +588,7 @@
                         data: subjectSuccessCount,
                         backgroundColor: '#3b82f6',
                         borderRadius: 4,
-                        yAxisID: 'y2'
+                        yAxisID: 'y1'
                     }
                 ]
             },
@@ -619,15 +611,7 @@
                         beginAtZero: true,
                         max: 100,
                         grid: { drawOnChartArea: false },
-                        title: { display: true, text: 'نسبة النجاح %' }
-                    },
-                    y2: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        beginAtZero: true,
-                        grid: { drawOnChartArea: false },
-                        title: { display: true, text: 'عدد الناجحين' }
+                        title: { display: true, text: 'النسبة / العدد' }
                     }
                 }
             }
@@ -656,28 +640,6 @@
             }
         };
 
-        const pieLabelsPlugin = {
-            id: 'pieLabelsPlugin',
-            afterDatasetsDraw(chart, args, pluginOptions) {
-                const { ctx } = chart;
-                chart.data.datasets.forEach((dataset, i) => {
-                    const meta = chart.getDatasetMeta(i);
-                    if (meta.hidden) return;
-                    meta.data.forEach((element, index) => {
-                        const dataString = dataset.data[index];
-                        if (dataString && Number(dataString) > 0) {
-                            const position = element.tooltipPosition();
-                            ctx.fillStyle = '#ffffff';
-                            ctx.font = 'bold 14px Arial';
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText(dataString, position.x, position.y);
-                        }
-                    });
-                });
-            }
-        };
-
         // 4. Trend Analysis (or Class Comparison) Line/Bar Chart
         // If termData has > 1 keys, show trend, else show class comparison
         const trendCtx = document.getElementById('trendChart').getContext('2d');
@@ -696,6 +658,14 @@
         let tValues = showTermTrend ? Object.values(termData) : sortedClassLabels.map(l => classData[l]);
         let tLabelName = showTermTrend ? 'تطور المتوسط حسب الفصل' : 'مقارنة الأقسام';
         let tType = showTermTrend ? 'line' : 'bar';
+
+        // dynamically adjust min-width of the chart container so scrolling works
+        // estimate 60px per bar/label
+        const trendContainer = document.getElementById('trendChartContainer');
+        if (trendContainer) {
+            const minWidth = Math.max(tLabels.length * 60, trendContainer.parentElement.clientWidth);
+            trendContainer.style.minWidth = minWidth + 'px';
+        }
 
         new Chart(trendCtx, {
             type: tType,
@@ -717,9 +687,15 @@
                 maintainAspectRatio: false,
                 scales: {
                     y: { beginAtZero: true, max: 20 },
-                    x: { ticks: { autoSkip: false } }
+                    x: {
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    }
                 },
-                layout: { padding: { top: 20 } } // Give space for labels
+                layout: { padding: { top: 20, bottom: 10 } } // Give space for labels
             },
             plugins: [dataLabelsPlugin]
         });
@@ -781,34 +757,6 @@
     <p>يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
 </div>
 {% endif %}
-
-<!-- Stats Explanation Modal -->
-<div id="statsExplanationModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height:80vh; overflow-y:auto;">
-        <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
-            <i class="fas fa-info-circle text-primary"></i> شرح المقاييس الإحصائية
-        </h3>
-        <div style="line-height: 1.6; color: #334155; font-size: 0.95rem;">
-            <p><strong>المتوسط العام:</strong> هو مجموع علامات جميع التلاميذ مقسوماً على عددهم الإجمالي. يعطي فكرة عامة عن مستوى القسم أو المؤسسة.</p>
-            <p><strong>نسبة النجاح:</strong> هي النسبة المئوية للتلاميذ الذين تحصلوا على معدل أكبر من أو يساوي 10 من 20.</p>
-            <p><strong>الانحراف المعياري:</strong> يقيس مدى تشتت وتباعد علامات التلاميذ عن المتوسط العام. كلما كان كبيراً، دل ذلك على وجود تفاوت كبير بين مستويات التلاميذ (فوارق بين الممتازين والضعفاء). وكلما كان صغيراً، دل على تقارب مستويات التلاميذ وتجانس القسم.</p>
-            <p><strong>المنوال:</strong> هي العلامة الأكثر تكراراً بين التلاميذ. تدل على الفئة الغالبة في القسم.</p>
-            <p><strong>الوسيط:</strong> هي العلامة التي تقسم القسم إلى نصفين (50% أعلى منها و 50% أقل منها). يفيد في تجنب تأثير العلامات المتطرفة جداً مقارنة بالمتوسط.</p>
-            <p><strong>التباين:</strong> هو مربع الانحراف المعياري، ويستخدم إحصائياً كخطوة لحسابه وتأكيد التشتت.</p>
-            <p><strong>المدى:</strong> هو الفرق بين أعلى نقطة وأدنى نقطة في القسم.</p>
-            <p><strong>منحنى غاوس:</strong> المخطط يقارن التوزيع الفعلي للعلامات بالمنحنى النظري الطبيعي. إذا كان التوزيع مطابقاً لجرس غاوس، فهذا يعني أن الاختبار كان متوازناً ومستويات التلاميذ تتوزع بشكل طبيعي (أغلبية في الوسط وأقلية في الأطراف).</p>
-        </div>
-        <div style="display:flex; justify-content:flex-end; border-top:1px solid #e2e8f0; padding-top:15px; margin-top:15px;">
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('statsExplanationModal').style.display='none'">إغلاق</button>
-        </div>
-    </div>
-</div>
-
-<script>
-    function showStatsExplanation() {
-        document.getElementById('statsExplanationModal').style.display = 'flex';
-    }
-</script>
 
 <!-- Import Grades Modal -->
 <div id="importGradesModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
