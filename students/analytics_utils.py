@@ -4,12 +4,8 @@ from django.db.models import QuerySet
 
 logger = logging.getLogger(__name__)
 
-def analyze_grades_locally(grades_qs: QuerySet):
-    """
-    Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
-    Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
-    """
 import re
+
 def format_class_name(level, class_name):
     if pd.isna(level) or pd.isna(class_name):
         return f"{level} {class_name}"
@@ -25,6 +21,11 @@ def format_class_name(level, class_name):
         return f"{level_match.group()}م{digits[0]}"
     return f"{level_match.group()}م{class_name}"
 
+def analyze_grades_locally(grades_qs: QuerySet):
+    """
+    Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
+    Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
+    """
     if not grades_qs.exists():
         return None
 
