@@ -106,10 +106,10 @@
             <th>متعثر (<10)</th>
         </tr>
         <tr>
-            <td>{{ local_stats.categories.ممتاز|default:"0" }}</td>
-            <td>{{ local_stats.categories.جيد|default:"0" }}</td>
-            <td>{{ local_stats.categories.متوسط|default:"0" }}</td>
-            <td>{{ local_stats.categories.متعثر|default:"0" }}</td>
+            <td>{{ local_stats.categories_dict.ممتاز|default:"0" }}</td>
+            <td>{{ local_stats.categories_dict.جيد|default:"0" }}</td>
+            <td>{{ local_stats.categories_dict.متوسط|default:"0" }}</td>
+            <td>{{ local_stats.categories_dict.متعثر|default:"0" }}</td>
         </tr>
     </table>
 
@@ -516,11 +516,36 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Prepare Data from Django
         // The values are already JSON serialized strings from the backend, we can output them directly.
+
+        // Plugin to draw data labels on top of bars
+        const dataLabelsPlugin = {
+            id: 'dataLabelsPlugin',
+            afterDatasetsDraw(chart, args, pluginOptions) {
+                const { ctx } = chart;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    if (meta.hidden) return;
+                    meta.data.forEach((element, index) => {
+                        ctx.fillStyle = '#334155';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const dataString = dataset.data[index];
+                        // Only draw if value is a valid number > 0
+                        if (dataString && Number(dataString) > 0) {
+                            ctx.fillText(dataString, element.x, element.y - 5);
+                        }
+                    });
+                });
+            }
+        };
+
         const distData = JSON.parse('{{ local_stats.distribution|escapejs }}' || '{}');
         const catData = JSON.parse('{{ local_stats.categories|escapejs }}' || '{}');
         const detailedSubjectData = JSON.parse('{{ local_stats.detailed_subject_stats_json|escapejs }}' || '{}');
         const classData = JSON.parse('{{ local_stats.class_avgs|escapejs }}' || '{}');
         const termData = JSON.parse('{{ local_stats.term_avgs|escapejs }}' || '{}');
+
 
         // 1. Histogram (Distribution)
         const histCtx = document.getElementById('histogramChart').getContext('2d');
@@ -532,10 +557,25 @@
                     label: 'عدد التلاميذ',
                     data: Object.values(distData),
                     backgroundColor: '#38bdf8',
-                    borderRadius: 4
+                    borderColor: '#0284c7',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    // Give it a shadow effect
+                    hoverBackgroundColor: '#0284c7'
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true },
+                    x: {
+                        grid: { display: false }
+                    }
+                },
+                layout: { padding: { top: 20 } }
+            },
+            plugins: [dataLabelsPlugin]
         });
 
         // 2. Pie Chart (Categories)
@@ -625,29 +665,6 @@
             }
         });
 
-        // Plugin to draw data labels on top of bars
-        const dataLabelsPlugin = {
-            id: 'dataLabelsPlugin',
-            afterDatasetsDraw(chart, args, pluginOptions) {
-                const { ctx } = chart;
-                chart.data.datasets.forEach((dataset, i) => {
-                    const meta = chart.getDatasetMeta(i);
-                    if (meta.hidden) return;
-                    meta.data.forEach((element, index) => {
-                        ctx.fillStyle = '#334155';
-                        ctx.font = 'bold 12px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'bottom';
-                        const dataString = dataset.data[index];
-                        // Only draw if value is a valid number > 0
-                        if (dataString && Number(dataString) > 0) {
-                            ctx.fillText(dataString, element.x, element.y - 5);
-                        }
-                    });
-                });
-            }
-        };
-
         // 4. Trend Analysis (or Class Comparison) Line/Bar Chart
         // If termData has > 1 keys, show trend, else show class comparison
         const trendCtx = document.getElementById('trendChart').getContext('2d');
@@ -667,12 +684,11 @@
         let tLabelName = showTermTrend ? 'تطور المتوسط حسب الفصل' : 'مقارنة الأقسام';
         let tType = showTermTrend ? 'line' : 'bar';
 
-        // dynamically adjust min-width of the chart container so scrolling works
-        // estimate 60px per bar/label
+        // Let the chart resize naturally by removing fixed min-width, ensuring all classes are visible without horizontal scroll cutoff
         const trendContainer = document.getElementById('trendChartContainer');
         if (trendContainer) {
-            const minWidth = Math.max(tLabels.length * 60, trendContainer.parentElement.clientWidth);
-            trendContainer.style.minWidth = minWidth + 'px';
+            trendContainer.style.minWidth = '100%';
+            trendContainer.style.width = '100%';
         }
 
         new Chart(trendCtx, {

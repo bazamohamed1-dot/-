@@ -152,7 +152,11 @@ def analyze_grades_locally(grades_qs: QuerySet):
         # We explicitly cast keys and values to avoid Pandas/Numpy types that break json.dumps silently
         subject_avgs_json = json.dumps({str(k): float(v) for k, v in subject_avgs.items()})
         dist_counts_json = json.dumps({str(k): int(v) for k, v in dist_counts.items()})
-        categories_json = json.dumps({str(k): int(v) for k, v in categories.items()})
+
+        # We also need a clean Python dict of categories for the template to render directly in HTML, not just the JSON string
+        clean_categories = {str(k): int(v) for k, v in categories.items()}
+        categories_json = json.dumps(clean_categories)
+
         class_avgs_json = json.dumps({str(k): float(v) for k, v in class_avgs.items()})
         term_avgs_json = json.dumps({str(k): float(v) for k, v in term_avgs.items()})
 
@@ -186,6 +190,7 @@ def analyze_grades_locally(grades_qs: QuerySet):
             'term_avgs': term_avgs_json,
             'std_dev': std_dev,
             'distribution': dist_counts_json,
+            'categories_dict': clean_categories,
             'categories': categories_json,
             'subject_avgs': subject_avgs_json,
             'detailed_subject_stats': detailed_subject_stats,

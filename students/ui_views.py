@@ -1234,13 +1234,13 @@ def advanced_analytics_view(request):
 
     # 5. Gauss Normal Distribution Data
     gauss_data = {}
-    if len(scores) > 1:
+    if len(active_scores) > 1:
         mean = advanced_stats['mean']
         std = advanced_stats['std_dev']
 
         # Create bins for actual data (from 0 to 20, step 1)
         bins = np.arange(0, 22, 1)
-        hist, bin_edges = np.histogram(scores, bins=bins, density=True)
+        hist, bin_edges = np.histogram(active_scores, bins=bins, density=True)
 
         # Create continuous x values for the theoretical curve
         x = np.linspace(0, 20, 100)
@@ -1257,7 +1257,7 @@ def advanced_analytics_view(request):
             'actual': [float(val) for val in hist], # Density values of actual scores
             'mean': round(mean, 2),
             'std_dev': round(std, 2),
-            'count': int(len(scores))
+            'count': len(active_scores)
         }
 
     # Add level and class lists for the dynamic Gauss curve
