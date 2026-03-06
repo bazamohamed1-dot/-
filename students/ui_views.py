@@ -1224,6 +1224,19 @@ def advanced_analytics_view(request):
             'actual': [float(val) for val in hist] # Density values of actual scores
         }
 
+    # Add level and class lists for the dynamic Gauss curve
+    levels = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
+
+    classes_qs = Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values('academic_year', 'class_name').distinct()
+    class_map = {}
+    for item in classes_qs:
+        lvl = item['academic_year'] or 'غير محدد'
+        cls = item['class_name']
+        if cls:
+            if lvl not in class_map:
+                class_map[lvl] = []
+            class_map[lvl].append(cls)
+
     context = {
         'page_title': 'مختبر التحليل المتقدم',
         'gender_stats_json': json.dumps(gender_stats),
@@ -1232,8 +1245,141 @@ def advanced_analytics_view(request):
         'class_stats_by_level': class_stats_by_level,
         'advanced_stats': advanced_stats,
         'gauss_data_json': json.dumps(gauss_data),
+        'levels': levels,
+        'class_map_json': json.dumps(class_map),
     }
     return render(request, 'students/advanced_analytics.html', context)
+
+def statistical_tests_view(request):
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
+    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_advanced_analytics')):
+        return redirect('dashboard')
+
+    levels = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
+
+    return render(request, 'students/statistical_tests.html', {'levels': levels})
+
+def run_statistical_test(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    test_type = request.GET.get('test_type')
+    grouping = request.GET.get('grouping')
+    level = request.GET.get('level')
+
+    from .models import Grade
+    import pandas as pd
+    import scipy.stats as stats
+
+    grades_qs = Grade.objects.all()
+    if level:
+        grades_qs = grades_qs.filter(student__academic_year=level)
+
+    if not grades_qs.exists():
+        return JsonResponse({'error': 'لا توجد بيانات كافية'})
+
+    # We aggregate by student to get their general average for the test
+    df = pd.DataFrame(list(grades_qs.values('student_id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
+
+    # Calculate mean score per student to avoid repeated measures bias in simple tests
+    student_means = df.groupby(['student_id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
+    student_means = student_means[student_means['score'] > 0] # remove absences
+
+    if student_means.empty:
+        return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
+
+    group_col = 'student__' + grouping
+    if group_col not in student_means.columns:
+        return JsonResponse({'error': 'متغير التجميع غير صالح'})
+
+    groups_data = {}
+    arrays_for_test = []
+
+    for name, group in student_means.groupby(group_col):
+        # Ignore empty or None names
+        if not str(name).strip() or str(name) == 'None': continue
+
+        scores = group['score'].values
+        if len(scores) > 1: # Need at least 2 for variance
+            groups_data[str(name)] = {
+                'count': len(scores),
+                'mean': float(scores.mean()),
+                'std': float(scores.std(ddof=1))
+            }
+            arrays_for_test.append(scores)
+
+    if len(arrays_for_test) < 2:
+        return JsonResponse({'error': 'لا توجد مجموعات كافية للمقارنة (تتطلب مجموعتين على الأقل)'})
+
+    statistic = 0.0
+    p_value = 1.0
+    test_name = ""
+
+    if test_type == 't_test_ind':
+        if len(arrays_for_test) > 2:
+            return JsonResponse({'error': 'اختبار T-Test يتطلب مجموعتين فقط. استخدم ANOVA.'})
+        test_name = "Independent T-Test"
+        statistic, p_value = stats.ttest_ind(arrays_for_test[0], arrays_for_test[1], equal_var=False)
+    elif test_type == 'anova':
+        test_name = "One-Way ANOVA"
+        statistic, p_value = stats.f_oneway(*arrays_for_test)
+    else:
+        return JsonResponse({'error': 'نوع الاختبار غير معروف'})
+
+    return JsonResponse({
+        'test_name': test_name,
+        'statistic': float(statistic),
+        'p_value': float(p_value),
+        'is_significant': bool(p_value < 0.05),
+        'groups': groups_data
+    })
+
+
+def get_gauss_data(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    from .models import Grade
+    import pandas as pd
+    import numpy as np
+    import scipy.stats as stats
+
+    level = request.GET.get('level', '')
+    class_name = request.GET.get('class_name', '')
+
+    grades_qs = Grade.objects.all()
+    if level:
+        grades_qs = grades_qs.filter(student__academic_year=level)
+    if class_name:
+        grades_qs = grades_qs.filter(student__class_name=class_name)
+
+    if not grades_qs.exists():
+        return JsonResponse({'x': [], 'y': [], 'actual': []})
+
+    df = pd.DataFrame(list(grades_qs.values('score')))
+    df = df[df['score'] > 0]
+
+    scores = df['score'].dropna()
+
+    if len(scores) <= 1:
+        return JsonResponse({'x': [], 'y': [], 'actual': []})
+
+    mean = scores.mean()
+    std = scores.std()
+
+    bins = np.arange(0, 22, 1)
+    hist, _ = np.histogram(scores, bins=bins, density=True)
+
+    discrete_x = np.arange(0, 21, 1)
+    discrete_y = stats.norm.pdf(discrete_x, mean, std) if std > 0 else np.zeros_like(discrete_x)
+
+    gauss_data = {
+        'x': [int(val) for val in discrete_x],
+        'y': [float(val) for val in discrete_y],
+        'actual': [float(val) for val in hist]
+    }
+    return JsonResponse(gauss_data)
 
 def upload_grades_ajax(request):
     """Handles bulk uploading of multiple grade files with AJAX progress"""

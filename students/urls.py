@@ -98,4 +98,7 @@ urlpatterns = [
     path('analytics_test/', ui_views.analytics_dashboard, name='analytics_test'),
     path('analytics/upload_grades_ajax/', ui_views.upload_grades_ajax, name='upload_grades_ajax'),
     path('analytics/advanced/', ui_views.advanced_analytics_view, name='advanced_analytics_view'),
+    path('analytics/gauss_data/', ui_views.get_gauss_data, name='get_gauss_data'),
+    path('analytics/statistical_tests/', ui_views.statistical_tests_view, name='statistical_tests_view'),
+    path('analytics/run_statistical_test/', ui_views.run_statistical_test, name='run_statistical_test'),
 ]

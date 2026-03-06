@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}الاختبارات الإحصائية المدعومة بالذكاء الاصطناعي{% endblock %}
+{% block header_title %}الاختبارات الإحصائية{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 style="color: #0f172a; margin:0;"><i class="fas fa-microscope text-primary me-2"></i> الاختبارات الإحصائية</h2>
+            <p class="text-muted mt-1 mb-0">إجراء اختبارات إحصائية واستنتاج الدلالات باستخدام الذكاء الاصطناعي</p>
+        </div>
+        <a href="{% url 'advanced_analytics_view' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-right me-1"></i> العودة للتحليل المتقدم
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+                <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
+                    <h5 class="m-0" style="color: #334155;"><i class="fas fa-sliders-h text-warning me-2"></i> إعدادات الاختبار</h5>
+                </div>
+                <div class="card-body">
+                    <form id="statTestForm">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">نوع الاختبار</label>
+                            <select id="testType" class="form-select">
+                                <option value="t_test_ind">T-Test (مستقل) - مقارنة بين مجموعتين</option>
+                                <option value="anova">ANOVA - مقارنة بين أكثر من مجموعتين</option>
+                            </select>
+                            <small class="text-muted d-block mt-1">مثال: T-Test لمقارنة الذكور والإناث، ANOVA لمقارنة الأقسام.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">المجموعة المستهدفة (المتغير المستقل)</label>
+                            <select id="groupingVariable" class="form-select">
+                                <option value="gender">الجنس (ذكور / إناث)</option>
+                                <option value="class_name">الأقسام</option>
+                                <option value="academic_year">المستويات</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">المستوى (اختياري، للفلترة)</label>
+                            <select id="filterLevel" class="form-select">
+                                <option value="">جميع المستويات</option>
+                                {% for level in levels %}
+                                    <option value="{{ level }}">{{ level }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <button type="button" class="btn btn-primary w-100 fw-bold" onclick="runTest()">
+                            <i class="fas fa-play me-1"></i> إجراء الاختبار
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8 mb-4">
+            <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+                <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h5 class="m-0" style="color: #334155;"><i class="fas fa-poll text-success me-2"></i> نتائج الاختبار</h5>
+                    <button type="button" class="btn btn-sm btn-outline-info" id="aiAnalyzeBtn" onclick="analyzeWithAI()" disabled>
+                        <i class="fas fa-robot"></i> تحليل AI المعمق
+                    </button>
+                </div>
+                <div class="card-body" id="testResultsArea">
+                    <div class="alert alert-secondary text-center">
+                        <i class="fas fa-info-circle fa-2x mb-2 text-muted"></i>
+                        <p class="m-0">يرجى تحديد المعلمات وإجراء الاختبار لرؤية النتائج هنا.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row" id="aiAnalysisRow" style="display: none;">
+        <div class="col-12">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; background: #f0f9ff; border: 1px solid #bae6fd;">
+                <div class="card-body">
+                    <h5 style="color: #0284c7; margin-bottom: 15px;"><i class="fas fa-brain me-2"></i> قراءة الذكاء الاصطناعي للاختبار</h5>
+                    <div id="aiLoading" style="display:none; text-align:center; padding:20px;">
+                        <i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i>
+                        <p style="margin-top:10px;">جاري استخلاص النتائج...</p>
+                    </div>
+                    <div id="aiAnalysisResult" style="font-size: 0.95rem; line-height: 1.6; color: #334155;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let lastTestData = null;
+
+    async function runTest() {
+        const testType = document.getElementById('testType').value;
+        const groupingVar = document.getElementById('groupingVariable').value;
+        const level = document.getElementById('filterLevel').value;
+        const resultsArea = document.getElementById('testResultsArea');
+        const aiBtn = document.getElementById('aiAnalyzeBtn');
+
+        resultsArea.innerHTML = '<div class="text-center p-4"><i class="fas fa-spinner fa-spin fa-2x text-primary"></i><p class="mt-2">جاري الحساب...</p></div>';
+        aiBtn.disabled = true;
+        document.getElementById('aiAnalysisRow').style.display = 'none';
+
+        try {
+            const response = await fetch(`/canteen/analytics/run_statistical_test/?test_type=${testType}&grouping=${groupingVar}&level=${encodeURIComponent(level)}`);
+            const data = await response.json();
+
+            if (!response.ok || data.error) {
+                resultsArea.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> ${data.error || 'حدث خطأ غير معروف'}</div>`;
+                return;
+            }
+
+            lastTestData = data;
+
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" style="text-align: center;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>المجموعة</th>
+                                <th>العدد (N)</th>
+                                <th>المتوسط (Mean)</th>
+                                <th>الانحراف المعياري (SD)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            for (const [grp, stats] of Object.entries(data.groups)) {
+                html += `
+                    <tr>
+                        <td><strong>${grp}</strong></td>
+                        <td>${stats.count}</td>
+                        <td>${stats.mean.toFixed(2)}</td>
+                        <td>${stats.std.toFixed(2)}</td>
+                    </tr>
+                `;
+            }
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 p-3 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                    <h6 style="color: #475569; margin-bottom: 15px;"><i class="fas fa-chart-line me-2"></i> نتيجة الاختبار: <strong>${data.test_name}</strong></h6>
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <span class="text-muted d-block" style="font-size: 0.85rem;">قيمة الاختبار (Statistic)</span>
+                            <strong style="font-size: 1.2rem; color: #0f172a;">${data.statistic.toFixed(4)}</strong>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block" style="font-size: 0.85rem;">القيمة الاحتمالية (P-Value)</span>
+                            <strong style="font-size: 1.2rem; color: ${data.p_value < 0.05 ? '#10b981' : '#ef4444'};">${data.p_value.toFixed(4)}</strong>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <span class="badge ${data.is_significant ? 'bg-success' : 'bg-secondary'} p-2" style="font-size: 0.9rem;">
+                            ${data.is_significant ? 'يوجد فرق ذو دلالة إحصائية' : 'لا يوجد فرق ذو دلالة إحصائية'}
+                        </span>
+                    </div>
+                </div>
+            `;
+
+            resultsArea.innerHTML = html;
+            aiBtn.disabled = false;
+
+        } catch (error) {
+            resultsArea.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i> فشل الاتصال بالخادم.</div>`;
+        }
+    }
+
+    async function analyzeWithAI() {
+        if (!lastTestData) return;
+
+        const aiRow = document.getElementById('aiAnalysisRow');
+        const loading = document.getElementById('aiLoading');
+        const resultDiv = document.getElementById('aiAnalysisResult');
+
+        aiRow.style.display = 'block';
+        loading.style.display = 'block';
+        resultDiv.style.display = 'none';
+
+        const prompt = `لقد قمت بإجراء اختبار إحصائي من نوع ${lastTestData.test_name}.
+المتغير المستقل: ${document.getElementById('groupingVariable').options[document.getElementById('groupingVariable').selectedIndex].text}
+قيمة الاختبار (Statistic): ${lastTestData.statistic.toFixed(4)}
+القيمة الاحتمالية (P-value): ${lastTestData.p_value.toFixed(4)}
+النتيجة: ${lastTestData.is_significant ? 'دالة إحصائياً' : 'غير دالة إحصائياً'}
+
+تفاصيل المجموعات:
+${Object.entries(lastTestData.groups).map(([grp, stats]) => `- ${grp}: العدد=${stats.count}، المتوسط=${stats.mean.toFixed(2)}`).join('\n')}
+
+أريدك أن:
+1. تشرح معنى هذه النتيجة ببساطة للمدير.
+2. توضح ما يعنيه هذا الفرق (أو عدمه) على أرض الواقع التعليمي.
+3. تقترح بعض التوصيات التربوية بناءً على هذه النتيجة.`;
+
+        try {
+            const formData = new FormData();
+            formData.append('query', prompt);
+            formData.append('mode', 'gemini_full'); // Use an advanced model for analysis
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            const response = await fetch("{% url 'ai_chat_view' %}", {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.response) {
+                let text = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                text = text.replace(/\n/g, '<br>');
+                resultDiv.innerHTML = text;
+                resultDiv.style.display = 'block';
+            } else {
+                resultDiv.innerHTML = '<span style="color:red;">خطأ: استجابة غير صالحة.</span>';
+                resultDiv.style.display = 'block';
+            }
+        } catch (error) {
+            resultDiv.innerHTML = '<span style="color:red;">خطأ في الاتصال بخادم الذكاء الاصطناعي.</span>';
+            resultDiv.style.display = 'block';
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+</script>
+{% endblock %}
