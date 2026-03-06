@@ -306,6 +306,13 @@
                     }
                     container.style.backgroundColor = "white"; // Ensure background is solid white
                     container.style.overflow = "auto";
+
+                    // Find canvas and maximize height
+                    const canvas = container.querySelector('canvas');
+                    if (canvas) {
+                        canvas.dataset.originalMaxHeight = canvas.style.maxHeight;
+                        canvas.style.maxHeight = '90vh';
+                    }
                 } else {
                     if (document.exitFullscreen) {
                         document.exitFullscreen();
@@ -316,6 +323,16 @@
                     }
                 }
             }
+
+            // Restore canvas heights when exiting fullscreen via Escape key
+            document.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) {
+                    document.querySelectorAll('canvas[data-original-max-height]').forEach(canvas => {
+                        canvas.style.maxHeight = canvas.dataset.originalMaxHeight;
+                        delete canvas.dataset.originalMaxHeight;
+                    });
+                }
+            });
         </script>
     </div>
 </div>
@@ -434,10 +451,8 @@
             <i class="fas fa-expand"></i>
         </button>
         <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chart-line text-info"></i> تحليل الاتجاهات (مقارنة الأقسام)</h4>
-        <div style="width: 100%; overflow-x: auto;">
-            <div style="min-width: 600px; height: 350px;">
-                <canvas id="trendChart"></canvas>
-            </div>
+        <div style="width: 100%; height: 350px; position: relative;">
+            <canvas id="trendChart"></canvas>
         </div>
     </div>
 
@@ -526,7 +541,8 @@
                     borderRadius: 4
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { responsive: true, maintainAspectRatio: false },
+            plugins: [dataLabelsPlugin]
         });
 
         // 2. Pie Chart (Categories)
@@ -540,7 +556,8 @@
                     backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { responsive: true, maintainAspectRatio: false },
+            plugins: [pieLabelsPlugin]
         });
 
         // 3. Subject Comparison Mixed Chart
@@ -579,7 +596,7 @@
                         data: subjectSuccessCount,
                         backgroundColor: '#3b82f6',
                         borderRadius: 4,
-                        yAxisID: 'y1'
+                        yAxisID: 'y2'
                     }
                 ]
             },
@@ -602,7 +619,15 @@
                         beginAtZero: true,
                         max: 100,
                         grid: { drawOnChartArea: false },
-                        title: { display: true, text: 'النسبة / العدد' }
+                        title: { display: true, text: 'نسبة النجاح %' }
+                    },
+                    y2: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'عدد الناجحين' }
                     }
                 }
             }
@@ -631,6 +656,28 @@
             }
         };
 
+        const pieLabelsPlugin = {
+            id: 'pieLabelsPlugin',
+            afterDatasetsDraw(chart, args, pluginOptions) {
+                const { ctx } = chart;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    if (meta.hidden) return;
+                    meta.data.forEach((element, index) => {
+                        const dataString = dataset.data[index];
+                        if (dataString && Number(dataString) > 0) {
+                            const position = element.tooltipPosition();
+                            ctx.fillStyle = '#ffffff';
+                            ctx.font = 'bold 14px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(dataString, position.x, position.y);
+                        }
+                    });
+                });
+            }
+        };
+
         // 4. Trend Analysis (or Class Comparison) Line/Bar Chart
         // If termData has > 1 keys, show trend, else show class comparison
         const trendCtx = document.getElementById('trendChart').getContext('2d');
@@ -649,16 +696,6 @@
         let tValues = showTermTrend ? Object.values(termData) : sortedClassLabels.map(l => classData[l]);
         let tLabelName = showTermTrend ? 'تطور المتوسط حسب الفصل' : 'مقارنة الأقسام';
         let tType = showTermTrend ? 'line' : 'bar';
-
-        // Add dynamic width based on the number of bars to make sure all bars fit correctly.
-        const dynamicWidth = tLabels.length * 50 + 100; // e.g. 50px per bar
-        const minWidth = 600;
-        const trendCanvasContainer = document.getElementById('trendChart').parentElement;
-        if (tType === 'bar') {
-            trendCanvasContainer.style.width = Math.max(dynamicWidth, minWidth) + 'px';
-        } else {
-            trendCanvasContainer.style.width = '100%';
-        }
 
         new Chart(trendCtx, {
             type: tType,

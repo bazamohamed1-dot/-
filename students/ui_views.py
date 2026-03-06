@@ -1221,7 +1221,10 @@ def advanced_analytics_view(request):
         gauss_data = {
             'x': [int(val) for val in discrete_x],
             'y': [float(val) for val in discrete_y],
-            'actual': [float(val) for val in hist] # Density values of actual scores
+            'actual': [float(val) for val in hist], # Density values of actual scores
+            'mean': round(mean, 2),
+            'std_dev': round(std, 2),
+            'count': int(len(scores))
         }
 
     # Add level and class lists for the dynamic Gauss curve
@@ -1377,7 +1380,16 @@ def get_gauss_data(request):
     gauss_data = {
         'x': [int(val) for val in discrete_x],
         'y': [float(val) for val in discrete_y],
-        'actual': [float(val) for val in hist]
+        'actual': [float(val) for val in hist],
+        'mean': round(mean, 2) if not pd.isna(mean) else 0,
+        'std_dev': round(std, 2) if not pd.isna(std) else 0,
+        'count': int(len(scores)),
+        'median': round(scores.median(), 2) if not scores.empty else 0,
+        'mode': round(scores.mode()[0], 2) if not scores.empty and not scores.mode().empty else 0,
+        'variance': round(scores.var(), 2) if len(scores) > 1 else 0,
+        'range': round(scores.max() - scores.min(), 2) if not scores.empty else 0,
+        'min': round(scores.min(), 2) if not scores.empty else 0,
+        'max': round(scores.max(), 2) if not scores.empty else 0,
     }
     return JsonResponse(gauss_data)
 
