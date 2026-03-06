@@ -7,11 +7,15 @@ async def run():
         page = await browser.new_page()
 
         print("Navigating to login page...")
-        await page.goto('http://127.0.0.1:8000/canteen/')
+        await page.goto('http://127.0.0.1:8000/auth/login/')
         await page.wait_for_timeout(2000)
 
-        # We don't have access to the UI of the login page to write playwright script properly. Let's just create a superuser and manually login via Django if needed, or we just trust the changes.
-        pass
+        await page.fill('input[name="username"]', 'admin')
+        await page.fill('input[name="password"]', 'admin')
+
+        await page.evaluate("""() => {
+            document.querySelector('button[type="submit"]').click();
+        }""")
 
         await page.wait_for_timeout(3000)
         print("Logged in successfully.")
