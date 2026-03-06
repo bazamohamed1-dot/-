@@ -6,15 +6,15 @@ async def run():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        print("Navigating to canteen login page...")
-        await page.goto('http://127.0.0.1:8000/canteen/login/')
+        print("Navigating to login page...")
+        await page.goto('http://127.0.0.1:8000/auth/login/')
         await page.wait_for_timeout(2000)
 
-        await page.fill('input#username', 'director')
-        await page.fill('input#password', 'Admin@123')
+        await page.fill('input[name="username"]', 'admin')
+        await page.fill('input[name="password"]', 'admin')
 
         await page.evaluate("""() => {
-            document.getElementById('loginBtn').click();
+            document.querySelector('button[type="submit"]').click();
         }""")
 
         await page.wait_for_timeout(3000)

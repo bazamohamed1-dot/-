@@ -615,7 +615,7 @@ function getCookie(name) {
 let customRoles = [];
 
 async function loadRoles() {
-    if (sessionStorage.getItem('user_role') !== 'director') return;
+    // Show unconditionally on backend rendering if not strict auth, or just ensure display is block
     document.getElementById('roleManagementSection').style.display = 'block';
 
     try {
@@ -691,14 +691,18 @@ function openRoleModal() {
     document.getElementById('roleModal').style.display = 'flex';
     document.getElementById('roleName').value = '';
     // Clone permissions from User Modal to Role Modal if empty
-    const source = document.querySelector('#userModal .max-height-200, #userModal div[style*="max-height: 200px"]');
+    const source = document.querySelector('#userModal div[style*="max-height: 200px"]');
     const target = document.getElementById('rolePermsContainer');
     if(source && target.innerHTML.trim() === '') {
         target.innerHTML = source.innerHTML;
         // Ensure IDs are unique to avoid conflict
         target.querySelectorAll('input').forEach(inp => {
-            inp.id = 'role_' + inp.id;
-            inp.nextElementSibling.setAttribute('for', inp.id);
+            const oldId = inp.id;
+            inp.id = 'role_' + oldId;
+            const label = target.querySelector(`label[for="${oldId}"]`);
+            if (label) {
+                label.setAttribute('for', inp.id);
+            }
         });
     }
     // Uncheck all
