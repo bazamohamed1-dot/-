@@ -18,7 +18,8 @@ from .utils_sync import sync_photos_logic
 from django.db.models import Q
 
 def sync_photos_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and request.user.profile.role != 'director':
         return redirect('dashboard')
 
@@ -27,7 +28,8 @@ def sync_photos_view(request):
     return redirect('settings')
 
 def pending_updates_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     pass
 
     updates = PendingUpdate.objects.all().order_by('-timestamp')
@@ -130,7 +132,8 @@ def dashboard(request):
     return render(request, 'students/dashboard.html', context)
 
 def settings_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('manage_settings'):
          return redirect('dashboard')
 
@@ -142,7 +145,8 @@ def settings_view(request):
     return render(request, 'students/settings.html', context)
 
 def import_eleve_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('import_data'):
          return redirect('dashboard')
 
@@ -276,7 +280,8 @@ def import_eleve_view(request):
     return redirect('settings')
 
 def import_eleve_confirm(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
 
     if request.method == 'POST':
         temp_path = request.POST.get('temp_file_path')
@@ -326,7 +331,8 @@ def import_eleve_confirm(request):
     return redirect('settings')
 
 def canteen_home(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_canteen'):
         return redirect('dashboard')
     context = {
@@ -336,7 +342,8 @@ def canteen_home(request):
     return render(request, 'students/canteen.html', context)
 
 def student_list(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
         return redirect('dashboard')
 
@@ -351,7 +358,8 @@ def student_list(request):
     return render(request, 'students/student_list.html', context)
 
 def students_management(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
         return redirect('dashboard')
     context = {
@@ -361,7 +369,8 @@ def students_management(request):
     return render(request, 'students/management.html', context)
 
 def library_home(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_library'):
         return redirect('dashboard')
     context = {
@@ -371,7 +380,8 @@ def library_home(request):
     return render(request, 'students/library.html', context)
 
 def archive_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_archive'):
         return redirect('dashboard')
     context = {
@@ -381,7 +391,8 @@ def archive_view(request):
     return render(request, 'students/archive.html', context)
 
 def print_student_cards(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_management'):
         return redirect('dashboard')
 
@@ -440,7 +451,8 @@ from .ai_utils import analyze_assignment_document, analyze_global_assignment_con
 import difflib
 
 def assignment_matching_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
 
     # 1. Processing Uploaded File (GET)
     if request.method == 'GET':
@@ -606,7 +618,8 @@ def assignment_matching_view(request):
         return redirect('hr_home')
 
 def hr_home(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
         return redirect('dashboard')
 
@@ -847,7 +860,8 @@ def hr_home(request):
     return render(request, 'students/hr.html', context)
 
 def hr_delete(request, pk):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
         return redirect('dashboard')
 
@@ -856,7 +870,8 @@ def hr_delete(request, pk):
     return redirect('hr_home')
 
 def parents_home(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_parents'):
         return redirect('dashboard')
 
@@ -876,7 +891,8 @@ def parents_home(request):
     return render(request, 'students/parents.html', context)
 
 def guidance_home(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_guidance'):
         return redirect('dashboard')
 
@@ -941,13 +957,15 @@ def guidance_home(request):
     return render(request, 'students/guidance.html', context)
 
 def ai_manual_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     pass
 
     return render(request, 'students/ai_manual.html')
 
 def ai_chat_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_chat')):
         return redirect('dashboard')
 
@@ -986,7 +1004,8 @@ def ai_chat_view(request):
 # --- AI & Task UI Views ---
 
 def tasks_view(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_tasks')):
         return redirect('dashboard')
 
@@ -1004,7 +1023,8 @@ def tasks_view(request):
     return render(request, 'students/tasks.html', context)
 
 def ai_control_panel(request):
-    if not request.user.is_authenticated: return redirect('canteen_landing')
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
     if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_control')):
         return redirect('dashboard')
 
