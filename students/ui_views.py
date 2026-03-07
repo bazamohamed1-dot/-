@@ -562,7 +562,15 @@ def assignment_matching_view(request):
                         continue
 
                 if teacher:
-                    assign, created = TeacherAssignment.objects.get_or_create(teacher=teacher, subject=final_subject)
+                    try:
+                        assign, created = TeacherAssignment.objects.get_or_create(teacher=teacher, subject=final_subject)
+                    except TeacherAssignment.MultipleObjectsReturned:
+                        # Handle edge case where db somehow has duplicate assignment records
+                        assignments = TeacherAssignment.objects.filter(teacher=teacher, subject=final_subject)
+                        assign = assignments.first()
+                        # Clean up duplicates to avoid future errors
+                        assignments.exclude(pk=assign.pk).delete()
+
                     # Merge classes
                     existing_classes = set(assign.classes) if assign.classes else set()
                     existing_classes.update(final_classes)
@@ -679,7 +687,7 @@ def assignment_matching_view(request):
             else:
                 c['auto_action'] = 'create_new'
 
-            c['classes_json'] = json.dumps(c['classes'])
+                c['classes_json'] = json.dumps(c.get('classes', []))
 
         context['all_teachers'] = all_teachers
 
