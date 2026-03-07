@@ -1184,10 +1184,16 @@ def analytics_dashboard(request):
     selected_level = request.GET.get('level', '')
     selected_class = request.GET.get('class_name', '')
     selected_teacher_id = request.GET.get('teacher_id', '')
+    selected_subject = request.GET.get('subject', '')
 
     grades_qs = Grade.objects.all()
     if selected_term:
         grades_qs = grades_qs.filter(term=selected_term)
+
+    # Subject Filtering
+    if selected_subject:
+        import django.db.models as models
+        grades_qs = grades_qs.filter(models.Q(subject__icontains=selected_subject))
 
     # Teacher Assignment Filtering
     if selected_teacher_id:
@@ -1219,14 +1225,12 @@ def analytics_dashboard(request):
                         q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
-            if teacher_subjects:
-                # Also filter by subject if it's specified, unless we want all subjects for those classes
-                # Usually we want to analyze the teacher's specific subject performance
+            if teacher_subjects and not selected_subject:
+                # If subject is explicitly selected via dropdown, it overrides teacher's default subject
+                # If not, filter by the teacher's subjects
                 q_subjs = models.Q()
                 for subj in teacher_subjects:
                     q_subjs |= models.Q(subject__icontains=subj)
-
-                # We also want to keep the general averages if they are needed for comparison, but if filtering by teacher, the subject filter makes sense.
                 grades_qs = grades_qs.filter(q_subjs)
 
         except Employee.DoesNotExist:
@@ -1268,6 +1272,10 @@ def analytics_dashboard(request):
 
     import json
 
+    # Get Dynamic Subjects List
+    subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
+    subjects_list.sort()
+
     # Get Teachers List for Dropdown
     from .models import Employee
     teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
@@ -1279,6 +1287,7 @@ def analytics_dashboard(request):
         'class_map_json': json.dumps(class_map),
         'token_cost': token_cost,
         'teachers': teachers,
+        'subjects_list': subjects_list,
         'selected_teacher_id': selected_teacher_id
     }
     return render(request, 'students/analytics.html', context)
@@ -1440,6 +1449,14 @@ def advanced_analytics_view(request):
             if cls not in class_map[lvl]:
                 class_map[lvl].append(cls)
 
+    # Get Dynamic Subjects List
+    subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
+    subjects_list.sort()
+
+    # Get Teachers List for Dropdown
+    from .models import Employee
+    teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
+
     context = {
         'page_title': 'مختبر التحليل المتقدم',
         'gender_stats_json': json.dumps(gender_stats),
@@ -1450,6 +1467,8 @@ def advanced_analytics_view(request):
         'gauss_data_json': json.dumps(gauss_data),
         'levels': levels,
         'class_map_json': json.dumps(class_map),
+        'teachers': teachers,
+        'subjects_list': subjects_list
     }
     return render(request, 'students/advanced_analytics.html', context)
 
@@ -1555,44 +1574,97 @@ def get_gauss_data(request):
 
     level = request.GET.get('level', '')
     class_name = request.GET.get('class_name', '')
+    teacher_id = request.GET.get('teacher_id', '')
+    subject = request.GET.get('subject', '')
 
     grades_qs = Grade.objects.all()
-    if level:
+
+    # Subject Filtering
+    if subject:
         import django.db.models as models
-        grades_qs = grades_qs.filter(
-            models.Q(student__academic_year=level) |
-            models.Q(student__academic_year__icontains=level.replace(' متوسط', '').strip())
-        )
-    if class_name:
-        from .analytics_utils import unformat_class_name
-        import django.db.models as models
-        # DB might have '5', '1م5', or 'أولى متوسط 5' or 'أولى 5'.
-        # We extract the pure digit (e.g. '5') and match any class name ending with or containing that digit for that level
-        raw_class = unformat_class_name(class_name)
-        if raw_class and raw_class.isdigit():
+        grades_qs = grades_qs.filter(models.Q(subject__icontains=subject))
+
+    # Teacher Assignment Filtering
+    if teacher_id:
+        from .models import Employee, TeacherAssignment
+        try:
+            teacher = Employee.objects.get(id=teacher_id)
+            assignments = TeacherAssignment.objects.filter(teacher=teacher)
+            teacher_classes = []
+            teacher_subjects = []
+            for assign in assignments:
+                if assign.classes:
+                    teacher_classes.extend(assign.classes)
+                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                    teacher_subjects.append(assign.subject)
+
+            teacher_classes = list(set(teacher_classes))
+
+            if teacher_classes:
+                import django.db.models as models
+                q_classes = models.Q()
+                from .analytics_utils import unformat_class_name
+                for cls in teacher_classes:
+                    raw_c = unformat_class_name(cls)
+                    if raw_c and raw_c.isdigit():
+                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
+                    else:
+                        q_classes |= models.Q(student__class_name=cls)
+                grades_qs = grades_qs.filter(q_classes)
+
+            if teacher_subjects and not subject:
+                q_subjs = models.Q()
+                for subj in teacher_subjects:
+                    q_subjs |= models.Q(subject__icontains=subj)
+                grades_qs = grades_qs.filter(q_subjs)
+
+        except Employee.DoesNotExist:
+            pass
+    else:
+        if level:
+            import django.db.models as models
             grades_qs = grades_qs.filter(
-                models.Q(student__class_name=class_name) |
-                models.Q(student__class_name=raw_class) |
-                models.Q(student__class_name__endswith=f" {raw_class}") |
-                models.Q(student__class_name__endswith=f"م{raw_class}") |
-                models.Q(student__class_name__icontains=raw_class)
+                models.Q(student__academic_year=level) |
+                models.Q(student__academic_year__icontains=level.replace(' متوسط', '').strip())
             )
-        else:
-            grades_qs = grades_qs.filter(student__class_name=class_name)
+        if class_name:
+            from .analytics_utils import unformat_class_name
+            import django.db.models as models
+            # DB might have '5', '1م5', or 'أولى متوسط 5' or 'أولى 5'.
+            # We extract the pure digit (e.g. '5') and match any class name ending with or containing that digit for that level
+            raw_class = unformat_class_name(class_name)
+            if raw_class and raw_class.isdigit():
+                grades_qs = grades_qs.filter(
+                    models.Q(student__class_name=class_name) |
+                    models.Q(student__class_name=raw_class) |
+                    models.Q(student__class_name__endswith=f" {raw_class}") |
+                    models.Q(student__class_name__endswith=f"م{raw_class}") |
+                    models.Q(student__class_name__icontains=raw_class)
+                )
+            else:
+                grades_qs = grades_qs.filter(student__class_name=class_name)
 
     if not grades_qs.exists():
         return JsonResponse({'x': [], 'y': [], 'actual': [], 'mean': 0, 'std_dev': 0, 'count': 0})
 
     df = pd.DataFrame(list(grades_qs.values('student__id', 'subject', 'student__class_name', 'student__academic_year', 'term', 'score')))
 
-    general_avg_subjs = [subj for subj in df['subject'].unique() if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل'))]
-
-    if general_avg_subjs:
-        general_avg_df = df[df['subject'].isin(general_avg_subjs)].copy()
+    if subject or teacher_id:
+        # If analyzing a specific subject or teacher, we don't look at the 'general average'
+        # We look directly at the scores of that subject
+        # If multiple subjects are caught (e.g., if a teacher teaches Math and Physics), we average them per student or treat them as raw scores
+        # We'll treat them as raw scores per student per subject
+        # To avoid multiple scores for the same student skewing the count, we group by student
+        target_df = df.groupby(['student__id'])['score'].mean().reset_index()
     else:
-        general_avg_df = df.groupby(['student__id', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+        general_avg_subjs = [subj for subj in df['subject'].unique() if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل'))]
 
-    active_scores = general_avg_df[general_avg_df['score'] > 0]['score'].dropna()
+        if general_avg_subjs:
+            target_df = df[df['subject'].isin(general_avg_subjs)].copy()
+        else:
+            target_df = df.groupby(['student__id', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+
+    active_scores = target_df[target_df['score'] > 0]['score'].dropna()
     active_scores = active_scores.clip(upper=20.0)
 
     if len(active_scores) <= 1:
