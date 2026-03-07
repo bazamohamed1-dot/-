@@ -72,11 +72,11 @@
                                 data-subject="{{ emp.subject|default:'' }}"
                                 data-classes="{{ assign.classes|default:'[]'|safe_json|escape }}"
                                 title="إسناد الأقسام">
-                            <i class="fas fa-chalkboard-teacher"></i>
+                            <i class="fas fa-chalkboard-teacher"></i> تفاصيل الإسناد
                         </button>
                         {% endwith %}
                         {% endif %}
-                        <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})'><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
                     </td>
                 </tr>
@@ -259,7 +259,26 @@
 
             <div class="mb-3">
                 <label>المادة</label>
-                <input type="text" name="subject" id="assignSubject" class="form-control" required>
+                <div class="d-flex gap-2">
+                    <select class="form-control w-50" onchange="document.getElementById('assignSubject').value = this.value; if(this.value === '') document.getElementById('assignSubject').focus();">
+                        <option value="">-- اختر من القائمة أو اكتب يدوياً --</option>
+                        <option value="رياضيات">رياضيات</option>
+                        <option value="لغة عربية">لغة عربية</option>
+                        <option value="لغة فرنسية">لغة فرنسية</option>
+                        <option value="لغة إنجليزية">لغة إنجليزية</option>
+                        <option value="تاريخ وجغرافيا">تاريخ وجغرافيا</option>
+                        <option value="علوم طبيعية">علوم طبيعية</option>
+                        <option value="فيزياء">فيزياء</option>
+                        <option value="تربية إسلامية">تربية إسلامية</option>
+                        <option value="تربية مدنية">تربية مدنية</option>
+                        <option value="تربية بدنية">تربية بدنية</option>
+                        <option value="تربية تشكيلية">تربية تشكيلية</option>
+                        <option value="تربية موسيقية">تربية موسيقية</option>
+                        <option value="إعلام آلي">إعلام آلي</option>
+                        <option value="لغة أمازيغية">لغة أمازيغية</option>
+                    </select>
+                    <input type="text" name="subject" id="assignSubject" class="form-control w-50" placeholder="أو اكتب المادة هنا..." required>
+                </div>
             </div>
 
             <div class="mb-3">

@@ -386,10 +386,100 @@ class AIService:
 # Stub
 def analyze_assignment_document(a): pass
 def analyze_global_assignment(f): pass
-def analyze_global_assignment_content(f):
+
+# Global AI Assignment Analysis
+def analyze_global_assignment_content(file_path):
     from students.utils_tools.smart_assignment_analyzer import extract_from_excel, extract_from_word, extract_from_pdf
-    ext = os.path.splitext(f)[1].lower()
-    if ext in ['.xlsx', '.xls']: return extract_from_excel(f)
-    if ext == '.docx': return extract_from_word(f)
-    if ext == '.pdf': return extract_from_pdf(f)
+    ext = os.path.splitext(file_path)[1].lower()
+
+    raw_text = ""
+    # Attempt simple local extraction first based on type
+    if ext in ['.xlsx', '.xls']:
+        return extract_from_excel(file_path) # Excel is usually tabular and well-handled locally
+    elif ext == '.docx':
+        from docx import Document
+        try:
+            doc = Document(file_path)
+            raw_text = "\n".join([p.text for p in doc.paragraphs])
+            for table in doc.tables:
+                for row in table.rows:
+                    raw_text += " | ".join([cell.text for cell in row.cells]) + "\n"
+        except: pass
+    elif ext == '.pdf':
+        try:
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    raw_text += (page.extract_text() or "") + "\n"
+        except: pass
+    elif ext in ['.jpg', '.jpeg', '.png', '.webp']:
+        # If OCR is required in the future, it goes here.
+        # For now, we will rely on Gemini Vision if keys are available, otherwise text extraction
+        pass
+    else:
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                raw_text = f.read()
+        except: pass
+
+    # If local parser failed or it's a file type that needs deep analysis
+    if not raw_text.strip():
+        # Fallback to local old parsing if no text extracted
+        if ext == '.docx': return extract_from_word(file_path)
+        if ext == '.pdf': return extract_from_pdf(file_path)
+        return []
+
+    # Send to DeepSeek (or Fallback AI) via AIService
+    ai = AIService()
+    prompt = f"""
+    قم بتحليل النص التالي المستخرج من جدول استعمال الزمن أو قائمة إسناد الأساتذة في مدرسة.
+    المطلوب:
+    استخرج قائمة بجميع الأساتذة مع المواد التي يدرسونها والأقسام المسندة إليهم.
+    يجب أن يكون الناتج حصرياً بصيغة JSON Array مصفوفة، حيث كل عنصر هو كائن Object يحتوي على:
+    - name: اسم الأستاذ واللقب (نص)
+    - subject: مادة التدريس (نص). إذا لم تكن واضحة ضع "/"
+    - classes: مصفوفة نصوص بأسماء الأقسام المسندة للأستاذ (مثل ["1م1", "4م2", "3م1"])
+
+    مثال للإخراج المطلوب:
+    [
+      {{"name": "محمد بن علي", "subject": "رياضيات", "classes": ["1م1", "2م2"]}},
+      {{"name": "فاطمة الزهراء", "subject": "لغة عربية", "classes": ["4م1"]}}
+    ]
+
+    تنبيه: لا تكتب أي نص إضافي قبل أو بعد الـ JSON. الإخراج يجب أن يكون JSON قابل للتحليل مباشرة.
+
+    النص للتحليل:
+    {raw_text[:8000]}
+    """
+
+    # Force OpenRouter (DeepSeek) or fallback
+    response = ai.generate_response("أنت خبير في تحليل البيانات المدرسية وصياغتها بـ JSON دقيق.", prompt, rag_enabled=False)
+
+    import json
+    import re
+    if response and response != "INSUFFICIENT_FUNDS_ERROR" and not response.startswith("⚠️"):
+        # Clean JSON markdown blocks if generated
+        clean_json = re.sub(r'```json\s*', '', response)
+        clean_json = re.sub(r'```\s*', '', clean_json).strip()
+
+        try:
+            candidates = json.loads(clean_json)
+            # Normalize to ensure standard structure
+            normalized = []
+            for c in candidates:
+                if isinstance(c, dict) and 'name' in c and 'classes' in c:
+                    normalized.append({
+                        'name': c.get('name', 'غير معروف'),
+                        'subject': c.get('subject', '/'),
+                        'classes': c.get('classes', [])
+                    })
+            if normalized:
+                return normalized
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse AI JSON response: {e}\nResponse: {clean_json}")
+
+    # Ultimate fallback if AI fails
+    if ext == '.docx': return extract_from_word(file_path)
+    if ext == '.pdf': return extract_from_pdf(file_path)
+
     return []

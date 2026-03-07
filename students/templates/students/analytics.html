@@ -210,6 +210,14 @@
                     <option value="الفصل الثاني" {% if request.GET.term == 'الفصل الثاني' %}selected{% endif %} style="color: black;">الفصل الثاني</option>
                     <option value="الفصل الثالث" {% if request.GET.term == 'الفصل الثالث' %}selected{% endif %} style="color: black;">الفصل الثالث</option>
                 </select>
+
+                <!-- Teacher Filter -->
+                <select name="teacher_id" class="form-select" style="min-width: 200px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="handleTeacherFilterChange(this)">
+                    <option value="" style="color: black;">فلترة حسب الأستاذ (كل الأساتذة)</option>
+                    {% for t in teachers %}
+                        <option value="{{ t.id }}" {% if selected_teacher_id == t.id|stringformat:"s" %}selected{% endif %} style="color: black;">{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
+                    {% endfor %}
+                </select>
             </form>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -289,6 +297,16 @@
 
             // Initialize dropdown on page load without submitting
             document.addEventListener('DOMContentLoaded', () => updateClassDropdown(false));
+
+            function handleTeacherFilterChange(selectElement) {
+                // If a teacher is selected, it implies filtering by their assigned classes
+                // We should probably reset the Level and Class dropdowns to avoid conflicting filters
+                if (selectElement.value !== "") {
+                    document.getElementById('levelFilter').value = "";
+                    document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
+                }
+                document.getElementById('analyticsFilterForm').submit();
+            }
 
             function toggleChartFullscreen(container) {
                 if (!document.fullscreenElement) {
