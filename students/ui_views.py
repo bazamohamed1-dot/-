@@ -451,11 +451,21 @@ from .ai_utils import analyze_assignment_document, analyze_global_assignment_con
 import difflib
 
 def assignment_matching_view(request):
+    """
+    Wizard-style interface for matching AI-extracted assignment data.
+    Steps:
+    1. Map Classes (الأقسام)
+    2. Map Subjects (المواد)
+    3. Map Teachers & Finalize Assignment (الأساتذة والإسناد)
+    """
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
 
-    # 1. Processing Uploaded File (GET)
-    if request.method == 'GET':
+    step = int(request.GET.get('step', 1))
+
+    # Session handling
+    if 'ai_extracted_data' not in request.session:
+        # Initial Extraction if coming from file upload redirect
         temp_path = request.session.get('assignment_temp_path')
         if not temp_path or not os.path.exists(temp_path):
             messages.error(request, "انتهت صلاحية الجلسة أو الملف غير موجود.")
@@ -463,159 +473,210 @@ def assignment_matching_view(request):
 
         try:
             candidates = analyze_global_assignment_content(temp_path)
+            if not candidates:
+                messages.error(request, "لم يتمكن الذكاء الاصطناعي من استخراج بيانات صالحة. تأكد من جودة الملف.")
+                return redirect('hr_home')
 
-            # --- MAPPING & VERIFICATION STEP ---
-            # 1. Collect all extracted classes from candidates
-            all_extracted_classes = set()
-            for c in candidates:
-                for cl in c['classes']:
-                    all_extracted_classes.add(cl)
-
-            # 2. Check against DB
-            db_classes = set(Student.objects.values_list('class_name', flat=True).distinct())
-            aliases = dict(ClassAlias.objects.values_list('alias', 'canonical_class'))
-
-            unknown_classes = []
-
-            # 3. Resolve Aliases
-            for c in candidates:
-                resolved_classes = []
-                for cl in c['classes']:
-                    if cl in db_classes:
-                        resolved_classes.append(cl)
-                    elif cl in aliases:
-                        resolved_classes.append(aliases[cl])
-                    else:
-                        # Keep raw but mark as unknown globally if not already
-                        resolved_classes.append(cl)
-                        if cl not in unknown_classes:
-                            unknown_classes.append(cl)
-
-                # Update candidate with resolved list
-                c['classes'] = list(set(resolved_classes))
-
-            # 4. If unknowns exist, redirect to Mapping View (with warning)
-            if unknown_classes and db_classes: # Only if DB has classes to map to
-                 messages.warning(request, f"تم العثور على أقسام غير معروفة: {', '.join(unknown_classes[:5])}... يرجى ربطها أولاً.")
-                 return redirect('class_mapping_view')
-
-            # --- END MAPPING STEP ---
-
-            all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
-
-            # Improved Fuzzy Matching
-            def get_similarity(s1, s2):
-                if not s1 or not s2: return 0.0
-                return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
-
-            for c in candidates:
-                best_score = 0.0
-                best_match = None
-                c_norm = c['name'].strip()
-
-                # AUTOMATIC MATCHING LOGIC
-                for t in all_teachers:
-                    t_full = f"{t.last_name} {t.first_name}"
-                    t_rev = f"{t.first_name} {t.last_name}"
-
-                    if t.last_name in c_norm and t.first_name in c_norm:
-                        score = 1.0
-                    elif t.last_name in c_norm and len(t.last_name) > 3:
-                        score = 0.8
-                    else:
-                        score = max(
-                            get_similarity(c_norm, t_full),
-                            get_similarity(c_norm, t_rev),
-                            get_similarity(c_norm, t.last_name)
-                        )
-
-                    if score > best_score:
-                        best_score = score
-                        best_match = t
-
-                if best_score >= 0.6 and best_match:
-                    c['suggested_id'] = best_match.id
-                    # Pre-select ACTION as existing ID
-                    c['auto_action'] = str(best_match.id)
-                else:
-                    # Pre-select ACTION as create new
-                    c['auto_action'] = 'create_new'
-
-                import json
-                c['classes_json'] = json.dumps(c['classes'])
-
-            context = {
-                'candidates': candidates,
-                'all_teachers': all_teachers,
-                'temp_file_path': temp_path,
-                'unmatched_count': len(candidates)
-            }
-            return render(request, 'students/assignment_match.html', context)
-
-        except Exception as e:
-            messages.error(request, f"Error processing file: {e}")
-            return redirect('hr_home')
-
-    # 2. Saving Matches (POST)
-    elif request.method == 'POST':
-        try:
-            import json
-            count = 0
-
-            # Iterate through form fields
-            for key, value in request.POST.items():
-                if key.startswith('match_'):
-                    idx = key.split('_')[1]
-                    action = value # 'ignore', 'create_new', or ID
-
-                    if action == 'ignore': continue
-
-                    name = request.POST.get(f'name_{idx}')
-                    subject = request.POST.get(f'subject_{idx}')
-                    classes_json = request.POST.get(f'classes_{idx}')
-                    classes = json.loads(classes_json) if classes_json else []
-
-                    teacher = None
-                    if action == 'create_new':
-                        # Create minimal teacher record
-                        parts = name.split()
-                        ln = parts[0] if parts else "Unknown"
-                        fn = " ".join(parts[1:]) if len(parts) > 1 else ""
-                        teacher = Employee.objects.create(
-                            last_name=ln, first_name=fn,
-                            full_name=name, rank='teacher', subject=subject
-                        )
-                    else:
-                        # Existing ID
-                        teacher = Employee.objects.get(id=action)
-                        if subject and subject != '/':
-                            teacher.subject = subject
-                            teacher.save()
-
-                    # Save Assignment
-                    TeacherAssignment.objects.create(
-                        teacher=teacher,
-                        subject=subject or teacher.subject or "عام",
-                        classes=classes
-                    )
-                    count += 1
-
-            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ.")
-
+            request.session['ai_extracted_data'] = candidates
             # Clean up temp file
-            temp_path = request.POST.get('file_path')
-            if temp_path and os.path.exists(temp_path):
-                try: os.remove(temp_path)
-                except: pass
-
-            # Clear session
+            try: os.remove(temp_path)
+            except: pass
             if 'assignment_temp_path' in request.session:
                 del request.session['assignment_temp_path']
-
         except Exception as e:
-            messages.error(request, f"خطأ في الحفظ: {e}")
+            messages.error(request, f"خطأ في تحليل الملف: {e}")
+            return redirect('hr_home')
 
-        return redirect('hr_home')
+    candidates = request.session.get('ai_extracted_data', [])
+
+    if request.method == 'POST':
+        if step == 1:
+            # Handle Class Mapping Submission
+            # The form submits key-value pairs: class_map_[original_class] = "Mapped Class"
+            for c in candidates:
+                new_classes = []
+                for cl in c['classes']:
+                    mapped_val = request.POST.get(f'class_map_{cl}')
+                    if mapped_val and mapped_val.strip():
+                        # Save mapping to ClassAlias globally for future use if it's different
+                        if mapped_val.strip() != cl:
+                             parts = mapped_val.strip().rsplit(' ', 1)
+                             if len(parts) == 2:
+                                  ClassAlias.objects.update_or_create(
+                                      alias=cl,
+                                      defaults={'canonical_level': parts[0], 'canonical_class': parts[1]}
+                                  )
+                        new_classes.append(mapped_val.strip())
+                    else:
+                        new_classes.append(cl) # Keep original if nothing entered
+                c['classes'] = list(set(new_classes))
+
+            request.session['ai_extracted_data'] = candidates
+            return redirect(f"{request.path}?step=2")
+
+        elif step == 2:
+            # Handle Subject Mapping Submission
+            for c in candidates:
+                mapped_subj = request.POST.get(f"subj_map_{c['subject']}")
+                if mapped_subj and mapped_subj.strip():
+                    c['subject'] = mapped_subj.strip()
+
+            request.session['ai_extracted_data'] = candidates
+            return redirect(f"{request.path}?step=3")
+
+        elif step == 3:
+            # Handle Final Teacher Mapping & Save
+            count = 0
+            for idx, c in enumerate(candidates):
+                action = request.POST.get(f'match_{idx}')
+                if action == 'ignore': continue
+
+                # Get the potentially user-edited values from step 3 form
+                final_name = request.POST.get(f'name_{idx}', c['name'])
+                final_subject = request.POST.get(f'subject_{idx}', c['subject'])
+
+                import json
+                classes_json = request.POST.get(f'classes_{idx}')
+                final_classes = json.loads(classes_json) if classes_json else c['classes']
+
+                teacher = None
+                if action == 'create_new':
+                    parts = final_name.split()
+                    ln = parts[0] if parts else "غير معروف"
+                    fn = " ".join(parts[1:]) if len(parts) > 1 else ""
+                    teacher = Employee.objects.create(
+                        last_name=ln, first_name=fn,
+                        full_name=final_name, rank='teacher', subject=final_subject
+                    )
+                else:
+                    try:
+                        teacher = Employee.objects.get(id=action)
+                        if final_subject and final_subject != '/':
+                            teacher.subject = final_subject
+                            teacher.save()
+                    except Employee.DoesNotExist:
+                        continue
+
+                if teacher:
+                    assign, created = TeacherAssignment.objects.get_or_create(teacher=teacher, subject=final_subject)
+                    # Merge classes
+                    existing_classes = set(assign.classes) if assign.classes else set()
+                    existing_classes.update(final_classes)
+                    assign.classes = list(existing_classes)
+                    assign.save()
+                    count += 1
+
+            messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ وربطهم بنجاح.")
+            if 'ai_extracted_data' in request.session:
+                del request.session['ai_extracted_data']
+            return redirect('hr_home')
+
+    # --- GET Display Logic for Steps ---
+    context = {'step': step, 'candidates': candidates}
+
+    if step == 1:
+        # Extract unique classes
+        extracted_classes = set()
+        for c in candidates:
+            for cl in c['classes']:
+                extracted_classes.add(cl)
+
+        # Get DB valid classes to build a dropdown
+        db_combinations = list(
+            Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='')
+            .exclude(class_name__isnull=True).exclude(class_name__exact='')
+            .values_list('academic_year', 'class_name').distinct()
+        )
+        db_classes = [f"{lvl} {cls}" for lvl, cls in db_combinations]
+
+        # Pre-process matches
+        aliases = dict(ClassAlias.objects.values_list('alias', 'canonical_class'))
+
+        class_mapping_data = []
+        for cl in extracted_classes:
+            suggested = cl
+            if cl in db_classes:
+                pass # perfect match
+            elif cl in aliases:
+                suggested = aliases[cl]
+
+            class_mapping_data.append({
+                'original': cl,
+                'suggested': suggested
+            })
+
+        context['class_mapping_data'] = class_mapping_data
+        context['db_classes'] = db_classes
+
+    elif step == 2:
+        extracted_subjects = set(c['subject'] for c in candidates if c['subject'] and c['subject'] != '/')
+
+        # Common subjects
+        standard_subjects = [
+            'رياضيات', 'لغة عربية', 'لغة فرنسية', 'لغة إنجليزية', 'تاريخ وجغرافيا',
+            'علوم طبيعية', 'فيزياء', 'تربية إسلامية', 'تربية مدنية', 'تربية بدنية',
+            'تربية تشكيلية', 'تربية موسيقية', 'إعلام آلي', 'لغة أمازيغية'
+        ]
+
+        subject_mapping_data = []
+        for subj in extracted_subjects:
+            suggested = subj
+            # Simple substring matching for suggestion
+            for s in standard_subjects:
+                if s in subj or subj in s:
+                    suggested = s
+                    break
+            subject_mapping_data.append({
+                'original': subj,
+                'suggested': suggested
+            })
+
+        context['subject_mapping_data'] = subject_mapping_data
+        context['standard_subjects'] = standard_subjects
+
+    elif step == 3:
+        all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
+
+        def get_similarity(s1, s2):
+            if not s1 or not s2: return 0.0
+            return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
+
+        import json
+        for c in candidates:
+            best_score = 0.0
+            best_match = None
+            c_norm = c['name'].strip()
+
+            for t in all_teachers:
+                t_full = f"{t.last_name} {t.first_name}"
+                t_rev = f"{t.first_name} {t.last_name}"
+
+                if t.last_name in c_norm and t.first_name in c_norm:
+                    score = 1.0
+                elif t.last_name in c_norm and len(t.last_name) > 3:
+                    score = 0.8
+                else:
+                    score = max(
+                        get_similarity(c_norm, t_full),
+                        get_similarity(c_norm, t_rev),
+                        get_similarity(c_norm, t.last_name)
+                    )
+
+                if score > best_score:
+                    best_score = score
+                    best_match = t
+
+            if best_score >= 0.6 and best_match:
+                c['suggested_id'] = best_match.id
+                c['auto_action'] = str(best_match.id)
+            else:
+                c['auto_action'] = 'create_new'
+
+            c['classes_json'] = json.dumps(c['classes'])
+
+        context['all_teachers'] = all_teachers
+
+    return render(request, 'students/assignment_match.html', context)
 
 def hr_home(request):
     if not request.user.is_authenticated:
@@ -819,9 +880,14 @@ def hr_home(request):
                             tmp.write(chunk)
                         tmp_path = tmp.name
 
+                    # Clear old extracted data if any
+                    if 'ai_extracted_data' in request.session:
+                        del request.session['ai_extracted_data']
+
                     # Store path in session to pass to matching view
                     request.session['assignment_temp_path'] = tmp_path
-                    return redirect('assignment_matching_view')
+                    from django.urls import reverse
+                    return redirect(f"{reverse('assignment_matching_view')}?step=1")
 
                 except Exception as e:
                     messages.error(request, f"خطأ في رفع الملف: {e}")
