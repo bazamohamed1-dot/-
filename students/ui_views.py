@@ -1109,7 +1109,11 @@ def analytics_dashboard(request):
     if selected_term:
         grades_qs = grades_qs.filter(term=selected_term)
     if selected_level:
-        grades_qs = grades_qs.filter(student__academic_year=selected_level)
+        import django.db.models as models
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=selected_level) |
+            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+        )
     if selected_class:
         from .analytics_utils import unformat_class_name
         import django.db.models as models
@@ -1346,7 +1350,12 @@ def run_statistical_test(request):
 
     grades_qs = Grade.objects.all()
     if level:
-        grades_qs = grades_qs.filter(student__academic_year=level)
+        import django.db.models as models
+        # Also do a broad match for level just in case DB has 'أولى' but frontend passed 'أولى متوسط'
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=level) |
+            models.Q(student__academic_year__icontains=level.replace(' متوسط', '').strip())
+        )
 
     if not grades_qs.exists():
         return JsonResponse({'error': 'لا توجد بيانات كافية'})
@@ -1422,7 +1431,11 @@ def get_gauss_data(request):
 
     grades_qs = Grade.objects.all()
     if level:
-        grades_qs = grades_qs.filter(student__academic_year=level)
+        import django.db.models as models
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=level) |
+            models.Q(student__academic_year__icontains=level.replace(' متوسط', '').strip())
+        )
     if class_name:
         from .analytics_utils import unformat_class_name
         import django.db.models as models
