@@ -53,3 +53,8 @@ def safe_json(value):
         return json.dumps(data, cls=DjangoJSONEncoder)
 
     return json.dumps(value, cls=DjangoJSONEncoder)
+
+@register.filter
+def get_assignments_data(emp):
+    assignments = list(emp.assignments.all().values('subject', 'classes'))
+    return json.dumps(assignments, cls=DjangoJSONEncoder)

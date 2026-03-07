@@ -307,24 +307,10 @@
             document.addEventListener('DOMContentLoaded', () => updateClassDropdown(false));
 
             function handleTeacherFilterChange(selectElement) {
-                // If a teacher is selected, it implies filtering by their assigned classes
-                // We should probably reset the Level and Class dropdowns to avoid conflicting filters
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
                     document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
-                    // Auto-select the teacher's subject if possible
-                    const selectedOption = selectElement.options[selectElement.selectedIndex];
-                    const teacherText = selectedOption.textContent;
-                    const match = teacherText.match(/\(([^)]+)\)$/);
-                    if (match && match[1] && match[1] !== '/') {
-                        const subjectDropdown = document.getElementById('subjectFilter');
-                        for(let i=0; i<subjectDropdown.options.length; i++) {
-                             if(subjectDropdown.options[i].value === match[1] || match[1].includes(subjectDropdown.options[i].value)) {
-                                 subjectDropdown.selectedIndex = i;
-                                 break;
-                             }
-                        }
-                    }
+                    // Backend will handle the subject dropdown options and auto-selection
                 }
                 document.getElementById('analyticsFilterForm').submit();
             }

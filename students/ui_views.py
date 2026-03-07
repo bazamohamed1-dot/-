@@ -531,17 +531,23 @@ def assignment_matching_view(request):
                 action = request.POST.get(f'match_{idx}')
                 if action == 'ignore': continue
 
-                # Get the potentially user-edited values from step 3 form
                 final_name = request.POST.get(f'name_{idx}', c['name'])
-                final_subject = request.POST.get(f'subject_{idx}', c['subject'])
 
-                import json
-                classes_json = request.POST.get(f'classes_{idx}')
+                subjects = request.POST.getlist(f'subject_{idx}[]')
+                block_indices = request.POST.getlist(f'block_indices_{idx}[]')
 
-                try:
-                    final_classes = json.loads(classes_json) if classes_json else c.get('classes', [])
-                except json.JSONDecodeError:
-                    final_classes = c.get('classes', [])
+                assignments = []
+                # Safely pair subjects with their specific block index to fetch the exact classes array
+                for j, subject in enumerate(subjects):
+                    if subject.strip() and j < len(block_indices):
+                        block_idx = block_indices[j]
+                        classes_checked = request.POST.getlist(f'classes_{idx}_{block_idx}[]')
+                        assignments.append({
+                            'subject': subject.strip(),
+                            'classes': classes_checked
+                        })
+
+                main_subject = subjects[0].strip() if subjects else c['subject']
 
                 teacher = None
                 if action == 'create_new':
@@ -550,32 +556,27 @@ def assignment_matching_view(request):
                     fn = " ".join(parts[1:]) if len(parts) > 1 else ""
                     teacher = Employee.objects.create(
                         last_name=ln, first_name=fn,
-                        rank='teacher', subject=final_subject
+                        rank='teacher', subject=main_subject
                     )
                 else:
                     try:
                         teacher = Employee.objects.get(id=action)
-                        if final_subject and final_subject != '/':
-                            teacher.subject = final_subject
+                        if main_subject and main_subject != '/':
+                            teacher.subject = main_subject
                             teacher.save()
+                        # Clear existing assignments when updating via wizard to prevent duplicates
+                        TeacherAssignment.objects.filter(teacher=teacher).delete()
                     except Employee.DoesNotExist:
                         continue
 
                 if teacher:
-                    try:
-                        assign, created = TeacherAssignment.objects.get_or_create(teacher=teacher, subject=final_subject)
-                    except TeacherAssignment.MultipleObjectsReturned:
-                        # Handle edge case where db somehow has duplicate assignment records
-                        assignments = TeacherAssignment.objects.filter(teacher=teacher, subject=final_subject)
-                        assign = assignments.first()
-                        # Clean up duplicates to avoid future errors
-                        assignments.exclude(pk=assign.pk).delete()
-
-                    # Merge classes
-                    existing_classes = set(assign.classes) if assign.classes else set()
-                    existing_classes.update(final_classes)
-                    assign.classes = list(existing_classes)
-                    assign.save()
+                    for assignment in assignments:
+                        if assignment.get('subject'):
+                            TeacherAssignment.objects.create(
+                                teacher=teacher,
+                                subject=assignment['subject'],
+                                classes=assignment.get('classes', [])
+                            )
                     count += 1
 
             messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ وربطهم بنجاح.")
@@ -623,12 +624,19 @@ def assignment_matching_view(request):
     elif step == 2:
         extracted_subjects = set(c['subject'] for c in candidates if c['subject'] and c['subject'] != '/')
 
-        # Common subjects
-        standard_subjects = [
+        # Get subjects from Grade model
+        from .models import Grade
+        grade_subjects = list(Grade.objects.values_list('subject', flat=True).distinct())
+
+        # Merge with common subjects as a fallback
+        common_subjects = [
             'رياضيات', 'لغة عربية', 'لغة فرنسية', 'لغة إنجليزية', 'تاريخ وجغرافيا',
             'علوم طبيعية', 'فيزياء', 'تربية إسلامية', 'تربية مدنية', 'تربية بدنية',
             'تربية تشكيلية', 'تربية موسيقية', 'إعلام آلي', 'لغة أمازيغية'
         ]
+
+        standard_subjects = list(set(grade_subjects + common_subjects))
+        standard_subjects.sort()
 
         subject_mapping_data = []
         for subj in extracted_subjects:
@@ -647,6 +655,9 @@ def assignment_matching_view(request):
         context['standard_subjects'] = standard_subjects
 
     elif step == 3:
+        from .models_mapping import ClassShortcut
+        context['all_classes'] = list(ClassShortcut.objects.values_list('shortcut', flat=True).distinct())
+        context['all_classes'].sort()
         all_teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
 
         def get_similarity(s1, s2):
@@ -853,33 +864,37 @@ def hr_home(request):
         elif action == 'manual_assign_single':
             try:
                 teacher_id = request.POST.get('teacher_id')
-                subject = request.POST.get('subject')
-                classes_str = request.POST.get('classes_str')
-
-                # Parse classes: split by comma or space
-                raw_list = classes_str.replace(',', ' ').split()
-                classes_list = [c.strip() for c in raw_list if c.strip()]
+                payload = request.POST.get('assignments_payload')
 
                 teacher = Employee.objects.get(id=teacher_id)
-                if subject:
-                    teacher.subject = subject
+                TeacherAssignment.objects.filter(teacher=teacher).delete()
+
+                assignments = []
+                if payload:
+                    import json
+                    try:
+                        assignments = json.loads(payload)
+                    except:
+                        pass
+
+                main_subject = ''
+                for assign in assignments:
+                    subj = assign.get('subject', '').strip()
+                    if subj:
+                        if not main_subject: main_subject = subj
+                        TeacherAssignment.objects.create(
+                            teacher=teacher,
+                            subject=subj,
+                            classes=assign.get('classes', [])
+                        )
+
+                if main_subject:
+                    teacher.subject = main_subject
                     teacher.save()
 
-                # Update or Create Assignment (Multi-Subject Support)
-                final_subject = subject or teacher.subject or "عام"
-
-                # Try to find existing assignment for this subject
-                assign, created = TeacherAssignment.objects.get_or_create(
-                    teacher=teacher,
-                    subject=final_subject
-                )
-
-                assign.classes = classes_list
-                assign.save()
-
-                messages.success(request, f"تم تحديث الإسناد للأستاذ {teacher.last_name} (مادة: {final_subject})")
+                messages.success(request, f'تم إسناد المادة {main_subject} للأستاذ بنجاح.')
             except Exception as e:
-                messages.error(request, f"خطأ: {e}")
+                messages.error(request, f'خطأ أثناء الحفظ: {e}')
             return redirect('hr_home')
 
         elif action == 'import_assignment_global':
@@ -921,7 +936,8 @@ def hr_home(request):
     }
 
     # Get All Classes for Dropdown
-    all_classes = list(Student.objects.values_list('class_name', flat=True).distinct())
+    from .models_mapping import ClassShortcut
+    all_classes = list(ClassShortcut.objects.values_list('shortcut', flat=True).distinct())
     all_classes.sort()
 
     # Auto-Select Logic (If file was uploaded previously)
@@ -1198,9 +1214,15 @@ def analytics_dashboard(request):
     # Teacher Assignment Filtering
     if selected_teacher_id:
         from .models import Employee, TeacherAssignment
+        from .models_mapping import ClassShortcut
         try:
             teacher = Employee.objects.get(id=selected_teacher_id)
             assignments = TeacherAssignment.objects.filter(teacher=teacher)
+
+            # If a subject is selected, only filter by classes for THAT specific subject
+            if selected_subject:
+                assignments = assignments.filter(subject__icontains=selected_subject)
+
             teacher_classes = []
             teacher_subjects = []
             for assign in assignments:
@@ -1212,12 +1234,20 @@ def analytics_dashboard(request):
             # Remove duplicates
             teacher_classes = list(set(teacher_classes))
 
-            if teacher_classes:
-                # We need to filter grades where student is in one of the assigned classes
+            # Map shortcuts back to full names if possible to filter the DB correctly
+            full_class_names = []
+            for tc in teacher_classes:
+                shortcut_obj = ClassShortcut.objects.filter(shortcut=tc).first()
+                if shortcut_obj:
+                    full_class_names.append(shortcut_obj.full_name)
+                full_class_names.append(tc) # Also keep the raw one just in case
+            full_class_names = list(set(full_class_names))
+
+            if full_class_names:
                 import django.db.models as models
                 q_classes = models.Q()
                 from .analytics_utils import unformat_class_name
-                for cls in teacher_classes:
+                for cls in full_class_names:
                     raw_c = unformat_class_name(cls)
                     if raw_c and raw_c.isdigit():
                         q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
@@ -1226,12 +1256,15 @@ def analytics_dashboard(request):
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
-                # If subject is explicitly selected via dropdown, it overrides teacher's default subject
-                # If not, filter by the teacher's subjects
+                # If no subject is explicitly selected via dropdown, filter by ALL the teacher's subjects
                 q_subjs = models.Q()
                 for subj in teacher_subjects:
                     q_subjs |= models.Q(subject__icontains=subj)
                 grades_qs = grades_qs.filter(q_subjs)
+
+            # Update subjects_list for dropdown to only show THIS teacher's subjects
+            if not selected_subject:
+                 subjects_list = teacher_subjects
 
         except Employee.DoesNotExist:
             pass
@@ -1311,30 +1344,56 @@ def advanced_analytics_view(request):
     grades_qs = Grade.objects.all()
 
     # Apply Filters to the QuerySet
+    # Compute teacher subjects BEFORE filtering the assignments by selected_subject
+    teacher_subjects = []
+    if selected_teacher_id:
+        from .models import Employee, TeacherAssignment
+        from .models_mapping import ClassShortcut
+        try:
+            teacher = Employee.objects.get(id=selected_teacher_id)
+            assignments = TeacherAssignment.objects.filter(teacher=teacher)
+            for assign in assignments:
+                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                    teacher_subjects.append(assign.subject)
+        except Employee.DoesNotExist:
+            pass
+
+    # Now apply selected_subject filter
     if selected_subject:
         import django.db.models as models
         grades_qs = grades_qs.filter(models.Q(subject__icontains=selected_subject))
 
     if selected_teacher_id:
         from .models import Employee, TeacherAssignment
+        from .models_mapping import ClassShortcut
         try:
             teacher = Employee.objects.get(id=selected_teacher_id)
             assignments = TeacherAssignment.objects.filter(teacher=teacher)
+
+            if selected_subject:
+                assignments = assignments.filter(subject__icontains=selected_subject)
+
             teacher_classes = []
-            teacher_subjects = []
             for assign in assignments:
                 if assign.classes:
                     teacher_classes.extend(assign.classes)
-                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
-                    teacher_subjects.append(assign.subject)
 
             teacher_classes = list(set(teacher_classes))
 
-            if teacher_classes:
+            # Map shortcuts back to full names if possible to filter the DB correctly
+            full_class_names = []
+            for tc in teacher_classes:
+                shortcut_obj = ClassShortcut.objects.filter(shortcut=tc).first()
+                if shortcut_obj:
+                    full_class_names.append(shortcut_obj.full_name)
+                full_class_names.append(tc) # Also keep the raw one just in case
+            full_class_names = list(set(full_class_names))
+
+            if full_class_names:
                 import django.db.models as models
                 q_classes = models.Q()
                 from .analytics_utils import unformat_class_name
-                for cls in teacher_classes:
+                for cls in full_class_names:
                     raw_c = unformat_class_name(cls)
                     if raw_c and raw_c.isdigit():
                         q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
@@ -1348,6 +1407,9 @@ def advanced_analytics_view(request):
                 for subj in teacher_subjects:
                     q_subjs |= models.Q(subject__icontains=subj)
                 grades_qs = grades_qs.filter(q_subjs)
+
+            # Note: subjects_list is derived earlier in this view from active grades so we shouldn't necessarily override it,
+            # but we will just filter the data correctly.
 
         except Employee.DoesNotExist:
             pass

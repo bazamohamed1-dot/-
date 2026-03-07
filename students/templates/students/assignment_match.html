@@ -98,29 +98,39 @@
             <thead>
                 <tr>
                     <th>الأستاذ (في الملف)</th>
-                    <th>المادة المؤكدة</th>
-                    <th>الأقسام المؤكدة</th>
+                    <th>الإسناد (المادة والأقسام)</th>
                     <th>مطابقة مع (قاعدة البيانات)</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in candidates %}
                 <tr>
-                    <td>
+                    <td style="vertical-align: top;">
                         <input type="text" name="name_{{ forloop.counter0 }}" value="{{ item.name }}" class="form-control" required style="min-width: 150px;">
                     </td>
-                    <td>
-                        <input type="text" name="subject_{{ forloop.counter0 }}" value="{{ item.subject }}" class="form-control" style="min-width: 120px;">
-                    </td>
-                    <td>
-                        <div class="d-flex flex-wrap gap-1 mb-1">
-                            {% for c in item.classes %}
-                            <span class="badge" style="background-color: var(--primary);">{{ c }}</span>
-                            {% endfor %}
+                    <td style="vertical-align: top;">
+                        <div id="teacher-assignments-{{ forloop.counter0 }}">
+                            <div class="assignment-block mb-3 p-3 border rounded" style="background: #fdfdfd; position: relative;">
+                                <label class="font-weight-bold">المادة</label>
+                                <input type="hidden" name="block_indices_{{ forloop.counter0 }}[]" value="0">
+                                <input type="text" name="subject_{{ forloop.counter0 }}[]" value="{{ item.subject }}" class="form-control mb-2" style="min-width: 120px;" placeholder="اكتب المادة هنا...">
+
+                                <label class="font-weight-bold">الأقسام</label>
+                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                    {% for db_c in all_classes %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="classes_{{ forloop.parentloop.counter0 }}_0[]" value="{{ db_c }}" {% if db_c in item.classes %}checked{% endif %}>
+                                        <label class="form-check-label">{{ db_c }}</label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
                         </div>
-                        <input type="hidden" name="classes_{{ forloop.counter0 }}" value="{{ item.classes_json|escape }}">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addWizardAssignmentBlock({{ forloop.counter0 }}, '{{ all_classes|join:',' }}')">
+                            <i class="fas fa-plus"></i> إضافة مادة أخرى
+                        </button>
                     </td>
-                    <td>
+                    <td style="vertical-align: top;">
                         <select name="match_{{ forloop.counter0 }}" class="form-control select2" style="min-width: 250px;">
                             <option value="ignore">-- تجاهل --</option>
                             <option value="create_new" {% if item.auto_action == 'create_new' %}selected{% endif %} style="font-weight: bold; color: green;">++ إنشاء أستاذ جديد ++</option>
@@ -133,7 +143,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="4" class="text-center">لا يوجد بيانات للعرض.</td></tr>
+                <tr><td colspan="3" class="text-center">لا يوجد بيانات للعرض.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -151,4 +161,47 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addWizardAssignmentBlock(teacherIndex, classesStr) {
+    const container = document.getElementById(`teacher-assignments-${teacherIndex}`);
+    const blockIndex = Date.now() + Math.floor(Math.random() * 1000);
+    const classesArray = classesStr.split(',');
+
+    const block = document.createElement('div');
+    block.className = 'assignment-block mb-3 p-3 border rounded';
+    block.style = 'background: #fdfdfd; position: relative; border-left: 3px solid var(--primary) !important;';
+
+    // Add a hidden input to track this specific block's index for this teacher
+    const indexInput = `<input type="hidden" name="block_indices_${teacherIndex}[]" value="${blockIndex}">`;
+
+    let html = `
+        <button type="button" class="btn btn-sm btn-danger position-absolute" style="top: 10px; left: 10px;" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+        ${indexInput}
+        <label class="font-weight-bold">المادة</label>
+        <input type="text" name="subject_${teacherIndex}[]" value="" class="form-control mb-2" style="min-width: 120px;" placeholder="اكتب المادة هنا..." required>
+
+        <label class="font-weight-bold">الأقسام</label>
+        <div class="d-flex flex-wrap gap-2 mt-1">
+    `;
+
+    classesArray.forEach(cls => {
+        if (!cls.trim()) return;
+        html += `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="classes_${teacherIndex}_${blockIndex}[]" value="${cls.trim()}">
+                <label class="form-check-label">${cls.trim()}</label>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    block.innerHTML = html;
+    container.appendChild(block);
+}
+</script>
 {% endblock %}

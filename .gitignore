@@ -8,3 +8,4 @@ db.sqlite3
 media/
 staticfiles/
 server.log
+node_modules/

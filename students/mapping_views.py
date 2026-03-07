@@ -24,17 +24,31 @@ def class_mapping_view(request):
 
     if request.method == 'POST' and request.GET.get('action') == 'quick_save':
         emp_id = request.POST.get('employee_id')
-        subject = request.POST.get('subject', '').strip()
-        classes = request.POST.getlist('classes')
         try:
+            import json
             emp = Employee.objects.get(id=emp_id)
-            emp.subject = subject
-            emp.save()
 
-            assign, created = TeacherAssignment.objects.get_or_create(teacher=emp)
-            assign.subject = subject
-            assign.classes = classes
-            assign.save()
+            assignments_data_raw = request.POST.get('assignments')
+            if assignments_data_raw:
+                assignments_data = json.loads(assignments_data_raw)
+
+                TeacherAssignment.objects.filter(teacher=emp).delete()
+
+                if assignments_data:
+                    emp.subject = assignments_data[0].get('subject', '').strip()
+                    emp.save()
+
+                for assign_data in assignments_data:
+                    subject = assign_data.get('subject', '').strip()
+                    classes = assign_data.get('classes', [])
+
+                    if subject:
+                        TeacherAssignment.objects.create(
+                            teacher=emp,
+                            subject=subject,
+                            classes=classes
+                        )
+
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
