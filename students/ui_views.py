@@ -537,7 +537,11 @@ def assignment_matching_view(request):
 
                 import json
                 classes_json = request.POST.get(f'classes_{idx}')
-                final_classes = json.loads(classes_json) if classes_json else c['classes']
+
+                try:
+                    final_classes = json.loads(classes_json) if classes_json else c.get('classes', [])
+                except json.JSONDecodeError:
+                    final_classes = c.get('classes', [])
 
                 teacher = None
                 if action == 'create_new':

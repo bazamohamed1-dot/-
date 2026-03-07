@@ -118,7 +118,7 @@
                             <span class="badge" style="background-color: var(--primary);">{{ c }}</span>
                             {% endfor %}
                         </div>
-                        <input type="hidden" name="classes_{{ forloop.counter0 }}" value="{{ item.classes_json }}">
+                        <input type="hidden" name="classes_{{ forloop.counter0 }}" value="{{ item.classes_json|escape }}">
                     </td>
                     <td>
                         <select name="match_{{ forloop.counter0 }}" class="form-control select2" style="min-width: 250px;">
