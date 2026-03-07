@@ -26,24 +26,27 @@
                 <tr>
                     <td>{{ item.name }}</td>
                     <td>
-                        {% for c in item.classes %}
-                        <span class="badge bg-secondary">{{ c }}</span>
-                        {% endfor %}
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for c in item.classes %}
+                            <span class="badge" style="background-color: var(--primary);">{{ c }}</span>
+                            {% endfor %}
+                        </div>
+                        <input type="hidden" name="classes_{{ forloop.counter0 }}" value="{{ item.classes_json }}">
                     </td>
-                    <td>{{ item.subject }}</td>
                     <td>
-                        <select name="match_{{ forloop.counter0 }}" class="form-control select2">
+                        <input type="text" name="subject_{{ forloop.counter0 }}" value="{{ item.subject }}" class="form-control" style="min-width: 120px;">
+                    </td>
+                    <td>
+                        <select name="match_{{ forloop.counter0 }}" class="form-control select2" style="min-width: 250px;">
                             <option value="ignore">-- تجاهل --</option>
-                            <option value="create_new" {% if item.auto_action == 'create_new' %}selected{% endif %}>++ إنشاء جديد ++</option>
+                            <option value="create_new" {% if item.auto_action == 'create_new' %}selected{% endif %} style="font-weight: bold; color: green;">++ إنشاء أستاذ جديد ++</option>
                             {% for teacher in all_teachers %}
                             <option value="{{ teacher.id }}" {% if teacher.id == item.suggested_id %}selected{% endif %}>
-                                {{ teacher.last_name }} {{ teacher.first_name }} ({{ teacher.subject|default:"-" }})
+                                {{ teacher.last_name }} {{ teacher.first_name }} ({{ teacher.subject|default:"بدون مادة" }})
                             </option>
                             {% endfor %}
                         </select>
                         <input type="hidden" name="name_{{ forloop.counter0 }}" value="{{ item.name }}">
-                        <input type="hidden" name="classes_{{ forloop.counter0 }}" value="{{ item.classes_json }}">
-                        <input type="hidden" name="subject_{{ forloop.counter0 }}" value="{{ item.subject }}">
                     </td>
                 </tr>
                 {% endfor %}

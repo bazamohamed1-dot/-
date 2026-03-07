@@ -1104,30 +1104,75 @@ def analytics_dashboard(request):
     selected_term = request.GET.get('term', '')
     selected_level = request.GET.get('level', '')
     selected_class = request.GET.get('class_name', '')
+    selected_teacher_id = request.GET.get('teacher_id', '')
 
     grades_qs = Grade.objects.all()
     if selected_term:
         grades_qs = grades_qs.filter(term=selected_term)
-    if selected_level:
-        import django.db.models as models
-        grades_qs = grades_qs.filter(
-            models.Q(student__academic_year=selected_level) |
-            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
-        )
-    if selected_class:
-        from .analytics_utils import unformat_class_name
-        import django.db.models as models
-        raw_class = unformat_class_name(selected_class)
-        if raw_class and raw_class.isdigit():
+
+    # Teacher Assignment Filtering
+    if selected_teacher_id:
+        from .models import Employee, TeacherAssignment
+        try:
+            teacher = Employee.objects.get(id=selected_teacher_id)
+            assignments = TeacherAssignment.objects.filter(teacher=teacher)
+            teacher_classes = []
+            teacher_subjects = []
+            for assign in assignments:
+                if assign.classes:
+                    teacher_classes.extend(assign.classes)
+                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                    teacher_subjects.append(assign.subject)
+
+            # Remove duplicates
+            teacher_classes = list(set(teacher_classes))
+
+            if teacher_classes:
+                # We need to filter grades where student is in one of the assigned classes
+                import django.db.models as models
+                q_classes = models.Q()
+                from .analytics_utils import unformat_class_name
+                for cls in teacher_classes:
+                    raw_c = unformat_class_name(cls)
+                    if raw_c and raw_c.isdigit():
+                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
+                    else:
+                        q_classes |= models.Q(student__class_name=cls)
+                grades_qs = grades_qs.filter(q_classes)
+
+            if teacher_subjects:
+                # Also filter by subject if it's specified, unless we want all subjects for those classes
+                # Usually we want to analyze the teacher's specific subject performance
+                q_subjs = models.Q()
+                for subj in teacher_subjects:
+                    q_subjs |= models.Q(subject__icontains=subj)
+
+                # We also want to keep the general averages if they are needed for comparison, but if filtering by teacher, the subject filter makes sense.
+                grades_qs = grades_qs.filter(q_subjs)
+
+        except Employee.DoesNotExist:
+            pass
+    else:
+        if selected_level:
+            import django.db.models as models
             grades_qs = grades_qs.filter(
-                models.Q(student__class_name=selected_class) |
-                models.Q(student__class_name=raw_class) |
-                models.Q(student__class_name__endswith=f" {raw_class}") |
-                models.Q(student__class_name__endswith=f"م{raw_class}") |
-                models.Q(student__class_name__icontains=raw_class)
+                models.Q(student__academic_year=selected_level) |
+                models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
             )
-        else:
-            grades_qs = grades_qs.filter(student__class_name=selected_class)
+        if selected_class:
+            from .analytics_utils import unformat_class_name
+            import django.db.models as models
+            raw_class = unformat_class_name(selected_class)
+            if raw_class and raw_class.isdigit():
+                grades_qs = grades_qs.filter(
+                    models.Q(student__class_name=selected_class) |
+                    models.Q(student__class_name=raw_class) |
+                    models.Q(student__class_name__endswith=f" {raw_class}") |
+                    models.Q(student__class_name__endswith=f"م{raw_class}") |
+                    models.Q(student__class_name__icontains=raw_class)
+                )
+            else:
+                grades_qs = grades_qs.filter(student__class_name=selected_class)
 
     local_stats = analyze_grades_locally(grades_qs)
 
@@ -1143,12 +1188,19 @@ def analytics_dashboard(request):
             token_cost = len(local_stats['markdown_data']) // 4
 
     import json
+
+    # Get Teachers List for Dropdown
+    from .models import Employee
+    teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
+
     context = {
         'page_title': 'تحليل النتائج',
         'local_stats': local_stats,
         'levels': levels,
         'class_map_json': json.dumps(class_map),
-        'token_cost': token_cost
+        'token_cost': token_cost,
+        'teachers': teachers,
+        'selected_teacher_id': selected_teacher_id
     }
     return render(request, 'students/analytics.html', context)
 
