@@ -574,7 +574,7 @@ async function returnBook(loanId) {
 
 async function loadStats() {
     try {
-        const response = await fetch('/canteen/library/stats/');
+        const response = await fetch(`/canteen/library/stats/?t=${new Date().getTime()}`);
         const data = await response.json();
 
         document.getElementById('borrowersCount').textContent = data.borrowers_count || 0;
@@ -620,7 +620,7 @@ async function showReadersModal() {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">جاري التحميل...</td></tr>';
 
     try {
-        const response = await fetch('/canteen/library/readers/');
+        const response = await fetch(`/canteen/library/readers/?t=${new Date().getTime()}`);
         const data = await response.json();
 
         if (data.length === 0) {
@@ -651,7 +651,7 @@ async function showBooksModal() {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">جاري التحميل...</td></tr>';
 
     try {
-        const response = await fetch('/canteen/library/readers/'); // Same API provides loan details
+        const response = await fetch(`/canteen/library/readers/?t=${new Date().getTime()}`); // Same API provides loan details
         const data = await response.json();
 
         if (data.length === 0) {
