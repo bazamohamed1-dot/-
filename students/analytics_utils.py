@@ -23,14 +23,13 @@ def format_class_name(level, class_name):
 
 def unformat_class_name(formatted_class):
     """
-    Tries to map a formatted class string (like '1م5') back to its raw numeric part (like '5')
-    if it was originally a single digit. This is a best-effort helper for backend queries when
-    the DB stores raw numbers but the frontend passes back formatted strings.
+    Tries to map a formatted class string (like '1م5' or 'أولى 5') back to its raw numeric part (like '5').
+    This is a best-effort helper for backend queries when the DB stores raw numbers but the frontend passes back formatted strings.
     """
     if not formatted_class:
         return formatted_class
     digits = re.findall(r'\d+', str(formatted_class))
-    if len(digits) >= 2:
+    if len(digits) >= 1:
         return digits[-1]
     return formatted_class
 
