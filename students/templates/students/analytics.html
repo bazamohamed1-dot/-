@@ -547,22 +547,38 @@
         const termData = JSON.parse('{{ local_stats.term_avgs|escapejs }}' || '{}');
 
 
-        // 1. Histogram (Distribution)
+        // 1. Histogram (Distribution) - Mixed Bar + Line chart
         const histCtx = document.getElementById('histogramChart').getContext('2d');
         new Chart(histCtx, {
             type: 'bar',
             data: {
                 labels: Object.keys(distData),
-                datasets: [{
-                    label: 'عدد التلاميذ',
-                    data: Object.values(distData),
-                    backgroundColor: '#38bdf8',
-                    borderColor: '#0284c7',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    // Give it a shadow effect
-                    hoverBackgroundColor: '#0284c7'
-                }]
+                datasets: [
+                    {
+                        type: 'line',
+                        label: 'اتجاه التوزيع',
+                        data: Object.values(distData),
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#ef4444',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                    },
+                    {
+                        type: 'bar',
+                        label: 'عدد التلاميذ',
+                        data: Object.values(distData),
+                        backgroundColor: '#38bdf8',
+                        borderColor: '#0284c7',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        hoverBackgroundColor: '#0284c7'
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -573,7 +589,12 @@
                         grid: { display: false }
                     }
                 },
-                layout: { padding: { top: 20 } }
+                layout: { padding: { top: 20 } },
+                plugins: {
+                    legend: {
+                        labels: { font: { family: 'Tajawal' } }
+                    }
+                }
             },
             plugins: [dataLabelsPlugin]
         });

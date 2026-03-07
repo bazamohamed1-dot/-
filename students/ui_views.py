@@ -1114,7 +1114,16 @@ def analytics_dashboard(request):
         from .analytics_utils import unformat_class_name
         import django.db.models as models
         raw_class = unformat_class_name(selected_class)
-        grades_qs = grades_qs.filter(models.Q(student__class_name=selected_class) | models.Q(student__class_name=raw_class))
+        if raw_class and raw_class.isdigit():
+            grades_qs = grades_qs.filter(
+                models.Q(student__class_name=selected_class) |
+                models.Q(student__class_name=raw_class) |
+                models.Q(student__class_name__endswith=f" {raw_class}") |
+                models.Q(student__class_name__endswith=f"م{raw_class}") |
+                models.Q(student__class_name__icontains=raw_class)
+            )
+        else:
+            grades_qs = grades_qs.filter(student__class_name=selected_class)
 
     local_stats = analyze_grades_locally(grades_qs)
 
@@ -1417,10 +1426,19 @@ def get_gauss_data(request):
     if class_name:
         from .analytics_utils import unformat_class_name
         import django.db.models as models
-        # Because we format the class on the frontend (e.g., '1م5'), but the DB might have '5' or '1م5',
-        # we try both just in case, or we use unformat.
+        # DB might have '5', '1م5', or 'أولى متوسط 5' or 'أولى 5'.
+        # We extract the pure digit (e.g. '5') and match any class name ending with or containing that digit for that level
         raw_class = unformat_class_name(class_name)
-        grades_qs = grades_qs.filter(models.Q(student__class_name=class_name) | models.Q(student__class_name=raw_class))
+        if raw_class and raw_class.isdigit():
+            grades_qs = grades_qs.filter(
+                models.Q(student__class_name=class_name) |
+                models.Q(student__class_name=raw_class) |
+                models.Q(student__class_name__endswith=f" {raw_class}") |
+                models.Q(student__class_name__endswith=f"م{raw_class}") |
+                models.Q(student__class_name__icontains=raw_class)
+            )
+        else:
+            grades_qs = grades_qs.filter(student__class_name=class_name)
 
     if not grades_qs.exists():
         return JsonResponse({'x': [], 'y': [], 'actual': [], 'mean': 0, 'std_dev': 0, 'count': 0})
