@@ -645,21 +645,24 @@ def assignment_matching_view(request):
         for c in candidates:
             best_score = 0.0
             best_match = None
-            c_norm = c['name'].strip()
+            c_norm = (c.get('name') or '').strip()
 
             for t in all_teachers:
-                t_full = f"{t.last_name} {t.first_name}"
-                t_rev = f"{t.first_name} {t.last_name}"
+                t_ln = t.last_name or ''
+                t_fn = t.first_name or ''
 
-                if t.last_name in c_norm and t.first_name in c_norm:
+                t_full = f"{t_ln} {t_fn}".strip()
+                t_rev = f"{t_fn} {t_ln}".strip()
+
+                if t_ln and t_fn and t_ln in c_norm and t_fn in c_norm:
                     score = 1.0
-                elif t.last_name in c_norm and len(t.last_name) > 3:
+                elif t_ln and t_ln in c_norm and len(t_ln) > 3:
                     score = 0.8
                 else:
                     score = max(
                         get_similarity(c_norm, t_full),
                         get_similarity(c_norm, t_rev),
-                        get_similarity(c_norm, t.last_name)
+                        get_similarity(c_norm, t_ln)
                     )
 
                 if score > best_score:
