@@ -698,7 +698,7 @@ async function loadRoles() {
     document.getElementById('roleManagementSection').style.display = 'block';
 
     try {
-        const res = await fetch('/canteen/api/roles/');
+        const res = await fetch(`/canteen/api/roles/?t=${new Date().getTime()}`);
         if (!res.ok) return; // Handle error or non-200
         const data = await res.json();
 
@@ -706,29 +706,33 @@ async function loadRoles() {
         customRoles = Array.isArray(data) ? data : (data.results || []);
 
         const tbody = document.getElementById('rolesTableBody');
-        tbody.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
         const optGroup = document.getElementById('customRolesOptGroup');
-        optGroup.innerHTML = '';
+        if (optGroup) optGroup.innerHTML = '';
 
         customRoles.forEach(r => {
             // Table Row
-            tbody.innerHTML += `
-                <tr style="border-bottom:1px solid #eee;">
-                    <td>${r.name}</td>
-                    <td class="western-nums">${r.permissions.length}</td>
-                    <td>
-                        <button class="btn btn-danger" onclick="deleteRole(${r.id})" style="padding:5px 10px;"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>
-            `;
+            if (tbody) {
+                tbody.innerHTML += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td>${r.name}</td>
+                        <td class="western-nums">${r.permissions.length}</td>
+                        <td>
+                            <button class="btn btn-danger" onclick="deleteRole(${r.id})" style="padding:5px 10px;"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }
 
             // Dropdown Option
-            const opt = document.createElement('option');
-            opt.value = r.name;
-            opt.textContent = r.name;
-            // Store perms as data attribute
-            opt.setAttribute('data-perms', JSON.stringify(r.permissions));
-            optGroup.appendChild(opt);
+            if (optGroup) {
+                const opt = document.createElement('option');
+                opt.value = r.name;
+                opt.textContent = r.name;
+                // Store perms as data attribute
+                opt.setAttribute('data-perms', JSON.stringify(r.permissions));
+                optGroup.appendChild(opt);
+            }
         });
     } catch(e) { console.error(e); }
 }
@@ -804,7 +808,7 @@ async function loadUsers() {
 
     try {
         // Fetch all users
-        const response = await fetch('/canteen/api/users/');
+        const response = await fetch(`/canteen/api/users/?t=${new Date().getTime()}`);
         if (!response.ok) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:red;">فشل تحميل المستخدمين</td></tr>';
             return;
