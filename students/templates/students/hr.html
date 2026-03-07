@@ -2,43 +2,7 @@
 {% load static %}
 {% load student_tags %}
 
-{% block header_title %}تسيير الموارد البشرية
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const form = document.getElementById('manualAssignForm');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const blocks = document.querySelectorAll('#assignmentBlocksContainer .assignment-block');
-            const assignments = [];
-
-            blocks.forEach(block => {
-                const subjectSelect = block.querySelector('.assign-subject-select');
-                const subject = subjectSelect ? subjectSelect.value : null;
-
-                const checkedClasses = Array.from(block.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
-
-                if (subject) {
-                    assignments.push({
-                        subject: subject,
-                        classes: checkedClasses
-                    });
-</script>
-                }
-            });
-
-            // Set a hidden field to carry the JSON payload
-            let payloadInput = document.getElementById('manualAssignmentsPayload');
-            if (payloadInput) {
-                payloadInput.value = JSON.stringify(assignments);
-            }
-
-            this.submit();
-        });
-    }
-});
-
-{% endblock %}
+{% block header_title %}تسيير الموارد البشرية{% endblock %}
 
 {% block content %}
 <div class="card mb-4">
