@@ -226,6 +226,18 @@
                             <select id="gaussClassSelector" class="form-select form-select-sm shadow-sm" style="min-width: 120px; font-weight: bold;" onchange="updateGaussChart()">
                                 <option value="">كل الأقسام</option>
                             </select>
+                            <select id="gaussTeacherSelector" class="form-select form-select-sm shadow-sm" style="min-width: 150px; font-weight: bold;" onchange="handleGaussTeacherChange()">
+                                <option value="">كل الأساتذة</option>
+                                {% for t in teachers %}
+                                    <option value="{{ t.id }}">{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
+                                {% endfor %}
+                            </select>
+                            <select id="gaussSubjectSelector" class="form-select form-select-sm shadow-sm" style="min-width: 120px; font-weight: bold;" onchange="updateGaussChart()">
+                                <option value="">المعدل العام (كل المواد)</option>
+                                {% for subj in subjects_list %}
+                                    <option value="{{ subj }}">{{ subj }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -422,6 +434,28 @@ function updateGaussStatsDisplay(data) {
 }
 
 
+    function handleGaussTeacherChange() {
+        const selectElement = document.getElementById('gaussTeacherSelector');
+        if (selectElement.value !== "") {
+            document.getElementById('gaussLevelSelector').value = "";
+            document.getElementById('gaussClassSelector').innerHTML = '<option value="">كل الأقسام</option>';
+            // Auto-select the teacher's subject if possible
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const teacherText = selectedOption.textContent;
+            const match = teacherText.match(/\(([^)]+)\)$/);
+            if (match && match[1] && match[1] !== '/') {
+                const subjectDropdown = document.getElementById('gaussSubjectSelector');
+                for(let i=0; i<subjectDropdown.options.length; i++) {
+                     if(subjectDropdown.options[i].value === match[1] || match[1].includes(subjectDropdown.options[i].value)) {
+                         subjectDropdown.selectedIndex = i;
+                         break;
+                     }
+                }
+            }
+        }
+        updateGaussChart();
+    }
+
     function updateGaussClassDropdown() {
         const levelSelect = document.getElementById('gaussLevelSelector');
         const classSelect = document.getElementById('gaussClassSelector');
@@ -451,9 +485,14 @@ function updateGaussStatsDisplay(data) {
     async function updateGaussChart() {
         const level = document.getElementById('gaussLevelSelector').value;
         const className = document.getElementById('gaussClassSelector').value;
+        const teacherId = document.getElementById('gaussTeacherSelector').value;
+        const subject = document.getElementById('gaussSubjectSelector').value;
 
         try {
-            const response = await fetch(`/canteen/analytics/gauss_data/?level=${encodeURIComponent(level)}&class_name=${encodeURIComponent(className)}`);
+            let url = `/canteen/analytics/gauss_data/?level=${encodeURIComponent(level)}&class_name=${encodeURIComponent(className)}`;
+            if (teacherId) url += `&teacher_id=${encodeURIComponent(teacherId)}`;
+            if (subject) url += `&subject=${encodeURIComponent(subject)}`;
+            const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
                 renderGaussChart(data);
@@ -550,12 +589,31 @@ function updateGaussStatsDisplay(data) {
         fetchAdvancedStats();
     }
 
+    // Global filters update
     async function fetchAdvancedStats() {
+        // We sync global filters to the Gauss filters so everything updates together
         const level = document.getElementById('globalLevelSelector').value;
         const className = document.getElementById('globalClassSelector').value;
 
+        document.getElementById('gaussLevelSelector').value = level;
+
+        // Populate and set class dropdown
+        updateGaussClassDropdown();
+        setTimeout(() => {
+            document.getElementById('gaussClassSelector').value = className;
+            updateGaussChart(); // This will fetch the data
+        }, 100);
+
         try {
-            const response = await fetch(`/canteen/analytics/gauss_data/?level=${encodeURIComponent(level)}&class_name=${encodeURIComponent(className)}`);
+            // We fetch here just to update the top stats UI (mean, median, etc)
+            let url = `/canteen/analytics/gauss_data/?level=${encodeURIComponent(level)}&class_name=${encodeURIComponent(className)}`;
+
+            const teacherId = document.getElementById('gaussTeacherSelector').value;
+            const subject = document.getElementById('gaussSubjectSelector').value;
+            if (teacherId) url += `&teacher_id=${encodeURIComponent(teacherId)}`;
+            if (subject) url += `&subject=${encodeURIComponent(subject)}`;
+
+            const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
                 renderGaussChart(data);

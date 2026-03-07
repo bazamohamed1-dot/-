@@ -218,6 +218,14 @@
                         <option value="{{ t.id }}" {% if selected_teacher_id == t.id|stringformat:"s" %}selected{% endif %} style="color: black;">{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
                     {% endfor %}
                 </select>
+
+                <!-- Subject Filter -->
+                <select name="subject" id="subjectFilter" class="form-select" style="min-width: 150px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="document.getElementById('analyticsFilterForm').submit();">
+                    <option value="" style="color: black;">جميع المواد</option>
+                    {% for subj in subjects_list %}
+                        <option value="{{ subj }}" {% if request.GET.subject == subj %}selected{% endif %} style="color: black;">{{ subj }}</option>
+                    {% endfor %}
+                </select>
             </form>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -304,6 +312,19 @@
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
                     document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
+                    // Auto-select the teacher's subject if possible
+                    const selectedOption = selectElement.options[selectElement.selectedIndex];
+                    const teacherText = selectedOption.textContent;
+                    const match = teacherText.match(/\(([^)]+)\)$/);
+                    if (match && match[1] && match[1] !== '/') {
+                        const subjectDropdown = document.getElementById('subjectFilter');
+                        for(let i=0; i<subjectDropdown.options.length; i++) {
+                             if(subjectDropdown.options[i].value === match[1] || match[1].includes(subjectDropdown.options[i].value)) {
+                                 subjectDropdown.selectedIndex = i;
+                                 break;
+                             }
+                        }
+                    }
                 }
                 document.getElementById('analyticsFilterForm').submit();
             }
