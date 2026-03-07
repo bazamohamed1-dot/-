@@ -2,7 +2,43 @@
 {% load static %}
 {% load student_tags %}
 
-{% block header_title %}تسيير الموارد البشرية{% endblock %}
+{% block header_title %}تسيير الموارد البشرية
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById('manualAssignForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const blocks = document.querySelectorAll('#assignmentBlocksContainer .assignment-block');
+            const assignments = [];
+
+            blocks.forEach(block => {
+                const subjectSelect = block.querySelector('.assign-subject-select');
+                const subject = subjectSelect ? subjectSelect.value : null;
+
+                const checkedClasses = Array.from(block.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
+
+                if (subject) {
+                    assignments.push({
+                        subject: subject,
+                        classes: checkedClasses
+                    });
+</script>
+                }
+            });
+
+            // Set a hidden field to carry the JSON payload
+            let payloadInput = document.getElementById('manualAssignmentsPayload');
+            if (payloadInput) {
+                payloadInput.value = JSON.stringify(assignments);
+            }
+
+            this.submit();
+        });
+    }
+});
+
+{% endblock %}
 
 {% block content %}
 <div class="card mb-4">
@@ -65,16 +101,14 @@
                     <td>
                         {% if emp.rank == 'teacher' %}
                         <!-- Pass current assignments safely using a data attribute to avoid JS syntax errors -->
-                        {% with assign=emp.assignments.last %}
+                        <!-- Pass current assignments safely using a data attribute to avoid JS syntax errors -->
                         <button class="btn btn-sm btn-warning btn-assign"
                                 data-id="{{ emp.id }}"
                                 data-name="{{ emp.last_name }} {{ emp.first_name }}"
-                                data-subject="{{ emp.subject|default:'' }}"
-                                data-classes="{{ assign.classes|default:'[]'|safe_json|escape }}"
+                                data-assignments="{{ emp|get_assignments_data|escape }}"
                                 title="إسناد الأقسام">
                             <i class="fas fa-chalkboard-teacher"></i> تفاصيل الإسناد
                         </button>
-                        {% endwith %}
                         {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
@@ -102,8 +136,7 @@
             <thead>
                 <tr>
                     <th>الأستاذ</th>
-                    <th>المادة</th>
-                    <th>الأقسام المسندة (مفصولة بفاصلة)</th>
+                    <th>الإسناد (المادة والأقسام)</th>
                     <th>إجراء</th>
                 </tr>
             </thead>
@@ -167,14 +200,14 @@
             button.addEventListener('click', function() {
                 const id = this.getAttribute('data-id');
                 const name = this.getAttribute('data-name');
-                const subject = this.getAttribute('data-subject');
-                let classes = [];
+
+                let assignments = [];
                 try {
-                    classes = JSON.parse(this.getAttribute('data-classes'));
+                    assignments = JSON.parse(this.getAttribute('data-assignments'));
                 } catch (e) {
-                    console.error("Error parsing classes JSON:", e);
+                    console.error("Error parsing assignments JSON:", e);
                 }
-                openManualAssign(id, name, subject, classes);
+                openManualAssign(id, name, assignments);
             });
         });
     });
@@ -252,59 +285,43 @@
     <div class="modal-content" style="background: white; width: 500px; margin: 100px auto; padding: 20px; border-radius: 8px;">
         <h3>إسناد الأقسام يدوياً</h3>
         <h5 id="assignTeacherName" class="text-primary mb-3"></h5>
-        <form method="post">
+        <form method="post" id="manualAssignForm">
             {% csrf_token %}
             <input type="hidden" name="action" value="manual_assign_single">
             <input type="hidden" name="teacher_id" id="assignTeacherId">
+            <input type="hidden" name="assignments_payload" id="manualAssignmentsPayload">
 
-            <div class="mb-3">
-                <label>المادة</label>
-                <div class="d-flex gap-2">
-                    <select class="form-control w-50" onchange="document.getElementById('assignSubject').value = this.value; if(this.value === '') document.getElementById('assignSubject').focus();">
-                        <option value="">-- اختر من القائمة أو اكتب يدوياً --</option>
-                        <option value="رياضيات">رياضيات</option>
-                        <option value="لغة عربية">لغة عربية</option>
-                        <option value="لغة فرنسية">لغة فرنسية</option>
-                        <option value="لغة إنجليزية">لغة إنجليزية</option>
-                        <option value="تاريخ وجغرافيا">تاريخ وجغرافيا</option>
-                        <option value="علوم طبيعية">علوم طبيعية</option>
-                        <option value="فيزياء">فيزياء</option>
-                        <option value="تربية إسلامية">تربية إسلامية</option>
-                        <option value="تربية مدنية">تربية مدنية</option>
-                        <option value="تربية بدنية">تربية بدنية</option>
-                        <option value="تربية تشكيلية">تربية تشكيلية</option>
-                        <option value="تربية موسيقية">تربية موسيقية</option>
-                        <option value="إعلام آلي">إعلام آلي</option>
-                        <option value="لغة أمازيغية">لغة أمازيغية</option>
-                    </select>
-                    <input type="text" name="subject" id="assignSubject" class="form-control w-50" placeholder="أو اكتب المادة هنا..." required>
-                </div>
+            <!-- Dynamic blocks container -->
+            <div id="assignmentBlocksContainer" style="max-height: 400px; overflow-y: auto; overflow-x: hidden; padding-right: 5px;">
+                <!-- Blocks will be injected here via JS -->
             </div>
 
-            <div class="mb-3">
-                <label>الأقسام المسندة</label>
-                <!-- Hidden input to store raw value if needed -->
-                <input type="hidden" name="classes_str" id="assignClassesHidden">
+            <button type="button" class="btn btn-outline-primary btn-sm mb-3" onclick="addModalAssignmentBlock()">
+                <i class="fas fa-plus"></i> إضافة مادة أخرى
+            </button>
 
-                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
-                    {% if all_classes %}
-                        {% for cls in all_classes %}
-                        <div class="form-check">
-                            <!-- Removed ID from input as spaces break HTML IDs, using value instead for targeting -->
-                            <input class="form-check-input class-checkbox" type="checkbox" value="{{ cls }}">
-                            <label class="form-check-label">
-                                {{ cls }}
-                            </label>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <p class="text-danger">لا توجد أقسام مسجلة في قاعدة البيانات. يرجى استيراد قائمة التلاميذ أولاً.</p>
-                        <input type="text" name="classes_str_manual" class="form-control" placeholder="أدخل الأقسام يدوياً (مفصولة بفاصلة)" id="manualInput">
-                    {% endif %}
-                </div>
+            <!-- Hidden template to grab subject options from -->
+            <div style="display: none;">
+                <select class="assign-subject-select">
+                    <option value="">-- اكتب المادة أو اختر --</option>
+                    <option value="رياضيات">رياضيات</option>
+                    <option value="لغة عربية">لغة عربية</option>
+                    <option value="لغة فرنسية">لغة فرنسية</option>
+                    <option value="لغة إنجليزية">لغة إنجليزية</option>
+                    <option value="تاريخ وجغرافيا">تاريخ وجغرافيا</option>
+                    <option value="علوم طبيعية">علوم طبيعية</option>
+                    <option value="فيزياء">فيزياء</option>
+                    <option value="تربية إسلامية">تربية إسلامية</option>
+                    <option value="تربية مدنية">تربية مدنية</option>
+                    <option value="تربية بدنية">تربية بدنية</option>
+                    <option value="تربية تشكيلية">تربية تشكيلية</option>
+                    <option value="تربية موسيقية">تربية موسيقية</option>
+                    <option value="إعلام آلي">إعلام آلي</option>
+                    <option value="لغة أمازيغية">لغة أمازيغية</option>
+                </select>
             </div>
 
-            <div class="d-flex justify-content-end gap-2">
+            <div class="d-flex justify-content-end gap-2 border-top pt-3 mt-2">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('manualAssignModal').style.display='none'">إلغاء</button>
                 <button type="submit" class="btn btn-primary">حفظ الإسناد</button>
             </div>
@@ -314,66 +331,128 @@
 
 <script>
     // --- Dynamic Assignment Editor Logic ---
+    const allGlobalClasses = {{ all_classes|safe_json|safe }};
+
+    function createAssignmentBlock(subject = '', classesArray = []) {
+        let blockHtml = `
+            <div class="assignment-block mb-3 p-3 border rounded" style="background: #fdfdfd;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="font-weight-bold">المادة</label>
+                    <button class="btn btn-sm btn-danger" onclick="this.closest('.assignment-block').remove()">
+                        <i class="fas fa-trash"></i> إزالة
+                    </button>
+                </div>
+                <input type="text" class="form-control mb-2 dyn-subject" value="${subject}" placeholder="أدخل المادة (مثال: رياضيات)">
+                <label class="font-weight-bold">الأقسام</label>
+                <div class="d-flex flex-wrap gap-2 mt-1 dyn-classes-container">
+        `;
+
+        allGlobalClasses.forEach(cls => {
+            const isChecked = classesArray.includes(cls) ? 'checked' : '';
+            blockHtml += `
+                <div class="form-check">
+                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${cls}" ${isChecked}>
+                    <label class="form-check-label">${cls}</label>
+                </div>
+            `;
+        });
+
+        blockHtml += `
+                </div>
+            </div>
+        `;
+        return blockHtml;
+    }
+
     function toggleEditAssignments() {
         const mainCard = document.getElementById('mainTableCard');
         const editorCard = document.getElementById('assignmentEditorCard');
         const tbody = document.getElementById('assignmentEditorBody');
 
         if (mainCard.style.display !== 'none') {
-            // Switch to Edit Mode
             mainCard.style.display = 'none';
             editorCard.style.display = 'block';
 
-            // Populate Editor
             tbody.innerHTML = '';
             document.querySelectorAll('.btn-assign').forEach(btn => {
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name');
-                const subject = btn.getAttribute('data-subject') || '';
-                const classesRaw = btn.getAttribute('data-classes');
-                let classesArray = [];
+                const assignmentsRaw = btn.getAttribute('data-assignments');
+
+                let assignments = [];
                 try {
-                    classesArray = JSON.parse(classesRaw);
+                    assignments = JSON.parse(assignmentsRaw);
                 } catch(e) {}
-                const classesStr = classesArray.join(', ');
+
+                if (assignments.length === 0) {
+                    assignments.push({subject: '', classes: []});
+                }
 
                 const tr = document.createElement('tr');
+                tr.setAttribute('data-id', id);
+
+                let blocksHtml = '';
+                assignments.forEach(a => {
+                    blocksHtml += createAssignmentBlock(a.subject, a.classes);
+                });
+
                 tr.innerHTML = `
-                    <td>${name}</td>
-                    <td>
-                        <input type="text" class="form-control dyn-subject" data-id="${id}" value="${subject}" placeholder="المادة">
+                    <td style="vertical-align: top; font-weight: bold; width: 20%;">${name}</td>
+                    <td class="assignments-cell">
+                        <div class="blocks-wrapper">
+                            ${blocksHtml}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="addAssignmentBlock(this)">
+                            <i class="fas fa-plus"></i> إضافة مادة أخرى
+                        </button>
                     </td>
-                    <td>
-                        <input type="text" class="form-control dyn-classes" data-id="${id}" value="${classesStr}" placeholder="مثال: 1م1, 2م3, 4م2">
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-primary" onclick="saveSingleAssignment('${id}', this)">حفظ</button>
+                    <td style="vertical-align: top; width: 10%;">
+                        <button class="btn btn-primary btn-save-row" onclick="saveSingleAssignment('${id}', this)">
+                            حفظ
+                        </button>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
         } else {
-            // Switch to Main View
             editorCard.style.display = 'none';
             mainCard.style.display = 'block';
-            // Reload page to reflect changes if any were made
             window.location.reload();
         }
     }
 
+    function addAssignmentBlock(btnElement) {
+        const wrapper = btnElement.closest('.assignments-cell').querySelector('.blocks-wrapper');
+        const div = document.createElement('div');
+        div.innerHTML = createAssignmentBlock();
+        wrapper.appendChild(div.firstElementChild);
+    }
+
+    function extractRowAssignments(tr) {
+        const assignments = [];
+        tr.querySelectorAll('.assignment-block').forEach(block => {
+            const subject = block.querySelector('.dyn-subject').value.trim();
+            const classes = [];
+            block.querySelectorAll('.dyn-class-cb:checked').forEach(cb => {
+                classes.push(cb.value);
+            });
+            if (subject || classes.length > 0) {
+                assignments.push({ subject, classes });
+            }
+        });
+        return assignments;
+    }
+
     function saveSingleAssignment(empId, btnElement) {
         const tr = btnElement.closest('tr');
-        const subject = tr.querySelector('.dyn-subject').value.trim();
-        const classesStr = tr.querySelector('.dyn-classes').value.trim();
-        const classesArray = classesStr.split(',').map(s => s.trim()).filter(s => s !== '');
+        const assignments = extractRowAssignments(tr);
 
         btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         btnElement.disabled = true;
 
         const formData = new FormData();
         formData.append('employee_id', empId);
-        formData.append('subject', subject);
-        classesArray.forEach(c => formData.append('classes', c));
+        formData.append('assignments', JSON.stringify(assignments));
 
         fetch("{% url 'class_mapping_view' %}?action=quick_save", {
             method: 'POST',
@@ -400,19 +479,16 @@
     function saveAllAssignments() {
         const promises = [];
         document.querySelectorAll('#assignmentEditorBody tr').forEach(tr => {
-            const btn = tr.querySelector('button');
-            const empId = tr.querySelector('.dyn-subject').getAttribute('data-id');
-            const subject = tr.querySelector('.dyn-subject').value.trim();
-            const classesStr = tr.querySelector('.dyn-classes').value.trim();
-            const classesArray = classesStr.split(',').map(s => s.trim()).filter(s => s !== '');
+            const btn = tr.querySelector('.btn-save-row');
+            const empId = tr.getAttribute('data-id');
+            const assignments = extractRowAssignments(tr);
 
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             btn.disabled = true;
 
             const formData = new FormData();
             formData.append('employee_id', empId);
-            formData.append('subject', subject);
-            classesArray.forEach(c => formData.append('classes', c));
+            formData.append('assignments', JSON.stringify(assignments));
 
             promises.push(
                 fetch("{% url 'class_mapping_view' %}?action=quick_save", {
@@ -425,7 +501,7 @@
 
         Promise.all(promises).then(() => {
             alert("تم حفظ جميع التعديلات بنجاح!");
-            toggleEditAssignments(); // Reloads
+            toggleEditAssignments();
         }).catch(() => {
             alert("حدث خطأ أثناء الحفظ الجماعي.");
         });
@@ -469,69 +545,109 @@ function openAssignmentModal() {
     document.getElementById('assignmentModal').style.display = 'block';
 }
 
-function openManualAssign(id, name, subject, classesJson) {
+function addModalAssignmentBlock() {
+    const container = document.getElementById('assignmentBlocksContainer');
+    const blockIndex = container.children.length;
+
+    // Get subject options
+    const subjectSelect = document.querySelector('.assign-subject-select');
+    let subjectOptions = '<option value="">-- اختر المادة --</option>';
+    if (subjectSelect) {
+        subjectOptions = subjectSelect.innerHTML;
+    }
+
+    // Get class checkboxes structure
+    const firstBlock = document.querySelector('.assignment-block');
+    let classCheckboxes = '';
+    if (firstBlock) {
+        const checkboxContainer = firstBlock.querySelector('.d-flex.flex-wrap');
+        if (checkboxContainer) {
+            // Clone the structure but clear values/names
+            Array.from(checkboxContainer.children).forEach(child => {
+                const cb = child.querySelector('input[type="checkbox"]');
+                const label = child.querySelector('label');
+                if (cb && label) {
+                    classCheckboxes += `
+                        <div class="form-check">
+                            <input class="form-check-input class-checkbox" type="checkbox" name="classes_checked_${blockIndex}[]" value="${cb.value}">
+                            <label class="form-check-label">${label.innerText}</label>
+                        </div>
+                    `;
+                }
+            });
+        }
+    }
+
+    const block = document.createElement('div');
+    block.className = 'assignment-block mb-3 p-3 border rounded position-relative';
+    block.style = 'background: #fdfdfd; border-left: 3px solid var(--primary) !important;';
+
+    block.innerHTML = `
+        <button type="button" class="btn btn-sm btn-danger position-absolute" style="top: 10px; left: 10px;" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+        <div class="row">
+            <div class="col-md-12 mb-3">
+                <label class="font-weight-bold">المادة</label>
+                <select name="assign_subject_${blockIndex}" class="form-control assign-subject-select" required>
+                    ${subjectOptions}
+                </select>
+            </div>
+            <div class="col-md-12">
+                <label class="font-weight-bold">الأقسام</label>
+                <div class="d-flex flex-wrap gap-2 mt-2 class-checkbox-container">
+                    ${classCheckboxes}
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.appendChild(block);
+    return block;
+}
+
+function openManualAssign(id, name, assignmentsJson) {
     document.getElementById('manualAssignModal').style.display = 'block';
     document.getElementById('assignTeacherId').value = id;
     document.getElementById('assignTeacherName').innerText = name;
-    document.getElementById('assignSubject').value = subject;
 
-    // Reset Checkboxes
-    document.querySelectorAll('.class-checkbox').forEach(cb => cb.checked = false);
-    if(document.getElementById('manualInput')) document.getElementById('manualInput').value = "";
+    let assignments = [];
+    if (assignmentsJson) {
+        if (typeof assignmentsJson === 'string') {
+            try {
+                assignments = JSON.parse(assignmentsJson.replace(/'/g, '"'));
+            } catch(e) {
+                console.error("Error parsing assignments JSON string:", e);
+            }
+        } else if (Array.isArray(assignmentsJson)) {
+            assignments = assignmentsJson;
+        } else if (typeof assignmentsJson === 'object') {
+            assignments = [assignmentsJson];
+        }
+    }
 
-    // 1. Pre-fill from Existing Database (if passed)
-    if (classesJson && Array.isArray(classesJson)) {
-        classesJson.forEach(clsName => {
-            // Target by value instead of ID to support spaces in class names like "4 م 1"
-            const cb = document.querySelector(`.class-checkbox[value="${clsName}"]`);
-            if (cb) cb.checked = true;
-            else {
-                 const man = document.getElementById('manualInput');
-                 if(man && man.value.indexOf(clsName) === -1) man.value += (man.value ? ", " : "") + clsName;
+    const container = document.getElementById('assignmentBlocksContainer');
+    container.innerHTML = '';
+
+    if (!assignments || assignments.length === 0) {
+        addModalAssignmentBlock();
+    } else {
+        assignments.forEach(assignment => {
+            const block = addModalAssignmentBlock();
+
+            const subjectSelect = block.querySelector('.assign-subject-select');
+            if (subjectSelect && assignment.subject) {
+                subjectSelect.value = assignment.subject;
+            }
+
+            if (assignment.classes && Array.isArray(assignment.classes)) {
+                assignment.classes.forEach(cls => {
+                    const cb = block.querySelector(`.class-checkbox[value="${cls}"]`);
+                    if (cb) cb.checked = true;
+                });
             }
         });
     }
-
-    // 2. Pre-fill from Auto-Select (Smart Import)
-    if (window.autoAssignmentData && window.autoAssignmentData[id]) {
-        const data = window.autoAssignmentData[id];
-
-        // Show indicator
-        document.getElementById('assignTeacherName').innerHTML = name + ' <span class="badge bg-success"><i class="fas fa-magic"></i> مقترح ملف</span>';
-
-        if (data.classes && data.classes.length > 0) {
-            data.classes.forEach(cls => {
-                const cb = document.querySelector(`.class-checkbox[value="${cls}"]`);
-                if (cb) cb.checked = true;
-            });
-        }
-
-        if (data.subject && data.subject !== '/') {
-             if(!document.getElementById('assignSubject').value || document.getElementById('assignSubject').value === '/') {
-                 document.getElementById('assignSubject').value = data.subject;
-             }
-        }
-    } else {
-        // Reset name just in case
-        document.getElementById('assignTeacherName').innerText = name;
-    }
-}
-
-// Intercept form submit to gather checkboxes
-const manualForm = document.querySelector('#manualAssignModal form');
-if (manualForm) {
-    manualForm.addEventListener('submit', function(e) {
-        const checked = Array.from(document.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
-
-        // If manual input exists (fallback), merge it
-        const manual = document.getElementById('manualInput');
-        if (manual && manual.value) {
-            checked.push(...manual.value.split(',').map(s => s.trim()));
-        }
-
-        const hiddenInput = document.getElementById('assignClassesHidden');
-        if(hiddenInput) hiddenInput.value = checked.join(' ');
-    });
 }
 
 function toggleSubject(rank) {
@@ -550,5 +666,41 @@ function toggleSubject(rank) {
 .btn-group .btn { margin-left: 5px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 </style>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById('manualAssignForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const blocks = document.querySelectorAll('#assignmentBlocksContainer .assignment-block');
+            const assignments = [];
+
+            blocks.forEach(block => {
+                const subjectSelect = block.querySelector('.assign-subject-select');
+                const subject = subjectSelect ? subjectSelect.value : null;
+
+                const checkedClasses = Array.from(block.querySelectorAll('.class-checkbox:checked')).map(cb => cb.value);
+
+                if (subject) {
+                    assignments.push({
+                        subject: subject,
+                        classes: checkedClasses
+                    });
+</script>
+                }
+            });
+
+            // Set a hidden field to carry the JSON payload
+            let payloadInput = document.getElementById('manualAssignmentsPayload');
+            if (payloadInput) {
+                payloadInput.value = JSON.stringify(assignments);
+            }
+
+            this.submit();
+        });
+    }
+});
 
 {% endblock %}
