@@ -546,7 +546,7 @@ def assignment_matching_view(request):
                     fn = " ".join(parts[1:]) if len(parts) > 1 else ""
                     teacher = Employee.objects.create(
                         last_name=ln, first_name=fn,
-                        full_name=final_name, rank='teacher', subject=final_subject
+                        rank='teacher', subject=final_subject
                     )
                 else:
                     try:
@@ -775,7 +775,6 @@ def hr_home(request):
                     defaults={
                         'last_name': ln,
                         'first_name': fn,
-                        'full_name': f"{ln} {fn}",
                         'date_of_birth': dob,
                         'rank': sys_rank,
                         'role': raw_rank,
@@ -816,7 +815,6 @@ def hr_home(request):
                     'employee_code': request.POST.get('employee_code'),
                     'last_name': request.POST.get('last_name'),
                     'first_name': request.POST.get('first_name'),
-                    'full_name': f"{request.POST.get('last_name')} {request.POST.get('first_name')}",
                     'rank': sys_rank,
                     'role': role_title, # Explicit manual title
                     'subject': request.POST.get('subject') if sys_rank == 'teacher' else '/',
