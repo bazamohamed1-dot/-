@@ -1169,7 +1169,7 @@ def advanced_analytics_view(request):
 
     # Basic logic for advanced stats (can be expanded later)
     # We will pass the raw query to Pandas and compute some basic predictive/inferential stats
-    df = pd.DataFrame(list(grades_qs.values('student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score')))
+    df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score')))
 
     from .analytics_utils import format_class_name
     df['student__class_name'] = df.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
@@ -1230,16 +1230,12 @@ def advanced_analytics_view(request):
 
     # 4. Central Tendency and Dispersion measures
     # Calculate these specifically on the "General Average" (المعدل العام) or "معدل الفصل X" to ensure Max/Min reflect true student averages and don't exceed 20
-    general_avg_subj = None
-    for subj in df['subject'].unique():
-        if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
-            general_avg_subj = subj
-            break
+    general_avg_subjs = [subj for subj in df['subject'].unique() if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل'))]
 
-    if general_avg_subj:
-        general_avg_df = df[df['subject'] == general_avg_subj].copy()
+    if general_avg_subjs:
+        general_avg_df = df[df['subject'].isin(general_avg_subjs)].copy()
     else:
-        general_avg_df = df.groupby(['student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+        general_avg_df = df.groupby(['student__id', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
     active_scores = general_avg_df[general_avg_df['score'] > 0]['score'].dropna()
 
@@ -1361,10 +1357,10 @@ def run_statistical_test(request):
         return JsonResponse({'error': 'لا توجد بيانات كافية'})
 
     # We aggregate by student to get their general average for the test
-    df = pd.DataFrame(list(grades_qs.values('student_id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
+    df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
 
     # Calculate mean score per student to avoid repeated measures bias in simple tests
-    student_means = df.groupby(['student_id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
+    student_means = df.groupby(['student__id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
     student_means = student_means[student_means['score'] > 0] # remove absences
 
     if student_means.empty:
@@ -1456,18 +1452,14 @@ def get_gauss_data(request):
     if not grades_qs.exists():
         return JsonResponse({'x': [], 'y': [], 'actual': [], 'mean': 0, 'std_dev': 0, 'count': 0})
 
-    df = pd.DataFrame(list(grades_qs.values('subject', 'student__class_name', 'student__academic_year', 'term', 'score')))
+    df = pd.DataFrame(list(grades_qs.values('student__id', 'subject', 'student__class_name', 'student__academic_year', 'term', 'score')))
 
-    general_avg_subj = None
-    for subj in df['subject'].unique():
-        if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
-            general_avg_subj = subj
-            break
+    general_avg_subjs = [subj for subj in df['subject'].unique() if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل'))]
 
-    if general_avg_subj:
-        general_avg_df = df[df['subject'] == general_avg_subj].copy()
+    if general_avg_subjs:
+        general_avg_df = df[df['subject'].isin(general_avg_subjs)].copy()
     else:
-        general_avg_df = df.groupby(['student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+        general_avg_df = df.groupby(['student__id', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
     active_scores = general_avg_df[general_avg_df['score'] > 0]['score'].dropna()
     active_scores = active_scores.clip(upper=20.0)
