@@ -1301,15 +1301,85 @@ def advanced_analytics_view(request):
     from .models import Grade
     import pandas as pd
 
+    # Global Filters
+    selected_level = request.GET.get('level', '')
+    selected_class = request.GET.get('class_name', '')
+    selected_teacher_id = request.GET.get('teacher_id', '')
+    selected_subject = request.GET.get('subject', '')
+
     # Retrieve all active grades
     grades_qs = Grade.objects.all()
-    if not grades_qs.exists():
-        messages.warning(request, "لا توجد علامات مسجلة للقيام بتحليل متقدم.")
-        return redirect('analytics_dashboard')
 
-    # Basic logic for advanced stats (can be expanded later)
-    # We will pass the raw query to Pandas and compute some basic predictive/inferential stats
-    df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score')))
+    # Apply Filters to the QuerySet
+    if selected_subject:
+        import django.db.models as models
+        grades_qs = grades_qs.filter(models.Q(subject__icontains=selected_subject))
+
+    if selected_teacher_id:
+        from .models import Employee, TeacherAssignment
+        try:
+            teacher = Employee.objects.get(id=selected_teacher_id)
+            assignments = TeacherAssignment.objects.filter(teacher=teacher)
+            teacher_classes = []
+            teacher_subjects = []
+            for assign in assignments:
+                if assign.classes:
+                    teacher_classes.extend(assign.classes)
+                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                    teacher_subjects.append(assign.subject)
+
+            teacher_classes = list(set(teacher_classes))
+
+            if teacher_classes:
+                import django.db.models as models
+                q_classes = models.Q()
+                from .analytics_utils import unformat_class_name
+                for cls in teacher_classes:
+                    raw_c = unformat_class_name(cls)
+                    if raw_c and raw_c.isdigit():
+                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
+                    else:
+                        q_classes |= models.Q(student__class_name=cls)
+                grades_qs = grades_qs.filter(q_classes)
+
+            if teacher_subjects and not selected_subject:
+                import django.db.models as models
+                q_subjs = models.Q()
+                for subj in teacher_subjects:
+                    q_subjs |= models.Q(subject__icontains=subj)
+                grades_qs = grades_qs.filter(q_subjs)
+
+        except Employee.DoesNotExist:
+            pass
+    else:
+        if selected_level:
+            import django.db.models as models
+            grades_qs = grades_qs.filter(
+                models.Q(student__academic_year=selected_level) |
+                models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+            )
+        if selected_class:
+            from .analytics_utils import unformat_class_name
+            import django.db.models as models
+            raw_class = unformat_class_name(selected_class)
+            if raw_class and raw_class.isdigit():
+                grades_qs = grades_qs.filter(
+                    models.Q(student__class_name=selected_class) |
+                    models.Q(student__class_name=raw_class) |
+                    models.Q(student__class_name__endswith=f" {raw_class}") |
+                    models.Q(student__class_name__endswith=f"م{raw_class}") |
+                    models.Q(student__class_name__icontains=raw_class)
+                )
+            else:
+                grades_qs = grades_qs.filter(student__class_name=selected_class)
+
+    if not grades_qs.exists():
+        messages.warning(request, "لا توجد علامات مسجلة للقيام بتحليل متقدم (أو لا توجد نتائج مطابقة للفلتر).")
+        # Don't redirect, render empty dashboard instead so filters remain accessible
+        df = pd.DataFrame(columns=['student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score', 'computed_level'])
+    else:
+        # Basic logic for advanced stats
+        df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score')))
 
     from .analytics_utils import format_class_name
     df['student__class_name'] = df.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
@@ -1369,15 +1439,18 @@ def advanced_analytics_view(request):
     import scipy.stats as stats
 
     # 4. Central Tendency and Dispersion measures
-    # Calculate these specifically on the "General Average" (المعدل العام) or "معدل الفصل X" to ensure Max/Min reflect true student averages and don't exceed 20
-    general_avg_subjs = [subj for subj in df['subject'].unique() if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل'))]
-
-    if general_avg_subjs:
-        general_avg_df = df[df['subject'].isin(general_avg_subjs)].copy()
+    if selected_subject or selected_teacher_id:
+        # If analyzing a specific subject/teacher, we calculate based on the specific subject scores
+        target_df = df.groupby(['student__id'])['score'].mean().reset_index() if not df.empty else pd.DataFrame(columns=['score'])
     else:
-        general_avg_df = df.groupby(['student__id', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+        # Fallback to general average
+        general_avg_subjs = [subj for subj in df['subject'].unique() if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل'))] if not df.empty else []
+        if general_avg_subjs:
+            target_df = df[df['subject'].isin(general_avg_subjs)].copy()
+        else:
+            target_df = df.groupby(['student__id', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index() if not df.empty else pd.DataFrame(columns=['score'])
 
-    active_scores = general_avg_df[general_avg_df['score'] > 0]['score'].dropna()
+    active_scores = target_df[target_df['score'] > 0]['score'].dropna() if not target_df.empty else pd.Series(dtype='float64')
 
     # Cap values to max 20 just in case
     active_scores = active_scores.clip(upper=20.0)
@@ -1468,7 +1541,11 @@ def advanced_analytics_view(request):
         'levels': levels,
         'class_map_json': json.dumps(class_map),
         'teachers': teachers,
-        'subjects_list': subjects_list
+        'subjects_list': subjects_list,
+        'selected_level': selected_level,
+        'selected_class': selected_class,
+        'selected_teacher_id': selected_teacher_id,
+        'selected_subject': selected_subject
     }
     return render(request, 'students/advanced_analytics.html', context)
 
