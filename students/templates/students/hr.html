@@ -310,7 +310,10 @@
                 <div class="d-flex flex-wrap gap-2 mt-1 dyn-classes-container">
         `;
 
-        allGlobalClasses.forEach(cls => {
+        // Include any custom classes not in global list
+        const combinedClasses = [...new Set([...allGlobalClasses, ...classesArray])];
+
+        combinedClasses.forEach(cls => {
             const isChecked = classesArray.includes(cls) ? 'checked' : '';
             blockHtml += `
                 <div class="form-check">
@@ -322,9 +325,33 @@
 
         blockHtml += `
                 </div>
+                <div class="mt-2 input-group input-group-sm" style="max-width: 250px;">
+                    <input type="text" class="form-control custom-class-input" placeholder="إضافة قسم غير موجود...">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" type="button" onclick="addCustomClass(this)">إضافة</button>
+                    </div>
+                </div>
             </div>
         `;
         return blockHtml;
+    }
+
+    function addCustomClass(btn) {
+        const block = btn.closest('.assignment-block');
+        const input = block.querySelector('.custom-class-input');
+        const container = block.querySelector('.dyn-classes-container');
+        const newClass = input.value.trim();
+
+        if (newClass) {
+            const div = document.createElement('div');
+            div.className = 'form-check';
+            div.innerHTML = `
+                <input class="form-check-input dyn-class-cb" type="checkbox" value="${newClass}" checked>
+                <label class="form-check-label">${newClass}</label>
+            `;
+            container.appendChild(div);
+            input.value = '';
+        }
     }
 
     function toggleEditAssignments() {
@@ -561,12 +588,36 @@ function addModalAssignmentBlock() {
                 <div class="d-flex flex-wrap gap-2 mt-2 class-checkbox-container">
                     ${classCheckboxes}
                 </div>
+                <div class="mt-2 input-group input-group-sm" style="max-width: 250px;">
+                    <input type="text" class="form-control custom-class-modal-input" placeholder="إضافة قسم غير موجود...">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" type="button" onclick="addCustomClassModal(this)">إضافة</button>
+                    </div>
+                </div>
             </div>
         </div>
     `;
 
     container.appendChild(block);
     return block;
+}
+
+function addCustomClassModal(btn) {
+    const block = btn.closest('.assignment-block');
+    const input = block.querySelector('.custom-class-modal-input');
+    const container = block.querySelector('.class-checkbox-container');
+    const newClass = input.value.trim();
+
+    if (newClass) {
+        const div = document.createElement('div');
+        div.className = 'form-check';
+        div.innerHTML = `
+            <input class="form-check-input class-checkbox" type="checkbox" value="${newClass}" checked>
+            <label class="form-check-label">${newClass}</label>
+        `;
+        container.appendChild(div);
+        input.value = '';
+    }
 }
 
 function openManualAssign(id, name, assignmentsJson) {
