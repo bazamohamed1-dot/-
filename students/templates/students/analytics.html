@@ -228,7 +228,21 @@
                 </select>
             </form>
 
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <!-- Teacher Info Badge -->
+            {% if teacher_info %}
+            <div class="w-100 mt-3 p-3 rounded" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-chalkboard-teacher fs-4 me-2 text-warning"></i>
+                    <h5 class="m-0 fw-bold text-white">إسناد الأستاذ: {{ teacher_info.name }}</h5>
+                </div>
+                <div class="d-flex flex-wrap gap-3 text-white" style="font-size: 0.95rem;">
+                    <div><i class="fas fa-book text-info"></i> <strong>المادة:</strong> {{ teacher_info.subjects }}</div>
+                    <div><i class="fas fa-users text-success"></i> <strong>الأقسام المسندة:</strong> {{ teacher_info.classes }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 15px;">
                 <button class="btn btn-outline-light shadow" onclick="window.print()" style="white-space: nowrap;">
                     <i class="fas fa-print me-1"></i>
                     طباعة محضر مجلس القسم/المستوى

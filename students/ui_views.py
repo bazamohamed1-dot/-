@@ -1380,6 +1380,8 @@ def analytics_dashboard(request):
 
     import json
 
+    import json
+
     # Get Dynamic Subjects List
     # We will declare teacher_subjects = [] at the top of the scope so it exists globally if missing
     teacher_subjects = locals().get('teacher_subjects', [])
@@ -1392,6 +1394,7 @@ def analytics_dashboard(request):
     subjects_list.sort()
 
     # Filter class_map to only show teacher classes if selected
+    teacher_info = None
     if selected_teacher_id and teacher_classes:
         filtered_class_map = {}
         for lvl, clist in class_map.items():
@@ -1400,6 +1403,16 @@ def analytics_dashboard(request):
                 filtered_class_map[lvl] = valid_cls
         class_map = filtered_class_map
         levels = list(class_map.keys())
+
+        try:
+            from .models import Employee
+            teacher_obj = Employee.objects.get(id=selected_teacher_id)
+            teacher_info = {
+                'name': f"{teacher_obj.last_name} {teacher_obj.first_name}",
+                'subjects': "، ".join(teacher_subjects),
+                'classes': "، ".join(teacher_classes)
+            }
+        except Exception: pass
 
     # Get Teachers List for Dropdown
     from .models import Employee
@@ -1699,6 +1712,7 @@ def advanced_analytics_view(request):
         'class_map_json': json.dumps(class_map),
         'teachers': teachers,
         'subjects_list': subjects_list,
+        'teacher_info': teacher_info,
         'selected_level': selected_level,
         'selected_class': selected_class,
         'selected_teacher_id': selected_teacher_id,
