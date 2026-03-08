@@ -1240,6 +1240,9 @@ def analytics_dashboard(request):
     from .analytics_utils import analyze_grades_locally
     import re
 
+    teacher_subjects = []
+    teacher_classes = []
+
     # Get distinct academic years (levels) and classes
     levels = list(Student.objects.values_list('academic_year', flat=True).distinct())
     levels = [lvl for lvl in levels if lvl]
@@ -1378,6 +1381,10 @@ def analytics_dashboard(request):
     import json
 
     # Get Dynamic Subjects List
+    # We will declare teacher_subjects = [] at the top of the scope so it exists globally if missing
+    teacher_subjects = locals().get('teacher_subjects', [])
+    teacher_classes = locals().get('teacher_classes', [])
+
     if teacher_subjects:
         subjects_list = teacher_subjects
     else:
@@ -1385,7 +1392,7 @@ def analytics_dashboard(request):
     subjects_list.sort()
 
     # Filter class_map to only show teacher classes if selected
-    if selected_teacher_id:
+    if selected_teacher_id and teacher_classes:
         filtered_class_map = {}
         for lvl, clist in class_map.items():
             valid_cls = [c for c in clist if c in teacher_classes]
