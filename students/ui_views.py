@@ -963,6 +963,13 @@ def hr_home(request):
                                 .exclude(class_name__isnull=True).exclude(class_name='')
                                 .values_list('academic_year', 'class_name').distinct())
 
+    arabic_level_map = {
+        'أولى': '1', 'الاولى': '1', 'الأولى': '1', 'اولى': '1',
+        'ثانية': '2', 'الثانية': '2', 'ثانيه': '2', 'الثانيه': '2',
+        'ثالثة': '3', 'الثالثة': '3', 'ثالثه': '3', 'الثالثه': '3',
+        'رابعة': '4', 'الرابعة': '4', 'رابعه': '4', 'الرابعه': '4'
+    }
+
     db_classes = []
     for level, cl_name in db_combinations:
         full = f"{level} {cl_name}".strip()
@@ -971,12 +978,25 @@ def hr_home(request):
         if shortcut_obj:
             db_classes.append(shortcut_obj.shortcut)
         else:
-            # Simple fallback heuristic: if level starts with '1', '2', '3', '4' etc.
-            first_char = level[0] if level else ""
+            # Advanced fallback heuristic supporting Arabic words
+            level_str = (level or "").strip()
+            first_char = level_str[0] if level_str else ""
+
+            # Check if starts with digit
             if first_char.isdigit():
                  db_classes.append(f"{first_char}م{cl_name}")
             else:
-                 db_classes.append(full)
+                 # Check if starts with a known Arabic level word
+                 mapped_digit = None
+                 for arb_word, digit in arabic_level_map.items():
+                     if level_str.startswith(arb_word):
+                         mapped_digit = digit
+                         break
+
+                 if mapped_digit:
+                     db_classes.append(f"{mapped_digit}م{cl_name}")
+                 else:
+                     db_classes.append(full)
 
     all_classes = list(set(shortcut_classes + assigned_classes + db_classes))
     all_classes.sort()
