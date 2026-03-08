@@ -119,8 +119,8 @@
                                 <div class="d-flex flex-wrap gap-2 mt-1">
                                     {% for db_c in all_classes %}
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="classes_{{ forloop.parentloop.counter0 }}_0[]" value="{{ db_c }}" {% if db_c in item.classes %}checked{% endif %}>
-                                        <label class="form-check-label">{{ db_c }}</label>
+                                        <input class="form-check-input" type="checkbox" id="class_{{ forloop.parentloop.counter0 }}_0_{{ forloop.counter0 }}" name="classes_{{ forloop.parentloop.counter0 }}_0[]" value="{{ db_c }}" {% if db_c in item.classes %}checked{% endif %}>
+                                        <label class="form-check-label" for="class_{{ forloop.parentloop.counter0 }}_0_{{ forloop.counter0 }}">{{ db_c }}</label>
                                     </div>
                                     {% endfor %}
                                 </div>
@@ -189,12 +189,12 @@ function addWizardAssignmentBlock(teacherIndex, classesStr) {
         <div class="d-flex flex-wrap gap-2 mt-1">
     `;
 
-    classesArray.forEach(cls => {
+    classesArray.forEach((cls, idx) => {
         if (!cls.trim()) return;
         html += `
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="classes_${teacherIndex}_${blockIndex}[]" value="${cls.trim()}">
-                <label class="form-check-label">${cls.trim()}</label>
+                <input class="form-check-input" type="checkbox" id="class_${teacherIndex}_${blockIndex}_${idx}" name="classes_${teacherIndex}_${blockIndex}[]" value="${cls.trim()}">
+                <label class="form-check-label" for="class_${teacherIndex}_${blockIndex}_${idx}">${cls.trim()}</label>
             </div>
         `;
     });
