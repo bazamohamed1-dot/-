@@ -297,6 +297,10 @@
     const allGlobalClasses = {{ all_classes|safe_json|safe }};
 
     function createAssignmentBlock(subject = '', classesArray = []) {
+        // Ensure no whitespace mismatch when determining checked states
+        const cleanClasses = classesArray.map(c => c.trim().replace(/\s+/g, ''));
+        const cleanGlobal = allGlobalClasses.map(c => c.trim().replace(/\s+/g, ''));
+
         let blockHtml = `
             <div class="assignment-block mb-3 p-3 border rounded" style="background: #fdfdfd;">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -310,15 +314,15 @@
                 <div class="d-flex flex-wrap gap-2 mt-1 dyn-classes-container">
         `;
 
-        // Include any custom classes not in global list
-        const combinedClasses = [...new Set([...allGlobalClasses, ...classesArray])];
+        // Include any custom classes not in global list based on cleaned values, but display original arrays when possible
+        const combinedCleanClasses = [...new Set([...cleanGlobal, ...cleanClasses])];
 
-        combinedClasses.forEach(cls => {
-            const isChecked = classesArray.includes(cls) ? 'checked' : '';
+        combinedCleanClasses.forEach(cleanCls => {
+            const isChecked = cleanClasses.includes(cleanCls) ? 'checked' : '';
             blockHtml += `
                 <div class="form-check">
-                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${cls}" ${isChecked}>
-                    <label class="form-check-label">${cls}</label>
+                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${cleanCls}" ${isChecked}>
+                    <label class="form-check-label">${cleanCls}</label>
                 </div>
             `;
         });
@@ -557,10 +561,11 @@ function addModalAssignmentBlock() {
                 const cb = child.querySelector('input[type="checkbox"]');
                 const label = child.querySelector('label');
                 if (cb && label) {
+                    const cleanCls = cb.value.trim().replace(/\s+/g, '');
                     classCheckboxes += `
                         <div class="form-check">
-                            <input class="form-check-input class-checkbox" type="checkbox" name="classes_checked_${blockIndex}[]" value="${cb.value}">
-                            <label class="form-check-label">${label.innerText}</label>
+                            <input class="form-check-input class-checkbox" type="checkbox" name="classes_checked_${blockIndex}[]" value="${cleanCls}">
+                            <label class="form-check-label">${cleanCls}</label>
                         </div>
                     `;
                 }
@@ -656,7 +661,8 @@ function openManualAssign(id, name, assignmentsJson) {
 
             if (assignment.classes && Array.isArray(assignment.classes)) {
                 assignment.classes.forEach(cls => {
-                    const cb = block.querySelector(`.class-checkbox[value="${cls}"]`);
+                    const cleanCls = cls.trim().replace(/\s+/g, '');
+                    const cb = block.querySelector(`.class-checkbox[value="${cleanCls}"]`);
                     if (cb) cb.checked = true;
                 });
             }
