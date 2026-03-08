@@ -74,7 +74,7 @@
                             <i class="fas fa-chalkboard-teacher"></i> تفاصيل الإسناد
                         </button>
                         {% endif %}
-                        <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", {{ emp|safe_json }})' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", JSON.parse("{{ emp|safe_json|escapejs }}"))' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
                     </td>
                 </tr>
