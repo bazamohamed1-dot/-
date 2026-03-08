@@ -1451,6 +1451,9 @@ def advanced_analytics_view(request):
     # Apply Filters to the QuerySet
     # Compute teacher subjects BEFORE filtering the assignments by selected_subject
     teacher_subjects = []
+    teacher_classes = []
+    teacher_info = None
+
     if selected_teacher_id:
         from .models import Employee, TeacherAssignment
         from .models_mapping import ClassShortcut
