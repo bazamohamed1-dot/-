@@ -139,8 +139,7 @@
     {% if auto_select_data %}
     document.addEventListener('DOMContentLoaded', function() {
         // auto_select_data is a dict: { teacher_id: { subject: "...", classes: [...] } }
-        // Use single quotes for the JSON string to avoid syntax errors with HTML escaping
-        const autoData = JSON.parse('{{ auto_select_data|escapejs }}');
+        const autoData = JSON.parse('{{ auto_select_data|safe_json|escapejs }}');
 
         // Store globally to use when opening modal
         window.autoAssignmentData = autoData;
@@ -652,7 +651,6 @@ document.addEventListener("DOMContentLoaded", function() {
                         subject: subject,
                         classes: checkedClasses
                     });
-</script>
                 }
             });
 
