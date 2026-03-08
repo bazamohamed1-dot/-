@@ -665,7 +665,21 @@ def assignment_matching_view(request):
             return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
 
         import json
+
+        # Make all_classes whitespace-normalized for robust matching
+        normalized_all_classes = {cl.replace(" ", ""): cl for cl in context['all_classes']}
+
         for c in candidates:
+            # Strip spaces from extracted classes to match with all_classes which might have different spacing
+            mapped_classes = []
+            for cl in c.get('classes', []):
+                cl_norm = cl.strip().replace(" ", "")
+                if cl_norm in normalized_all_classes:
+                    mapped_classes.append(normalized_all_classes[cl_norm])
+                else:
+                    mapped_classes.append(cl.strip())
+            c['classes'] = mapped_classes
+
             best_score = 0.0
             best_match = None
             c_norm = (c.get('name') or '').strip()
