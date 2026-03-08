@@ -951,7 +951,16 @@ def hr_home(request):
 
     # Get All Classes for Dropdown
     from .models_mapping import ClassShortcut
-    all_classes = list(ClassShortcut.objects.values_list('shortcut', flat=True).distinct())
+    shortcut_classes = list(ClassShortcut.objects.values_list('shortcut', flat=True).distinct())
+
+    # Also fetch existing assignments so teachers don't lose custom classes
+    assigned_classes = []
+    for ta in TeacherAssignment.objects.all():
+        assigned_classes.extend(ta.classes)
+
+    db_classes = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name='').values_list('class_name', flat=True).distinct())
+
+    all_classes = list(set(shortcut_classes + assigned_classes + db_classes))
     all_classes.sort()
 
     # Auto-Select Logic (If file was uploaded previously)
