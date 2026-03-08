@@ -1378,8 +1378,21 @@ def analytics_dashboard(request):
     import json
 
     # Get Dynamic Subjects List
-    subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
+    if teacher_subjects:
+        subjects_list = teacher_subjects
+    else:
+        subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
     subjects_list.sort()
+
+    # Filter class_map to only show teacher classes if selected
+    if selected_teacher_id:
+        filtered_class_map = {}
+        for lvl, clist in class_map.items():
+            valid_cls = [c for c in clist if c in teacher_classes]
+            if valid_cls:
+                filtered_class_map[lvl] = valid_cls
+        class_map = filtered_class_map
+        levels = list(class_map.keys())
 
     # Get Teachers List for Dropdown
     from .models import Employee
@@ -1657,7 +1670,10 @@ def advanced_analytics_view(request):
                 class_map[lvl].append(cls)
 
     # Get Dynamic Subjects List
-    subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
+    if teacher_subjects:
+        subjects_list = teacher_subjects
+    else:
+        subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
     subjects_list.sort()
 
     # Get Teachers List for Dropdown

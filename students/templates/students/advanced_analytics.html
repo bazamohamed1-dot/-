@@ -575,6 +575,11 @@ function updateGaussStatsDisplay(data) {
         });
     }
 
+    function handleGlobalTeacherChange() {
+        // When global teacher changes, trigger form submission to refresh server context
+        document.getElementById('globalFiltersForm').submit();
+    }
+
     function updateGlobalClassDropdown() {
         const levelSelect = document.getElementById('globalLevelSelector');
         const classSelect = document.getElementById('globalClassSelector');
