@@ -689,12 +689,16 @@ def assignment_matching_view(request):
                     mapped_classes.append(normalized_all_classes[cl_norm])
                     continue
 
-                # Heuristic extraction for common formats (e.g. "أولى 1", "4 متوسط 2")
-                # Try finding a digit representing the class number
-                match_num = re.search(r'\d+', cl_orig)
-                class_num = match_num.group() if match_num else ""
+                # If it's already properly formatted (like "4م1") but just missing from normalized_all_classes
+                # (e.g., custom class not in DB yet), don't mutate it further.
+                if re.match(r'^\d+م\d+$', cl_norm):
+                     mapped_classes.append(cl_norm)
+                     continue
 
+                # Heuristic extraction for common formats (e.g. "أولى 1", "4 متوسط 2")
+                all_nums = re.findall(r'\d+', cl_orig)
                 mapped_digit = None
+                class_num = None
 
                 # Find Arabic words representing the level
                 for arb_word, digit in arabic_level_map.items():
@@ -702,21 +706,15 @@ def assignment_matching_view(request):
                         mapped_digit = digit
                         break
 
-                # Or find a starting digit for the level
-                if not mapped_digit:
-                    match_level = re.search(r'^\s*(\d)', cl_orig)
-                    if match_level:
-                        # If two digits exist in the string (e.g., "1متوسط2" -> Level 1, Class 2)
-                        # Ensure we don't accidentally treat class_num as mapped_digit if they are the same
-                        all_nums = re.findall(r'\d+', cl_orig)
-                        if len(all_nums) >= 2:
-                             mapped_digit = all_nums[0]
-                             class_num = all_nums[1]
-                        else:
-                             mapped_digit = match_level.group(1)
-                             if mapped_digit == class_num and len(cl_orig) > 1:
-                                 # Edge case where string is something like "أولى 1", and re.findall only saw '1'
-                                 pass
+                if mapped_digit:
+                     class_num = all_nums[0] if len(all_nums) > 0 else None
+                else:
+                     if len(all_nums) >= 2:
+                          mapped_digit = all_nums[0]
+                          class_num = all_nums[1]
+                     elif len(all_nums) == 1:
+                          mapped_digit = all_nums[0]
+                          class_num = all_nums[0]
 
                 if mapped_digit and class_num:
                     constructed_shortcut = f"{mapped_digit}م{class_num}"
