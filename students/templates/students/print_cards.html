@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load student_tags %}
 
 {% block title %}طباعة البطاقات المدرسية{% endblock %}
 {% block header_title %}طباعة البطاقات المدرسية{% endblock %}
@@ -183,15 +184,13 @@
 
     <div class="id-card">
         <div class="photo-area">
-            {% if student.photo %}
-                {% if 'data:image' in student.photo.name %}
-                    <img src="{{ student.photo.name|safe }}">
+            {% with photo_url=student|get_student_photo_url %}
+                {% if photo_url %}
+                    <img src="{{ photo_url|safe }}">
                 {% else %}
-                    <img src="{{ student.photo.url }}">
+                    <i class="fas fa-user fa-3x" style="color:#cbd5e1"></i>
                 {% endif %}
-            {% else %}
-                <i class="fas fa-user fa-3x" style="color:#cbd5e1"></i>
-            {% endif %}
+            {% endwith %}
         </div>
 
         <div class="info-area">

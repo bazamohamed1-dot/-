@@ -58,3 +58,25 @@ def safe_json(value):
 def get_assignments_data(emp):
     assignments = list(emp.assignments.all().values('subject', 'classes'))
     return json.dumps(assignments, cls=DjangoJSONEncoder)
+
+@register.filter
+def get_student_photo_url(student):
+    """
+    Robustly gets a student's photo URL, falling back to file system
+    if the database field is empty but the image was synced offline.
+    """
+    from django.conf import settings
+    import os
+
+    if student.photo and hasattr(student.photo, 'url') and getattr(student.photo, 'name', None):
+        if 'data:image' in student.photo.name:
+            return student.photo.name
+        return student.photo.url
+
+    # Fallback to checking file system if DB is empty
+    safe_id = str(student.student_id_number).replace('/', '_').replace('\\', '_').strip()
+    expected_path = os.path.join(settings.MEDIA_ROOT, 'students_photos', f'{safe_id}.jpg')
+    if os.path.isfile(expected_path):
+        return f'{settings.MEDIA_URL}students_photos/{safe_id}.jpg'
+
+    return None
