@@ -931,10 +931,11 @@ function renderTable() {
             pendingBadge = '<i class="fas fa-plus-circle" title="جديد (غير متزامن)" style="color:#10b981; margin-right:5px;"></i>';
         }
 
+        const isChecked = selectedStudentIds.has(String(s.dbId)) ? 'checked' : '';
         return `
         <tr onclick="fillForm(${i}, this)" style="${pendingStyle}">
             <td onclick="event.stopPropagation()">
-                <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox" onchange="updateSelectionState()">
+                <input type="checkbox" name="student_ids" value="${s.dbId}" class="row-checkbox" ${isChecked} onchange="updateSelectionState(this)">
             </td>
             <td>${s.id || ''}</td>
             <td>${s.ln || ''} ${pendingBadge}</td>
@@ -947,13 +948,23 @@ function renderTable() {
     }).join('');
 }
 
+// Global Selection Tracking Set for Pagination
+const selectedStudentIds = new Set();
+
 // "Select All Matching" Logic
 let isAllMatchingSelected = false;
 let totalMatchingCount = 0; // Set by fetchStudents from result.count
 
 function toggleSelectAll(source) {
     const checkboxes = document.querySelectorAll('.row-checkbox');
-    checkboxes.forEach(cb => cb.checked = source.checked);
+    checkboxes.forEach(cb => {
+        cb.checked = source.checked;
+        if (source.checked) {
+            selectedStudentIds.add(cb.value);
+        } else {
+            selectedStudentIds.delete(cb.value);
+        }
+    });
 
     // Legacy Banner Logic (Optional, kept as secondary)
     if (source.checked && totalMatchingCount > checkboxes.length && !isAllMatchingSelected) {
@@ -1021,7 +1032,15 @@ function resetSelectAllMatching(clearUI = true) {
     }
 }
 
-function updateSelectionState() {
+function updateSelectionState(checkbox) {
+    if (checkbox) {
+        if (checkbox.checked) {
+            selectedStudentIds.add(checkbox.value);
+        } else {
+            selectedStudentIds.delete(checkbox.value);
+        }
+    }
+
     // If any individual checkbox is unchecked, we lose "Select All Matching" state
     const checkboxes = document.querySelectorAll('.row-checkbox');
     const allChecked = Array.from(checkboxes).every(cb => cb.checked);
@@ -1040,12 +1059,28 @@ function updateSelectionState() {
 }
 
 function submitPrint() {
-    const checkboxes = document.querySelectorAll('.row-checkbox:checked');
-    if (checkboxes.length === 0) {
+    if (selectedStudentIds.size === 0 && !isAllMatchingSelected) {
         alert("يرجى اختيار تلميذ واحد على الأقل للطباعة");
         return;
     }
-    document.getElementById('printForm').submit();
+
+    // Create hidden inputs for all selected IDs so they get submitted even if not on the current DOM page
+    const form = document.getElementById('printForm');
+
+    // Remove old hidden inputs
+    form.querySelectorAll('.hidden-student-id').forEach(el => el.remove());
+
+    // Append current tracked ones
+    selectedStudentIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'student_ids';
+        input.value = id;
+        input.className = 'hidden-student-id';
+        form.appendChild(input);
+    });
+
+    form.submit();
 }
 
 // Helper to get CSRF token

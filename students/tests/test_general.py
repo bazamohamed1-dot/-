@@ -3,9 +3,18 @@ from rest_framework.test import APIClient
 from students.models import Student, LibraryLoan
 from datetime import date, timedelta
 
+from django.contrib.auth.models import User
+from students.models import EmployeeProfile
+
 class LibraryTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+
+        # Setup an authenticated user with library permission
+        self.user = User.objects.create_user(username='librarian', password='password')
+        EmployeeProfile.objects.create(user=self.user, role='librarian', permissions=['library_scan', 'library_loan', 'library_return', 'access_library'])
+        self.client.force_authenticate(user=self.user)
+
         self.student = Student.objects.create(
             student_id_number='1234567890123456',
             last_name='Test',

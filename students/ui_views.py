@@ -65,6 +65,14 @@ def dashboard(request):
                 return redirect('students_management')
             elif profile.has_perm('access_archive'):
                 return redirect('archive_home')
+            elif profile.has_perm('access_guidance'):
+                return redirect('guidance_home')
+            elif profile.has_perm('access_hr'):
+                return redirect('hr_home')
+            elif profile.has_perm('access_parents'):
+                return redirect('parents_home')
+            elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'):
+                return redirect('analytics_dashboard')
             else:
                 pass # Default dashboard for others (Teachers)
         else:

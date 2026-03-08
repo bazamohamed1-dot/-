@@ -616,6 +616,9 @@ function updateGaussStatsDisplay(data) {
 
     function handleGlobalTeacherChange() {
         // When global teacher changes, trigger form submission to refresh server context
+        document.getElementById('globalLevelSelector').value = "";
+        document.getElementById('globalClassSelector').innerHTML = '<option value="">كل الأقسام</option>';
+        document.getElementById('globalSubjectSelector').value = ""; // Reset subject dropdown too
         document.getElementById('globalFiltersForm').submit();
     }
 

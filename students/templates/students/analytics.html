@@ -324,7 +324,7 @@
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
                     document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
-                    // Backend will handle the subject dropdown options and auto-selection
+                    document.getElementById('subjectFilter').value = ""; // Reset subject to show all assigned subjects
                 }
                 document.getElementById('analyticsFilterForm').submit();
             }
