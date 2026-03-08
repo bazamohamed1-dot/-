@@ -1,0 +1,643 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>برنامج تسيير المؤسسات التربوية - تسجيل الدخول</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --secondary: #64748b;
+            --bg-overlay: rgba(255, 255, 255, 0.95);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bg-collage {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .bg-img {
+            position: absolute;
+            background-size: cover;
+            background-position: center;
+            border-radius: 30px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            opacity: 0.85;
+            transition: all 1s ease;
+        }
+
+        /* Classroom */
+        .img-1 {
+            top: -5%; left: -5%; width: 60vw; height: 60vh;
+            background-image: url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=1000&q=80');
+            transform: rotate(-3deg);
+            z-index: 1;
+        }
+
+        /* Students */
+        .img-2 {
+            bottom: -10%; right: -5%; width: 65vw; height: 65vh;
+            background-image: url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1000&q=80');
+            transform: rotate(2deg);
+            z-index: 1;
+        }
+
+        /* Admin/Office */
+        .img-3 {
+            top: 10%; right: -10%; width: 40vw; height: 40vh;
+            background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80');
+            transform: rotate(5deg);
+            z-index: 2;
+            opacity: 0.7;
+        }
+
+        /* Flag */
+        .img-4 {
+            bottom: 5%; left: -8%; width: 35vw; height: 35vh;
+            background-image: url('https://flagcdn.com/w1280/dz.png');
+            transform: rotate(-8deg);
+            z-index: 2;
+            opacity: 0.6;
+        }
+
+        .bg-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(5px);
+            z-index: 5;
+        }
+
+        .login-container {
+            position: relative;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+
+        .logo-area {
+            margin-bottom: 30px;
+        }
+
+        .logo-icon {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 5px;
+            font-weight: 800;
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 1px 3px rgba(0,0,0,0.3);
+            padding-bottom: 5px;
+        }
+
+        .credit-text {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: -5px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        p.subtitle {
+            color: var(--secondary);
+            font-size: 0.95rem;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #334155;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 45px 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            outline: none;
+            background: white;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+        }
+
+        .footer {
+            margin-top: 25px;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        #error-msg {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            display: none;
+            border: 1px solid #fecaca;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-collage">
+        <div class="bg-img img-1"></div>
+        <div class="bg-img img-2"></div>
+        <div class="bg-img img-3"></div>
+        <div class="bg-img img-4"></div>
+    </div>
+    <div class="bg-overlay"></div>
+
+    <div class="login-container">
+        <div class="logo-area">
+            <i class="fas fa-graduation-cap logo-icon"></i>
+            <h1>برنامج تسيير المؤسسات التربوية</h1>
+            <div class="credit-text">من انجاز السيد المدير : بازة محمد الطاهر</div>
+            <p class="subtitle">قم بتسجيل الدخول للوصول إلى لوحة التحكم</p>
+        </div>
+
+        <div id="error-msg"></div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <input type="hidden" name="csrfmiddlewaretoken" value="GPFEbhZcTqMbn5fj55WhnnIWqm82bFSrJHRiB6yiKJT8BEulGsHMHqK1wWHxD1De">
+            <div class="form-group">
+                <label>اسم المستخدم</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="username" required dir="ltr" style="text-align: left;" placeholder="Username">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>كلمة المرور</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="password" required dir="ltr" style="text-align: left;" placeholder="Password">
+                </div>
+            </div>
+
+            <button type="submit" id="loginBtn">
+                <span id="btnText">دخول</span>
+                <div class="spinner" id="btnSpinner"></div>
+            </button>
+        </form>
+
+        <div style="margin-top:15px;">
+            <a href="#" onclick="openForgotModal()" style="color:var(--primary); font-size:0.9rem; text-decoration:none;">نسيت اسم المستخدم أو كلمة المرور؟</a>
+        </div>
+
+        <div class="footer">
+            &copy; 2025 جميع الحقوق محفوظة
+            <div style="margin-top: 10px;">
+                <a href="#" onclick="forceRefresh()" style="color: #94a3b8; font-size: 0.8rem; text-decoration: underline;">
+                    <i class="fas fa-sync"></i> تحديث التطبيق (إصلاح مشاكل التصفح)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9000; justify-content:center; align-items:center;">
+        <div class="login-container" style="max-width:350px;">
+            <h3><i class="fas fa-key"></i> استعادة كلمة المرور</h3>
+            <p style="font-size:0.9rem; color:#64748b; margin-bottom:20px;">أدخل اسم المستخدم لاستلام تعليمات الاستعادة عبر البريد المسجل (المدير فقط).</p>
+            <input type="text" id="forgotUsername" placeholder="اسم المستخدم" style="text-align:left; direction:ltr;" class="form-input">
+            <button class="btn" id="sendResetBtn" style="margin-top:15px; width:100%; background:var(--primary); color:white;" onclick="sendResetRequest()">
+                <span>إرسال</span>
+                <i class="fas fa-spinner fa-spin" id="resetSpinner" style="display:none;"></i>
+            </button>
+            <button class="btn" style="margin-top:10px; width:100%; background:#e2e8f0; color:#333;" onclick="document.getElementById('forgotModal').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+
+    <!-- Welcome Overlay -->
+    <div id="welcomeOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.95); z-index:9999; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+        <i class="fas fa-check-circle" style="font-size:5rem; color:var(--success); margin-bottom:20px;"></i>
+        <h2 style="color:var(--primary); font-size:2rem;">أهلاً بك، <span id="welcomeUser"></span></h2>
+        <p style="color:#64748b; font-size:1.2rem;">جاري تحضير واجهة العمل...</p>
+        <div class="spinner" style="border-color:var(--primary); border-top-color:transparent; width:40px; height:40px; margin-top:20px; display:block;"></div>
+    </div>
+
+    <!-- 2FA Modal -->
+    <div id="2faModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9000; justify-content:center; align-items:center;">
+        <div class="login-container" style="max-width:350px;">
+            <h3><i class="fas fa-shield-alt"></i> المصادقة الثنائية</h3>
+            <p style="font-size:0.9rem; color:#64748b; margin-bottom:20px;">أدخل الرمز من تطبيق المصادقة الخاص بك</p>
+            <input type="text" id="2faCode" placeholder="xxxxxx" style="text-align:center; font-size:1.5rem; letter-spacing:5px;" maxlength="6" class="western-nums">
+            <button class="btn" style="margin-top:15px; width:100%; background:var(--primary); color:white;" onclick="verify2FA()">تحقق</button>
+            <button class="btn" style="margin-top:10px; width:100%; background:#e2e8f0; color:#333;" onclick="close2FA()">إلغاء</button>
+        </div>
+    </div>
+
+    <script>
+        let temp2FAToken = null;
+
+        // Force Clear Service Worker Logic
+        function forceRefresh() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
+                });
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                    }
+                });
+            }
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.reload(true);
+        }
+
+        // FORCE UNREGISTER ALL SERVICE WORKERS IMMEDIATELY
+        // This runs before anything else to nuclear option the cache
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    console.log('Unregistering SW:', registration);
+                    registration.unregister();
+                }
+            });
+
+            // Clear all caches
+            caches.keys().then(function(names) {
+                for (let name of names) {
+                    caches.delete(name);
+                }
+            });
+        }
+
+        // Only re-register if NOT localhost and explicitly needed (e.g. Production)
+        // For now, we disable it locally completely to solve the stuck issue.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+                if (!isLocalhost) {
+                    // Register with timestamp to bust cache
+                    navigator.serviceWorker.register('/service-worker.js?v=' + new Date().getTime()).then(function(registration) {
+                        registration.update();
+                    }).catch(err => console.log('SW Fail', err));
+                }
+
+                // Auto-fill logic from URL Query Params (QR Code Login)
+                const urlParams = new URLSearchParams(window.location.search);
+                const username = urlParams.get('username');
+                const install = urlParams.get('install');
+
+                if (username) {
+                    document.getElementById('username').value = username;
+                    // Focus password
+                    document.getElementById('password').focus();
+                }
+
+                if (install === 'true') {
+                    // Trigger install prompt logic immediately if available
+                    // We need to wait a bit for 'beforeinstallprompt' to fire potentially
+                    setTimeout(() => {
+                        if (typeof showInstallPromotion === 'function') {
+                            showInstallPromotion(); // from base.html if loaded, but landing doesn't extend base.
+                            // Landing has its own minimal logic, so we need to trigger it manually here if possible
+                            // Or better: show a dedicated install button for this flow.
+                            showLandingInstallPrompt();
+                        }
+                    }, 1000);
+                }
+            });
+        }
+
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // If URL has install=true, show it immediately
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('install') === 'true') {
+                showLandingInstallPrompt();
+            }
+        });
+
+        function showLandingInstallPrompt() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+               // Fallback or instructions if prompt not available (e.g. already installed or iOS)
+               console.log("Install prompt not available yet");
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('loginBtn');
+            const spinner = document.getElementById('btnSpinner');
+            const btnText = document.getElementById('btnText');
+            const errorMsg = document.getElementById('error-msg');
+
+            // Reset UI
+            errorMsg.style.display = 'none';
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'block';
+
+            try {
+                // Ensure Device ID
+                let deviceId = localStorage.getItem('device_id');
+                if (!deviceId) {
+                    deviceId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                        return v.toString(16);
+                    });
+                    localStorage.setItem('device_id', deviceId);
+                }
+
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
+                };
+                if (deviceId) headers['X-Device-ID'] = deviceId;
+
+                const response = await fetch('/canteen/auth/login/', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.require_2fa) {
+                        // Show 2FA Modal
+                        temp2FAToken = data.temp_token;
+                        document.getElementById('2faModal').style.display = 'flex';
+                        btn.disabled = false;
+                        btnText.style.display = 'block';
+                        spinner.style.display = 'none';
+                        return;
+                    }
+
+                    completeLogin(data);
+                } else {
+                    // Handle Lockout
+                    if (data.code === 'LOCKED') {
+                        // Disable all inputs and button permanently
+                        document.querySelectorAll('input').forEach(i => i.disabled = true);
+                        btn.disabled = true; // Keep disabled
+                        btn.style.backgroundColor = '#94a3b8'; // Grey out
+                        btn.style.cursor = 'not-allowed';
+
+                        errorMsg.innerHTML = '<i class="fas fa-lock"></i> تم قفل الحساب. يرجى الاتصال بالمدير لتفعيله.';
+                        errorMsg.style.display = 'block';
+                        // Do NOT re-enable button
+                        spinner.style.display = 'none';
+                        btnText.style.display = 'block';
+                    } else {
+                        // Standard Error
+                        errorMsg.textContent = data.error || 'حدث خطأ غير معروف';
+                        errorMsg.style.display = 'block';
+                        btn.disabled = false;
+                        btnText.style.display = 'block';
+                        spinner.style.display = 'none';
+                    }
+                }
+            } catch (err) {
+                errorMsg.textContent = 'خطأ في الاتصال بالخادم';
+                errorMsg.style.display = 'block';
+                console.error(err);
+                btn.disabled = false;
+                btnText.style.display = 'block';
+                spinner.style.display = 'none';
+            }
+        }
+
+        async function verify2FA() {
+            const code = document.getElementById('2faCode').value;
+            if(!code) return;
+
+            try {
+                const response = await fetch('/canteen/auth/2fa/login/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('baza_school_csrf_v2') },
+                    body: JSON.stringify({ temp_token: temp2FAToken, code: code })
+                });
+
+                const data = await response.json();
+                if(response.ok) {
+                    document.getElementById('2faModal').style.display = 'none';
+                    completeLogin(data);
+                } else {
+                    alert(data.error || 'Invalid Code');
+                }
+            } catch(e) { alert("Error"); }
+        }
+
+        function close2FA() {
+            document.getElementById('2faModal').style.display = 'none';
+            temp2FAToken = null;
+        }
+
+        function completeLogin(data) {
+            // Success
+            sessionStorage.setItem('session_token', data.token);
+            sessionStorage.setItem('user_role', data.role);
+            sessionStorage.setItem('username', data.username);
+
+            // Show Welcome Overlay
+            document.getElementById('welcomeUser').textContent = data.username;
+            document.getElementById('welcomeOverlay').style.display = 'flex';
+
+            // Simulate loading delay
+            setTimeout(() => {
+                // Redirect based on role
+                if (data.role === 'storekeeper') {
+                    window.location.href = '/canteen/ui/';
+                } else if (data.role === 'librarian') {
+                    window.location.href = '/canteen/library/';
+                } else if (data.role === 'archivist') {
+                    window.location.href = '/canteen/archive/';
+                } else if (data.role === 'secretariat') {
+                    window.location.href = '/canteen/management/';
+                } else {
+                    // Director
+                    window.location.href = '/canteen/dashboard/';
+                }
+            }, 2000);
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function openForgotModal() {
+            document.getElementById('forgotModal').style.display = 'flex';
+            document.getElementById('forgotUsername').value = '';
+        }
+
+        async function sendResetRequest() {
+            const username = document.getElementById('forgotUsername').value;
+
+            // Just display the message for regular users as requested
+            // "If a user forgets account info... show message to contact Director"
+            if (username && username.toLowerCase() !== 'director' && username.toLowerCase() !== 'admin') {
+                alert("يرجى الاتصال بالمدير لاستعادة معلومات الدخول الخاصة بك.");
+                document.getElementById('forgotModal').style.display = 'none';
+                return;
+            }
+
+            // For Director/Admin, proceed with backend flow (Email/Token)
+            const btn = document.getElementById('sendResetBtn');
+            const spinner = document.getElementById('resetSpinner');
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
+                };
+                const deviceId = localStorage.getItem('device_id');
+                if (deviceId) headers['X-Device-ID'] = deviceId;
+
+                const response = await fetch('/canteen/auth/forgot_password/', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ username })
+                });
+
+                const data = await response.json();
+
+                // Enhanced Feedback
+                if (response.ok) {
+                    alert(data.message || "تم إرسال تعليمات الاستعادة.");
+                } else {
+                    alert(data.error || "خطأ في الاستعادة");
+                }
+
+                document.getElementById('forgotModal').style.display = 'none';
+            } catch(e) {
+                // Network error is different, warn user
+                alert("حدث خطأ في الاتصال. تأكد من الإنترنت.");
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+    </script>
+</body>
+</html>
