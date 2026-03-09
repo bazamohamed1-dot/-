@@ -57,24 +57,31 @@ def dashboard(request):
 
             if role == 'director':
                 pass # Continue to dashboard
-            elif profile.has_perm('access_canteen'):
-                return redirect('canteen_home')
-            elif profile.has_perm('access_library'):
-                return redirect('library_home')
-            elif profile.has_perm('access_management'):
-                return redirect('students_management')
-            elif profile.has_perm('access_archive'):
-                return redirect('archive_home')
-            elif profile.has_perm('access_guidance'):
-                return redirect('guidance_home')
-            elif profile.has_perm('access_hr'):
-                return redirect('hr_home')
-            elif profile.has_perm('access_parents'):
-                return redirect('parents_home')
-            elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'):
-                return redirect('analytics_dashboard')
             else:
-                pass # Default dashboard for others (Teachers)
+                # Count how many main interfaces they have access to
+                access_perms = [
+                    'access_canteen', 'access_library', 'access_management',
+                    'access_archive', 'access_guidance', 'access_hr',
+                    'access_parents', 'access_analytics', 'access_advanced_analytics'
+                ]
+                interfaces_count = sum(1 for p in access_perms if profile.has_perm(p))
+
+                # If they have multiple interface permissions, let them stay on the dashboard
+                # so they can use the sidebar to choose where to go.
+                if interfaces_count > 1:
+                    pass
+                elif interfaces_count == 1:
+                    # If exactly one interface, redirect directly to it to save them a click
+                    if profile.has_perm('access_canteen'): return redirect('canteen_home')
+                    elif profile.has_perm('access_library'): return redirect('library_home')
+                    elif profile.has_perm('access_management'): return redirect('students_management')
+                    elif profile.has_perm('access_archive'): return redirect('archive_home')
+                    elif profile.has_perm('access_guidance'): return redirect('guidance_home')
+                    elif profile.has_perm('access_hr'): return redirect('hr_home')
+                    elif profile.has_perm('access_parents'): return redirect('parents_home')
+                    elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'): return redirect('analytics_dashboard')
+                else:
+                    pass # Default dashboard for others (Teachers with no special interface perms)
         else:
             # No profile (e.g., admin). If not superuser, redirect
             if not request.user.is_superuser:
@@ -1331,11 +1338,11 @@ def analytics_dashboard(request):
                 q_classes = models.Q()
                 from .analytics_utils import unformat_class_name
                 for cls in full_class_names:
-                    raw_c = unformat_class_name(cls)
-                    if raw_c and raw_c.isdigit():
-                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
-                    else:
-                        q_classes |= models.Q(student__class_name=cls)
+                    # Using exact match or strict ends_with matching to prevent "1" matching "1AM 1", "2AM 1", etc.
+                    # Best approach: Since HR UI already normalizes to ClassShortcut format (e.g. 1م1),
+                    # and since we just expanded shortcut_obj.full_name (e.g. أولى متوسط 1),
+                    # exact match is generally safest.
+                    q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
@@ -1517,11 +1524,7 @@ def advanced_analytics_view(request):
                 q_classes = models.Q()
                 from .analytics_utils import unformat_class_name
                 for cls in full_class_names:
-                    raw_c = unformat_class_name(cls)
-                    if raw_c and raw_c.isdigit():
-                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
-                    else:
-                        q_classes |= models.Q(student__class_name=cls)
+                    q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
@@ -1874,11 +1877,7 @@ def get_gauss_data(request):
                 q_classes = models.Q()
                 from .analytics_utils import unformat_class_name
                 for cls in teacher_classes:
-                    raw_c = unformat_class_name(cls)
-                    if raw_c and raw_c.isdigit():
-                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
-                    else:
-                        q_classes |= models.Q(student__class_name=cls)
+                    q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not subject:
