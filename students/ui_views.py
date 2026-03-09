@@ -1141,7 +1141,7 @@ def ai_manual_view(request):
 def ai_chat_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_chat')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_ai_chat')):
         return redirect('dashboard')
 
     if request.method == 'POST':
@@ -1181,7 +1181,7 @@ def ai_chat_view(request):
 def tasks_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_tasks')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_tasks')):
         return redirect('dashboard')
 
     # Simple permission check: must be logged in
@@ -1200,7 +1200,7 @@ def tasks_view(request):
 def ai_control_panel(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_control')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_ai_control')):
         return redirect('dashboard')
 
     context = {
@@ -1213,7 +1213,7 @@ def ai_control_panel(request):
 def analytics_dashboard(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_analytics')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_analytics')):
         return redirect('dashboard')
 
     if request.method == 'POST':
@@ -1351,27 +1351,28 @@ def analytics_dashboard(request):
 
         except Employee.DoesNotExist:
             pass
-    else:
-        if selected_level:
-            import django.db.models as models
+
+    # Apply global level/class filters even if teacher is selected, to narrow down further
+    if selected_level:
+        import django.db.models as models
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=selected_level) |
+            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+        )
+    if selected_class:
+        from .analytics_utils import unformat_class_name
+        import django.db.models as models
+        raw_class = unformat_class_name(selected_class)
+        if raw_class and raw_class.isdigit():
             grades_qs = grades_qs.filter(
-                models.Q(student__academic_year=selected_level) |
-                models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+                models.Q(student__class_name=selected_class) |
+                models.Q(student__class_name=raw_class) |
+                models.Q(student__class_name__endswith=f" {raw_class}") |
+                models.Q(student__class_name__endswith=f"م{raw_class}") |
+                models.Q(student__class_name__icontains=raw_class)
             )
-        if selected_class:
-            from .analytics_utils import unformat_class_name
-            import django.db.models as models
-            raw_class = unformat_class_name(selected_class)
-            if raw_class and raw_class.isdigit():
-                grades_qs = grades_qs.filter(
-                    models.Q(student__class_name=selected_class) |
-                    models.Q(student__class_name=raw_class) |
-                    models.Q(student__class_name__endswith=f" {raw_class}") |
-                    models.Q(student__class_name__endswith=f"م{raw_class}") |
-                    models.Q(student__class_name__icontains=raw_class)
-                )
-            else:
-                grades_qs = grades_qs.filter(student__class_name=selected_class)
+        else:
+            grades_qs = grades_qs.filter(student__class_name=selected_class)
 
     effective_subject = selected_subject
     if selected_teacher_id and not effective_subject and teacher_subjects:
@@ -1447,7 +1448,7 @@ def analytics_dashboard(request):
 def advanced_analytics_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_advanced_analytics')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_advanced_analytics')):
         return redirect('dashboard')
 
     from .models import Grade
@@ -1743,7 +1744,7 @@ def advanced_analytics_view(request):
 def statistical_tests_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_advanced_analytics')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_advanced_analytics')):
         return redirect('dashboard')
 
     levels = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
