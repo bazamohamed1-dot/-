@@ -33,7 +33,7 @@ def unformat_class_name(formatted_class):
         return digits[-1]
     return formatted_class
 
-def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None):
+def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zeros=True):
     """
     Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
     Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
@@ -47,6 +47,10 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None):
         if not data:
             return None
         df = pd.DataFrame(data)
+
+        # Remove zeros from dataframe entirely if include_zeros is False
+        if not include_zeros:
+            df = df[df['score'] != 0.0]
 
         # Reconstruct full_name
         df['student_name'] = df['student__last_name'].fillna('') + ' ' + df['student__first_name'].fillna('')

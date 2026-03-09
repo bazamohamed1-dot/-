@@ -226,6 +226,11 @@
                         <option value="{{ subj }}" {% if request.GET.subject == subj %}selected{% endif %} style="color: black;">{{ subj }}</option>
                     {% endfor %}
                 </select>
+
+                <div style="display: flex; gap: 8px; align-items: center; margin-right: 15px;">
+                    <input type="checkbox" id="includeZeros" name="include_zeros" value="true" onchange="document.getElementById('analyticsFilterForm').submit();" {% if request.GET.include_zeros != 'false' %}checked{% endif %}>
+                    <label for="includeZeros" style="color: white; font-size: 0.9rem; cursor: pointer; white-space: nowrap;">احتساب الأصفار</label>
+                </div>
             </form>
 
             <!-- Teacher Info Badge -->
@@ -246,6 +251,10 @@
                 <button class="btn btn-outline-light shadow" onclick="window.print()" style="white-space: nowrap;">
                     <i class="fas fa-print me-1"></i>
                     طباعة محضر مجلس القسم/المستوى
+                </button>
+
+                <button class="btn btn-info shadow fw-bold" onclick="showZerosModal()" style="white-space: nowrap;">
+                    <i class="fas fa-user-times me-1"></i> عرض الغائبين والأصفار
                 </button>
 
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
@@ -769,6 +778,53 @@
     <p>يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
 </div>
 {% endif %}
+
+<!-- Zeros & Absences Modal -->
+<div id="zerosModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+    <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom: 20px;">
+            <h3 style="margin:0; color:#0f172a;"><i class="fas fa-user-times text-danger"></i> قائمة الغائبين والأصفار</h3>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('zerosModal').style.display='none'"><i class="fas fa-times"></i> إغلاق</button>
+        </div>
+
+        <table class="table table-bordered table-striped" style="direction: rtl;">
+            <thead class="table-dark">
+                <tr>
+                    <th>التلميذ</th>
+                    <th>القسم</th>
+                    <th>المادة</th>
+                    <th>الحالة / العلامة</th>
+                </tr>
+            </thead>
+            <tbody id="zerosTableBody">
+                <!-- Dynamically populated via JS using the raw dataframe data if passed, or we can use ranking_list -->
+                {% for student in local_stats.ranking_list %}
+                    {% if student.score == 0 %}
+                        <tr>
+                            <td>{{ student.student_name }}</td>
+                            <td style="direction: ltr; text-align: right;">{{ student.student__class_name }}</td>
+                            <td>المعدل العام</td>
+                            <td><span class="badge bg-danger">0.0 (أو غائب)</span></td>
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+        <div id="zerosTableEmpty" style="display:none; text-align: center; padding: 20px; color: #64748b;">لا يوجد تلاميذ بعلامة صفر أو غياب في هذا النطاق المفلتر.</div>
+    </div>
+</div>
+
+<script>
+    function showZerosModal() {
+        document.getElementById('zerosModal').style.display = 'flex';
+        const rows = document.querySelectorAll('#zerosTableBody tr');
+        if (rows.length === 0) {
+            document.getElementById('zerosTableEmpty').style.display = 'block';
+        } else {
+            document.getElementById('zerosTableEmpty').style.display = 'none';
+        }
+    }
+</script>
 
 <!-- Import Grades Modal -->
 <div id="importGradesModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
