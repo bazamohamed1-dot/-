@@ -33,7 +33,7 @@ def unformat_class_name(formatted_class):
         return digits[-1]
     return formatted_class
 
-def analyze_grades_locally(grades_qs: QuerySet):
+def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None):
     """
     Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
     Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
@@ -57,18 +57,23 @@ def analyze_grades_locally(grades_qs: QuerySet):
         import json
         from datetime import date
 
-        # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
         general_avg_subj = None
-        for subj in df['subject'].unique():
-            if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
-                general_avg_subj = subj
-                break
 
-        if general_avg_subj:
-            general_avg_df = df[df['subject'] == general_avg_subj].copy()
-        else:
-            # If no explicit general average subject, we calculate it per student per term
+        # If a specific subject filter is passed (e.g., specific teacher subject), calculate metrics based on THAT subject
+        if subject_filter:
             general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+        else:
+            # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
+            for subj in df['subject'].unique():
+                if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
+                    general_avg_subj = subj
+                    break
+
+            if general_avg_subj:
+                general_avg_df = df[df['subject'] == general_avg_subj].copy()
+            else:
+                # If no explicit general average subject, we calculate it per student per term
+                general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
         # Separate absent vs active students based on general average
         # An absent student is defined as having a general average of exactly 0.0 or NaN
