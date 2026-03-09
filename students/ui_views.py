@@ -1373,7 +1373,13 @@ def analytics_dashboard(request):
             else:
                 grades_qs = grades_qs.filter(student__class_name=selected_class)
 
-    local_stats = analyze_grades_locally(grades_qs)
+    effective_subject = selected_subject
+    if selected_teacher_id and not effective_subject and teacher_subjects:
+        # If filtering by teacher but no specific subject is chosen, and they only teach one subject, use it
+        if len(teacher_subjects) == 1:
+            effective_subject = teacher_subjects[0]
+
+    local_stats = analyze_grades_locally(grades_qs, subject_filter=effective_subject)
 
     token_cost = 0
     if local_stats and local_stats.get('markdown_data'):
@@ -1529,27 +1535,30 @@ def advanced_analytics_view(request):
 
         except Employee.DoesNotExist:
             pass
-    else:
-        if selected_level:
-            import django.db.models as models
+
+    # Apply global level/class filters ONLY if no teacher is selected (or if we want them to narrow down teacher classes)
+    # The user request implies: if teacher is chosen, just show their stuff. But if level/class is chosen WITH teacher, it should narrow.
+    # However, to be safe, we just apply them sequentially.
+    if selected_level:
+        import django.db.models as models
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=selected_level) |
+            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+        )
+    if selected_class:
+        from .analytics_utils import unformat_class_name
+        import django.db.models as models
+        raw_class = unformat_class_name(selected_class)
+        if raw_class and raw_class.isdigit():
             grades_qs = grades_qs.filter(
-                models.Q(student__academic_year=selected_level) |
-                models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+                models.Q(student__class_name=selected_class) |
+                models.Q(student__class_name=raw_class) |
+                models.Q(student__class_name__endswith=f" {raw_class}") |
+                models.Q(student__class_name__endswith=f"م{raw_class}") |
+                models.Q(student__class_name__icontains=raw_class)
             )
-        if selected_class:
-            from .analytics_utils import unformat_class_name
-            import django.db.models as models
-            raw_class = unformat_class_name(selected_class)
-            if raw_class and raw_class.isdigit():
-                grades_qs = grades_qs.filter(
-                    models.Q(student__class_name=selected_class) |
-                    models.Q(student__class_name=raw_class) |
-                    models.Q(student__class_name__endswith=f" {raw_class}") |
-                    models.Q(student__class_name__endswith=f"م{raw_class}") |
-                    models.Q(student__class_name__icontains=raw_class)
-                )
-            else:
-                grades_qs = grades_qs.filter(student__class_name=selected_class)
+        else:
+            grades_qs = grades_qs.filter(student__class_name=selected_class)
 
     if not grades_qs.exists():
         messages.warning(request, "لا توجد علامات مسجلة للقيام بتحليل متقدم (أو لا توجد نتائج مطابقة للفلتر).")
