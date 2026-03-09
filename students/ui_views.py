@@ -1280,6 +1280,8 @@ def analytics_dashboard(request):
     selected_class = request.GET.get('class_name', '')
     selected_teacher_id = request.GET.get('teacher_id', '')
     selected_subject = request.GET.get('subject', '')
+    include_zeros_param = request.GET.get('include_zeros', 'true')
+    include_zeros = include_zeros_param == 'true'
 
     grades_qs = Grade.objects.all()
     if selected_term:
@@ -1375,7 +1377,7 @@ def analytics_dashboard(request):
         if len(teacher_subjects) == 1:
             effective_subject = teacher_subjects[0]
 
-    local_stats = analyze_grades_locally(grades_qs, subject_filter=effective_subject)
+    local_stats = analyze_grades_locally(grades_qs, subject_filter=effective_subject, include_zeros=include_zeros)
 
     token_cost = 0
     if local_stats and local_stats.get('markdown_data'):
