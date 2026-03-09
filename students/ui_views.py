@@ -1328,15 +1328,28 @@ def analytics_dashboard(request):
                 full_class_names.append(tc) # Also keep the raw one just in case
             full_class_names = list(set(full_class_names))
 
-            if full_class_names:
+            if teacher_classes:
                 import django.db.models as models
+                import re
                 q_classes = models.Q()
-                for cls in full_class_names:
-                    # Also map back from '1 1AM 1' to '1AM 1' safely for exact match, as Student ClassName might be just '1AM 1'
-                    parts = cls.split(' ', 1)
-                    if len(parts) > 1:
-                        q_classes |= models.Q(student__class_name=parts[1])
-                    q_classes |= models.Q(student__class_name=cls)
+                for hr_cls in teacher_classes:
+                    # Parse standard HR format like '1م1' or '4م2'
+                    m = re.match(r'(\d+)م(\d+)', hr_cls)
+                    if m:
+                        lvl_digit = m.group(1)
+                        cls_digit = m.group(2)
+                        arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                        q_level = models.Q(student__academic_year=lvl_digit) | models.Q(student__academic_year__icontains=lvl_digit) | models.Q(student__academic_year__icontains=arb_lvl)
+
+                        # Add pattern matching for Arabic strings like "أولى متوسط 1"
+                        q_class = models.Q(student__class_name=cls_digit) | models.Q(student__class_name__endswith=f" {cls_digit}") | models.Q(student__class_name__endswith=f"م{cls_digit}") | models.Q(student__class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(student__class_name=hr_cls) | models.Q(student__class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(student__class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                        q_classes |= (q_level & q_class)
+                    else:
+                        q_classes |= models.Q(student__class_name=hr_cls)
+
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
@@ -1513,14 +1526,27 @@ def advanced_analytics_view(request):
                 full_class_names.append(tc) # Also keep the raw one just in case
             full_class_names = list(set(full_class_names))
 
-            if full_class_names:
+            if teacher_classes:
                 import django.db.models as models
+                import re
                 q_classes = models.Q()
-                for cls in full_class_names:
-                    parts = cls.split(' ', 1)
-                    if len(parts) > 1:
-                        q_classes |= models.Q(student__class_name=parts[1])
-                    q_classes |= models.Q(student__class_name=cls)
+                for hr_cls in teacher_classes:
+                    m = re.match(r'(\d+)م(\d+)', hr_cls)
+                    if m:
+                        lvl_digit = m.group(1)
+                        cls_digit = m.group(2)
+                        arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                        q_level = models.Q(student__academic_year=lvl_digit) | models.Q(student__academic_year__icontains=lvl_digit) | models.Q(student__academic_year__icontains=arb_lvl)
+
+                        # Add pattern matching for Arabic strings like "أولى متوسط 1"
+                        q_class = models.Q(student__class_name=cls_digit) | models.Q(student__class_name__endswith=f" {cls_digit}") | models.Q(student__class_name__endswith=f"م{cls_digit}") | models.Q(student__class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(student__class_name=hr_cls) | models.Q(student__class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(student__class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                        q_classes |= (q_level & q_class)
+                    else:
+                        q_classes |= models.Q(student__class_name=hr_cls)
+
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
@@ -1870,15 +1896,25 @@ def get_gauss_data(request):
 
             if teacher_classes:
                 import django.db.models as models
+                import re
                 q_classes = models.Q()
-                for cls in teacher_classes:
-                    shortcut_obj = ClassShortcut.objects.filter(shortcut=cls).first()
-                    if shortcut_obj:
-                        q_classes |= models.Q(student__class_name=shortcut_obj.full_name)
-                        parts = shortcut_obj.full_name.split(' ', 1)
-                        if len(parts) > 1:
-                            q_classes |= models.Q(student__class_name=parts[1])
-                    q_classes |= models.Q(student__class_name=cls)
+                for hr_cls in teacher_classes:
+                    m = re.match(r'(\d+)م(\d+)', hr_cls)
+                    if m:
+                        lvl_digit = m.group(1)
+                        cls_digit = m.group(2)
+                        arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                        q_level = models.Q(student__academic_year=lvl_digit) | models.Q(student__academic_year__icontains=lvl_digit) | models.Q(student__academic_year__icontains=arb_lvl)
+
+                        # Add pattern matching for Arabic strings like "أولى متوسط 1"
+                        q_class = models.Q(student__class_name=cls_digit) | models.Q(student__class_name__endswith=f" {cls_digit}") | models.Q(student__class_name__endswith=f"م{cls_digit}") | models.Q(student__class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(student__class_name=hr_cls) | models.Q(student__class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(student__class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                        q_classes |= (q_level & q_class)
+                    else:
+                        q_classes |= models.Q(student__class_name=hr_cls)
+
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not subject:
