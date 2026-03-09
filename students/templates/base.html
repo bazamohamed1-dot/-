@@ -151,29 +151,11 @@
 
         /* Responsive Design */
         @media (max-width: 1024px) {
-            /* Logic: Hide sidebar for everyone by default, but allow Director to toggle it */
-
-            /* For Non-Directors: Completely Hide Sidebar & Toggle & Bottom Nav */
-            body:not(.role-director) .sidebar {
-                display: none !important;
-            }
-            body:not(.role-director) .toggle-sidebar {
-                display: none !important;
-            }
-            /* Hide Bottom Nav for Non-Director on Mobile/Tablet as requested */
-            body:not(.role-director) .bottom-nav {
-                display: none !important;
-            }
-            /* Reset Content Padding for Non-Director since no bottom nav */
-            body:not(.role-director) .content {
-                padding-bottom: 90px !important; /* Ensure content is not hidden by mobile bottom bars if any */
-            }
-
-            /* For Director: Hide by default, show if active */
-            body.role-director .sidebar {
+            /* Enable Sidebar Toggle for EVERYONE (including Custom Roles) */
+            .sidebar {
                 display: none;
             }
-            body.role-director .sidebar.active {
+            .sidebar.active {
                 display: flex !important;
                 position: fixed;
                 right: 0;
@@ -181,15 +163,25 @@
                 height: 100%;
                 z-index: 9999;
             }
-            body.role-director .toggle-sidebar {
+            .toggle-sidebar {
                 display: block !important; /* Show toggle for Director */
                 font-size: 1.5rem;
                 background: none;
                 border: none;
                 cursor: pointer;
             }
+
+            /* Hide Bottom Nav for Non-Director on Mobile/Tablet as requested previously */
+            body:not(.role-director) .bottom-nav {
+                display: none !important;
+            }
+            /* Reset Content Padding for Non-Director since no bottom nav */
+            body:not(.role-director) .content {
+                padding-bottom: 90px !important;
+            }
+
             body.role-director .bottom-nav {
-                display: flex; /* Show bottom nav on mobile/tablet for Director */
+                display: flex;
             }
 
             .main {
@@ -314,26 +306,37 @@
                 </a>
             </li>
             {% endif %}
+            {% if request.user|has_perm:'access_management' %}
             <li class="nav-item">
                 <a href="{% url 'students_management' %}" class="nav-link {% if 'management' in request.path %}active{% endif %}">
                     <i class="fas fa-user-graduate"></i> تسيير التلاميذ
                 </a>
             </li>
+            {% endif %}
+
+            {% if request.user|has_perm:'access_canteen' %}
             <li class="nav-item">
                 <a href="{% url 'canteen_home' %}" class="nav-link {% if request.resolver_match.url_name == 'canteen_home' %}active{% endif %}">
                     <i class="fas fa-utensils"></i> المطعم المدرسي
                 </a>
             </li>
+            {% endif %}
+
+            {% if request.user|has_perm:'access_library' %}
             <li class="nav-item">
                 <a href="{% url 'library_home' %}" class="nav-link {% if 'library' in request.path %}active{% endif %}">
                     <i class="fas fa-book"></i> المكتبة
                 </a>
             </li>
+            {% endif %}
+
+            {% if request.user|has_perm:'access_archive' %}
             <li class="nav-item">
                 <a href="{% url 'archive_home' %}" class="nav-link {% if 'archive' in request.path %}active{% endif %}">
                     <i class="fas fa-archive"></i> الأرشيف
                 </a>
             </li>
+            {% endif %}
             {% if request.user|has_perm:'access_hr' %}
             <li class="nav-item">
                 <a href="{% url 'hr_home' %}" class="nav-link {% if 'hr' in request.path %}active{% endif %}">
@@ -367,11 +370,14 @@
             </li>
             {% endif %}
 
+            {% if request.user|has_perm:'manage_settings' or request.user.profile.role == 'director' or request.user.is_superuser %}
             <li class="nav-item" style="margin-top: auto;">
                 <a href="{% url 'settings' %}" class="nav-link {% if 'settings' in request.path %}active{% endif %}">
                     <i class="fas fa-cog"></i> الإعدادات
                 </a>
             </li>
+            {% endif %}
+
             {% if request.user.profile.role == 'director' or request.user.is_superuser %}
             <li class="nav-item">
                 <a href="{% url 'pending_updates_view' %}" class="nav-link {% if 'pending_updates' in request.path %}active{% endif %}" style="display: flex; justify-content: space-between; align-items: center;">
@@ -460,15 +466,21 @@
     <a href="{% url 'dashboard' %}" class="bottom-nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
         <i class="fas fa-home"></i> الرئيسية
     </a>
+    {% if request.user|has_perm:'access_management' %}
     <a href="{% url 'students_management' %}" class="bottom-nav-item {% if 'management' in request.path %}active{% endif %}">
         <i class="fas fa-user-graduate"></i> التلاميذ
     </a>
+    {% endif %}
+    {% if request.user|has_perm:'access_canteen' %}
     <a href="{% url 'canteen_home' %}" class="bottom-nav-item {% if request.resolver_match.url_name == 'canteen_home' %}active{% endif %}">
         <i class="fas fa-utensils"></i> المطعم
     </a>
+    {% endif %}
+    {% if request.user|has_perm:'manage_settings' or request.user.profile.role == 'director' or request.user.is_superuser %}
     <a href="{% url 'settings' %}" class="bottom-nav-item {% if 'settings' in request.path %}active{% endif %}">
         <i class="fas fa-cog"></i> الإعدادات
     </a>
+    {% endif %}
 </nav>
 
 <script src="{% static 'js/dexie.min.js' %}"></script>

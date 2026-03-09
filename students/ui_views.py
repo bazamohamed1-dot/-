@@ -1280,8 +1280,12 @@ def analytics_dashboard(request):
     selected_class = request.GET.get('class_name', '')
     selected_teacher_id = request.GET.get('teacher_id', '')
     selected_subject = request.GET.get('subject', '')
-    include_zeros_param = request.GET.get('include_zeros', 'true')
-    include_zeros = include_zeros_param == 'true'
+    filter_applied = request.GET.get('filter_applied', '')
+
+    if filter_applied:
+        include_zeros = request.GET.get('include_zeros') == 'true'
+    else:
+        include_zeros = True
 
     grades_qs = Grade.objects.all()
     if selected_term:

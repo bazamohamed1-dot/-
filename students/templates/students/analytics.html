@@ -227,8 +227,11 @@
                     {% endfor %}
                 </select>
 
+                <!-- Hidden input to track if form was explicitly submitted so we know to read unchecked state -->
+                <input type="hidden" name="filter_applied" value="1">
+
                 <div style="display: flex; gap: 8px; align-items: center; margin-right: 15px;">
-                    <input type="checkbox" id="includeZeros" name="include_zeros" value="true" onchange="document.getElementById('analyticsFilterForm').submit();" {% if request.GET.include_zeros != 'false' %}checked{% endif %}>
+                    <input type="checkbox" id="includeZeros" name="include_zeros" value="true" onchange="document.getElementById('analyticsFilterForm').submit();" {% if not request.GET.filter_applied or request.GET.include_zeros == 'true' %}checked{% endif %}>
                     <label for="includeZeros" style="color: white; font-size: 0.9rem; cursor: pointer; white-space: nowrap;">احتساب الأصفار</label>
                 </div>
             </form>
@@ -799,12 +802,18 @@
             <tbody id="zerosTableBody">
                 <!-- Dynamically populated via JS using the raw dataframe data if passed, or we can use ranking_list -->
                 {% for student in local_stats.ranking_list %}
-                    {% if student.score == 0 %}
+                    {% if student.is_absent %}
                         <tr>
                             <td>{{ student.student_name }}</td>
                             <td style="direction: ltr; text-align: right;">{{ student.student__class_name }}</td>
-                            <td>المعدل العام</td>
-                            <td><span class="badge bg-danger">0.0 (أو غائب)</span></td>
+                            <td>{{ request.GET.subject|default:"المعدل العام" }}</td>
+                            <td>
+                                {% if student.score == 0 %}
+                                    <span class="badge bg-danger">0.00</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">غائب</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% endif %}
                 {% endfor %}
