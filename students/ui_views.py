@@ -58,28 +58,17 @@ def dashboard(request):
             if role == 'director':
                 pass # Continue to dashboard
             else:
-                # Count how many main interfaces they have access to
-                access_perms = [
-                    'access_canteen', 'access_library', 'access_management',
-                    'access_archive', 'access_guidance', 'access_hr',
-                    'access_parents', 'access_analytics', 'access_advanced_analytics'
-                ]
-                interfaces_count = sum(1 for p in access_perms if profile.has_perm(p))
-
-                # If they have multiple interface permissions, let them stay on the dashboard
-                # so they can use the sidebar to choose where to go.
-                if interfaces_count > 1:
-                    pass
-                elif interfaces_count == 1:
-                    # If exactly one interface, redirect directly to it to save them a click
-                    if profile.has_perm('access_canteen'): return redirect('canteen_home')
-                    elif profile.has_perm('access_library'): return redirect('library_home')
-                    elif profile.has_perm('access_management'): return redirect('students_management')
-                    elif profile.has_perm('access_archive'): return redirect('archive_home')
-                    elif profile.has_perm('access_guidance'): return redirect('guidance_home')
-                    elif profile.has_perm('access_hr'): return redirect('hr_home')
-                    elif profile.has_perm('access_parents'): return redirect('parents_home')
-                    elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'): return redirect('analytics_dashboard')
+                # Instead of allowing them to see the main dashboard (which they may not have requested explicitly),
+                # always route them to their FIRST available permitted interface.
+                # Once there, they can use the sidebar to navigate to the other interfaces they have access to.
+                if profile.has_perm('access_canteen'): return redirect('canteen_home')
+                elif profile.has_perm('access_library'): return redirect('library_home')
+                elif profile.has_perm('access_management'): return redirect('students_management')
+                elif profile.has_perm('access_archive'): return redirect('archive_home')
+                elif profile.has_perm('access_guidance'): return redirect('guidance_home')
+                elif profile.has_perm('access_hr'): return redirect('hr_home')
+                elif profile.has_perm('access_parents'): return redirect('parents_home')
+                elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'): return redirect('analytics_dashboard')
                 else:
                     pass # Default dashboard for others (Teachers with no special interface perms)
         else:
@@ -1336,12 +1325,11 @@ def analytics_dashboard(request):
             if full_class_names:
                 import django.db.models as models
                 q_classes = models.Q()
-                from .analytics_utils import unformat_class_name
                 for cls in full_class_names:
-                    # Using exact match or strict ends_with matching to prevent "1" matching "1AM 1", "2AM 1", etc.
-                    # Best approach: Since HR UI already normalizes to ClassShortcut format (e.g. 1م1),
-                    # and since we just expanded shortcut_obj.full_name (e.g. أولى متوسط 1),
-                    # exact match is generally safest.
+                    # Also map back from '1 1AM 1' to '1AM 1' safely for exact match, as Student ClassName might be just '1AM 1'
+                    parts = cls.split(' ', 1)
+                    if len(parts) > 1:
+                        q_classes |= models.Q(student__class_name=parts[1])
                     q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
@@ -1522,8 +1510,10 @@ def advanced_analytics_view(request):
             if full_class_names:
                 import django.db.models as models
                 q_classes = models.Q()
-                from .analytics_utils import unformat_class_name
                 for cls in full_class_names:
+                    parts = cls.split(' ', 1)
+                    if len(parts) > 1:
+                        q_classes |= models.Q(student__class_name=parts[1])
                     q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
@@ -1875,8 +1865,13 @@ def get_gauss_data(request):
             if teacher_classes:
                 import django.db.models as models
                 q_classes = models.Q()
-                from .analytics_utils import unformat_class_name
                 for cls in teacher_classes:
+                    shortcut_obj = ClassShortcut.objects.filter(shortcut=cls).first()
+                    if shortcut_obj:
+                        q_classes |= models.Q(student__class_name=shortcut_obj.full_name)
+                        parts = shortcut_obj.full_name.split(' ', 1)
+                        if len(parts) > 1:
+                            q_classes |= models.Q(student__class_name=parts[1])
                     q_classes |= models.Q(student__class_name=cls)
                 grades_qs = grades_qs.filter(q_classes)
 
