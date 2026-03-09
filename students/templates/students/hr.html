@@ -63,6 +63,14 @@
                     <td>{{ emp.subject|default:"-" }}</td>
                     <td>{{ emp.phone }}</td>
                     <td>
+                        {% if emp.rank == 'teacher' %}
+                        <!-- Hidden element storing assignment data for the Quick Assignment Editor -->
+                        <span class="teacher-assignment-data" style="display:none;"
+                              data-id="{{ emp.id }}"
+                              data-name="{{ emp.last_name }} {{ emp.first_name }}"
+                              data-assignments="{{ emp|get_assignments_data|escape }}">
+                        </span>
+                        {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", JSON.parse("{{ emp|safe_json|escapejs }}"))' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
                     </td>
@@ -357,7 +365,7 @@
             editorCard.style.display = 'block';
 
             tbody.innerHTML = '';
-            document.querySelectorAll('.btn-assign').forEach(btn => {
+            document.querySelectorAll('.teacher-assignment-data').forEach(btn => {
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name');
                 const assignmentsRaw = btn.getAttribute('data-assignments');

@@ -1264,9 +1264,14 @@ def upload_update_file(request):
             os.remove(tmp_path)
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
-    queryset = SystemMessage.objects.filter(active=True)
     serializer_class = SystemMessageSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = SystemMessage.objects.filter(active=True)
+        # If recipient is defined, it only applies to that user OR the user is director
+        from django.db.models import Q
+        return qs.filter(Q(recipient__isnull=True) | Q(recipient=self.request.user))
 
     def perform_create(self, serializer):
         if hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'director':
