@@ -510,6 +510,47 @@
 
 </div>
 
+<!-- Teacher Comparison Table -->
+{% if local_stats.teacher_stats %}
+<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;">
+    <div class="card col-md-12" style="flex: 1; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; background: #fff;">
+        <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chalkboard-teacher text-info"></i> مقارنة أداء الأساتذة</h4>
+        <div class="table-responsive">
+            <table class="table table-hover table-striped" style="direction: rtl;">
+                <thead class="table-dark">
+                    <tr>
+                        <th>الأستاذ</th>
+                        <th>عدد الاختبارات</th>
+                        <th>متوسط العلامات</th>
+                        <th>نسبة النجاح (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ts in local_stats.teacher_stats %}
+                    <tr>
+                        <td>{{ ts.teacher_name }}</td>
+                        <td>{{ ts.total_tested }}</td>
+                        <td>
+                            <span class="badge {% if ts.avg_score >= 10 %}bg-success{% else %}bg-danger{% endif %} fs-6">
+                                {{ ts.avg_score }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="progress" style="height: 20px; border-radius: 10px; background-color: #e2e8f0;">
+                                <div class="progress-bar {% if ts.success_pct >= 50 %}bg-success{% else %}bg-danger{% endif %}" role="progressbar" style="width: {{ ts.success_pct }}%;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                    <span style="font-weight:bold; color:white; padding:0 5px;">{{ ts.success_pct }}%</span>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Ranking Table & Deep Analysis Request -->
 <div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;" id="rankingSection">
     <div class="card col-md-8" style="flex: 2; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px;">
