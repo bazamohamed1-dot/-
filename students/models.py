@@ -197,6 +197,16 @@ class EmployeeProfile(models.Model):
     def has_perm(self, perm):
         if self.role == 'director' or self.user.is_superuser:
             return True
+
+        # Guard against malformed stringified JSON being saved accidentally
+        if isinstance(self.permissions, str):
+            import json
+            try:
+                perms_list = json.loads(self.permissions.replace("'", '"'))
+                return perm in perms_list
+            except Exception:
+                return perm in self.permissions
+
         return perm in self.permissions
 
     def __str__(self):

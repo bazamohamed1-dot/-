@@ -192,6 +192,14 @@
         <div>
             <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
             <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
+            {% if request.GET.teacher_id or request.GET.class_name %}
+            <div style="margin-top: 10px; font-size: 0.85rem; padding: 5px 10px; background: rgba(56, 189, 248, 0.1); border-left: 3px solid #38bdf8; border-radius: 4px; display: inline-block;">
+                <i class="fas fa-info-circle text-info me-1"></i> البيانات معروضة بناءً على الفلترة المختارة.
+                {% if teacher_info %}
+                    <br><small style="color: #94a3b8; margin-right: 20px;">الأقسام التي دخلت في الحساب: {{ teacher_info.classes }}</small>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%;">
             <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-grow: 1;" id="analyticsFilterForm">
@@ -256,8 +264,11 @@
                     طباعة محضر مجلس القسم/المستوى
                 </button>
 
-                <button class="btn btn-info shadow fw-bold" onclick="showZerosModal()" style="white-space: nowrap;">
-                    <i class="fas fa-user-times me-1"></i> عرض الغائبين والأصفار
+                <button class="btn btn-danger shadow fw-bold" onclick="showZerosModal('zeros')" style="white-space: nowrap;">
+                    <i class="fas fa-user-times me-1"></i> عرض الأصفار
+                </button>
+                <button class="btn btn-warning shadow fw-bold" onclick="showZerosModal('absences')" style="white-space: nowrap; color: #0f172a;">
+                    <i class="fas fa-user-slash me-1"></i> عرض الغائبين
                 </button>
 
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
@@ -786,7 +797,7 @@
 <div id="zerosModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
     <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height: 80vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom: 20px;">
-            <h3 style="margin:0; color:#0f172a;"><i class="fas fa-user-times text-danger"></i> قائمة الغائبين والأصفار</h3>
+            <h3 id="zerosModalTitle" style="margin:0; color:#0f172a;"><i class="fas fa-user-times text-danger"></i> القائمة</h3>
             <button class="btn btn-sm btn-secondary" onclick="document.getElementById('zerosModal').style.display='none'"><i class="fas fa-times"></i> إغلاق</button>
         </div>
 
@@ -800,37 +811,55 @@
                 </tr>
             </thead>
             <tbody id="zerosTableBody">
-                <!-- Dynamically populated via JS using the raw dataframe data if passed, or we can use ranking_list -->
-                {% for student in local_stats.ranking_list %}
-                    {% if student.is_absent %}
-                        <tr>
-                            <td>{{ student.student_name }}</td>
-                            <td style="direction: ltr; text-align: right;">{{ student.student__class_name }}</td>
-                            <td>{{ request.GET.subject|default:"المعدل العام" }}</td>
-                            <td>
-                                {% if student.score == 0 %}
-                                    <span class="badge bg-danger">0.00</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">غائب</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endif %}
-                {% endfor %}
+                <!-- Populated via JS -->
             </tbody>
         </table>
-        <div id="zerosTableEmpty" style="display:none; text-align: center; padding: 20px; color: #64748b;">لا يوجد تلاميذ بعلامة صفر أو غياب في هذا النطاق المفلتر.</div>
+        <div id="zerosTableEmpty" style="display:none; text-align: center; padding: 20px; color: #64748b;">لا يوجد تلاميذ مطابقين للشرط في هذا النطاق المفلتر.</div>
     </div>
 </div>
 
 <script>
-    function showZerosModal() {
+    // Store full ranking list for filtering
+    const rankingList = JSON.parse('{{ local_stats.ranking_list_json|escapejs|default:"[]" }}');
+    const currentSubject = '{{ request.GET.subject|default:"المعدل العام" }}';
+
+    function showZerosModal(type) {
         document.getElementById('zerosModal').style.display = 'flex';
-        const rows = document.querySelectorAll('#zerosTableBody tr');
-        if (rows.length === 0) {
-            document.getElementById('zerosTableEmpty').style.display = 'block';
+        const tbody = document.getElementById('zerosTableBody');
+        const emptyDiv = document.getElementById('zerosTableEmpty');
+        const title = document.getElementById('zerosModalTitle');
+
+        tbody.innerHTML = '';
+        let count = 0;
+
+        if (type === 'zeros') {
+            title.innerHTML = '<i class="fas fa-times-circle text-danger"></i> قائمة الأصفار';
         } else {
-            document.getElementById('zerosTableEmpty').style.display = 'none';
+            title.innerHTML = '<i class="fas fa-user-slash text-warning"></i> قائمة الغائبين';
+        }
+
+        rankingList.forEach(student => {
+            const isZero = student.score === 0;
+            const isAbsent = student.is_absent && !isZero;
+
+            if ((type === 'zeros' && isZero) || (type === 'absences' && isAbsent)) {
+                count++;
+                const tr = document.createElement('tr');
+                const badge = isZero ? '<span class="badge bg-danger">0.00</span>' : '<span class="badge bg-secondary">غائب</span>';
+                tr.innerHTML = `
+                    <td>${student.student_name}</td>
+                    <td style="direction: ltr; text-align: right;">${student.student__class_name}</td>
+                    <td>${currentSubject}</td>
+                    <td>${badge}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        });
+
+        if (count === 0) {
+            emptyDiv.style.display = 'block';
+        } else {
+            emptyDiv.style.display = 'none';
         }
     }
 </script>
