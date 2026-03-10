@@ -2031,6 +2031,19 @@ def get_gauss_data(request):
     }
     return JsonResponse(gauss_data)
 
+def rename_subject_ajax(request):
+    """Renames an imported subject globally in the Grade table to fix import typos"""
+    if request.method == 'POST':
+        old_name = request.POST.get('old_name')
+        new_name = request.POST.get('new_name')
+        if old_name and new_name:
+            from .models import Grade
+            Grade.objects.filter(subject=old_name).update(subject=new_name)
+            return JsonResponse({'success': True})
+        return JsonResponse({'success': False, 'error': 'بيانات مفقودة'})
+    return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
+
+
 def upload_grades_ajax(request):
     """Handles bulk uploading of multiple grade files with AJAX progress"""
     if request.method == 'POST' and request.FILES.get('file'):

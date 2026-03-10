@@ -199,9 +199,9 @@ def process_grades_file(file_path, term):
                     score_val = str(row[col_idx]).replace(',', '.').strip()
                     if score_val:
                         try:
-                            # Handle explicit 'غ' or 'غائب' or 'غياب' as 0.0
+                            # Handle explicit 'غ' or 'غائب' or 'غياب' as -1.0 (to mean absent without throwing it away)
                             if 'غ' in score_val.lower() or 'abs' in score_val.lower():
-                                score = 0.0
+                                score = -1.0
                             else:
                                 score = float(score_val)
 
@@ -329,7 +329,7 @@ def process_grades_file_ai(file_path, term):
             for subject, score in grades.items():
                 try:
                     if isinstance(score, str) and ('غ' in score.lower() or 'abs' in score.lower()):
-                        score_val = 0.0
+                        score_val = -1.0
                     else:
                         score_val = float(score)
 
