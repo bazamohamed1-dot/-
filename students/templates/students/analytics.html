@@ -244,20 +244,6 @@
                 </div>
             </form>
 
-            <!-- Teacher Info Badge -->
-            {% if teacher_info %}
-            <div class="w-100 mt-3 p-3 rounded" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);">
-                <div class="d-flex align-items-center mb-2">
-                    <i class="fas fa-chalkboard-teacher fs-4 me-2 text-warning"></i>
-                    <h5 class="m-0 fw-bold text-white">إسناد الأستاذ: {{ teacher_info.name }}</h5>
-                </div>
-                <div class="d-flex flex-wrap gap-3 text-white" style="font-size: 0.95rem;">
-                    <div><i class="fas fa-book text-info"></i> <strong>المادة:</strong> {{ teacher_info.subjects }}</div>
-                    <div><i class="fas fa-users text-success"></i> <strong>الأقسام المسندة:</strong> {{ teacher_info.classes }}</div>
-                </div>
-            </div>
-            {% endif %}
-
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 15px;">
                 <button class="btn btn-outline-light shadow" onclick="window.print()" style="white-space: nowrap;">
                     <i class="fas fa-print me-1"></i>
@@ -347,13 +333,28 @@
             }
 
             // Initialize dropdown on page load without submitting
-            document.addEventListener('DOMContentLoaded', () => updateClassDropdown(false));
+            document.addEventListener('DOMContentLoaded', () => {
+                const teacherSelected = document.querySelector('select[name="teacher_id"]').value !== "";
+                const levelFilter = document.getElementById('levelFilter');
+
+                // If a teacher is selected, limit the Level dropdown to only the levels they teach
+                if (teacherSelected) {
+                    const validLevels = Object.keys(classMap);
+                    Array.from(levelFilter.options).forEach(opt => {
+                        if (opt.value !== "" && !validLevels.includes(opt.value)) {
+                            opt.style.display = 'none';
+                        }
+                    });
+                }
+
+                updateClassDropdown(false);
+            });
 
             function handleTeacherFilterChange(selectElement) {
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
-                    document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
-                    document.getElementById('subjectFilter').value = ""; // Reset subject to show all assigned subjects
+                    // Keep class filter to re-evaluate after reload, just reset level and subject
+                    document.getElementById('subjectFilter').value = "";
                 }
                 document.getElementById('analyticsFilterForm').submit();
             }
