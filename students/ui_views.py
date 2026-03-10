@@ -1366,7 +1366,36 @@ def analytics_dashboard(request):
         except Employee.DoesNotExist:
             pass
 
-    # Apply global level/class filters even if teacher is selected, to narrow down further
+    # Wait, the teacher block that auto-selects `selected_level` happens further down around line 1450.
+    # We must move the auto-selection UP before we filter `grades_qs` with it.
+
+    # Move auto-selection logic here:
+    if selected_teacher_id and teacher_classes:
+        # Compute valid levels early
+        temp_levels = []
+        for tc in teacher_classes:
+            import re
+            m = re.match(r'(\d+)م', tc)
+            if m:
+                lvl_digit = m.group(1)
+                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                arb_lvl = arb_map.get(lvl_digit, lvl_digit) + ' متوسط'
+                if arb_lvl not in temp_levels:
+                    temp_levels.append(arb_lvl)
+
+        if not selected_level and temp_levels:
+            selected_level = temp_levels[0]
+
+        # Try to auto select class if only 1
+        if selected_level:
+            valid_classes_for_lvl = []
+            for tc in teacher_classes:
+                if str(selected_level).split()[0] in str(tc) or str(selected_level).replace(' متوسط', '') in str(tc):
+                    valid_classes_for_lvl.append(tc)
+            if len(valid_classes_for_lvl) == 1 and not selected_class:
+                selected_class = valid_classes_for_lvl[0]
+
+    # Now apply the filters
     if selected_level:
         import django.db.models as models
         grades_qs = grades_qs.filter(
@@ -1450,6 +1479,11 @@ def analytics_dashboard(request):
 
         class_map = filtered_class_map
         levels = list(class_map.keys())
+
+        # Ensure the selected_level and selected_class context matches the ones we auto-selected earlier
+        # so the template sets the correct 'selected' option in the HTML dropdowns.
+        if selected_level and selected_level not in levels:
+             selected_level = levels[0] if levels else ""
 
         try:
             from .models import Employee

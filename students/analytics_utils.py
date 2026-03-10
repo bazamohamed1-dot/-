@@ -210,8 +210,66 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
         pivot_df = df.pivot_table(index=['student_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()
         markdown_table = pivot_df.head(20).to_markdown(index=False) + "\n... (Truncated for AI processing)" if len(pivot_df) > 20 else pivot_df.to_markdown(index=False)
 
+        # Teacher Performance Comparison
+        teacher_stats = []
+        try:
+            from .models import TeacherAssignment
+            import re
+
+            # Build mapping
+            class_subj_to_teacher = {}
+            for assign in TeacherAssignment.objects.all():
+                t_name = f"{assign.teacher.last_name} {assign.teacher.first_name}"
+                subj = assign.subject
+                for c in assign.classes:
+                    class_subj_to_teacher[(c, subj)] = t_name
+
+            def get_teacher(row):
+                lvl = row['student__academic_year']
+                cls = row['student__class_name']
+                subj = row['subject']
+
+                lvl_digit = "1"
+                if "ثانية" in lvl or "2" in lvl: lvl_digit = "2"
+                elif "ثالثة" in lvl or "3" in lvl: lvl_digit = "3"
+                elif "رابعة" in lvl or "4" in lvl: lvl_digit = "4"
+
+                cls_digit = "".join(re.findall(r'\d+', cls))
+                if not cls_digit: cls_digit = "1"
+
+                shortcut = f"{lvl_digit}م{cls_digit}"
+
+                if (shortcut, subj) in class_subj_to_teacher:
+                    return class_subj_to_teacher[(shortcut, subj)]
+
+                for (c, s), t_name in class_subj_to_teacher.items():
+                    if c == shortcut and (s in subj or subj in s):
+                        return t_name
+                return "غير مسند"
+
+            teacher_df = df[df['score'] > 0].copy()
+            teacher_df['teacher_name'] = teacher_df.apply(get_teacher, axis=1)
+            teacher_df = teacher_df[teacher_df['teacher_name'] != "غير مسند"]
+
+            for t_name, group in teacher_df.groupby('teacher_name'):
+                total_t = len(group)
+                avg_score_t = float(round(group['score'].mean(), 2)) if total_t > 0 else 0.0
+                above_10_t = int(len(group[group['score'] >= 10]))
+                success_pct_t = float(round((above_10_t / total_t) * 100, 2)) if total_t > 0 else 0.0
+                teacher_stats.append({
+                    'teacher_name': t_name,
+                    'total_tested': total_t,
+                    'avg_score': avg_score_t,
+                    'success_pct': success_pct_t
+                })
+            # Sort by average score descending
+            teacher_stats = sorted(teacher_stats, key=lambda x: x['avg_score'], reverse=True)
+        except Exception as e:
+            print("Error in teacher stats:", e)
+
         return {
             'total_students': total_students,
+            'teacher_stats': teacher_stats,
             'total_males': total_males,
             'total_females': total_females,
             'total_repeaters': total_repeaters,
