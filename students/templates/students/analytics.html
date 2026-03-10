@@ -340,11 +340,14 @@
                 // If a teacher is selected, limit the Level dropdown to only the levels they teach
                 if (teacherSelected) {
                     const validLevels = Object.keys(classMap);
-                    Array.from(levelFilter.options).forEach(opt => {
+                    // Iterate backwards so removing an option doesn't shift indices
+                    for (let i = levelFilter.options.length - 1; i >= 0; i--) {
+                        let opt = levelFilter.options[i];
                         if (opt.value !== "" && !validLevels.includes(opt.value)) {
-                            opt.style.display = 'none';
+                            // Using remove() instead of display:none for better browser support
+                            levelFilter.remove(i);
                         }
-                    });
+                    }
                 }
 
                 updateClassDropdown(false);
@@ -353,7 +356,7 @@
             function handleTeacherFilterChange(selectElement) {
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
-                    // Keep class filter to re-evaluate after reload, just reset level and subject
+                    document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
                     document.getElementById('subjectFilter').value = "";
                 }
                 document.getElementById('analyticsFilterForm').submit();
