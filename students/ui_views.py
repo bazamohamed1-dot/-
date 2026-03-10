@@ -1425,11 +1425,29 @@ def analytics_dashboard(request):
     # Filter class_map to only show teacher classes if selected
     teacher_info = None
     if selected_teacher_id and teacher_classes:
+        # Full class names are needed since class_map contains formatted names (e.g. 1 متوسط 1)
+        # but teacher_classes usually contains abbreviations (e.g. 1م1)
+        # We mapped them earlier into full_class_names list.
         filtered_class_map = {}
         for lvl, clist in class_map.items():
-            valid_cls = [c for c in clist if c in teacher_classes]
+            valid_cls = []
+            for c in clist:
+                # We check if 'c' (e.g. "1 متوسط 1") matches any of the teacher's full class names or shortcuts
+                from .analytics_utils import unformat_class_name
+                raw_c = unformat_class_name(c)
+                # also build short format like 1م1
+                import re
+                short_c = c
+                m = re.search(r'(\d+)\s*متوسط\s*(\d+)', c)
+                if m:
+                    short_c = f"{m.group(1)}م{m.group(2)}"
+
+                if c in teacher_classes or raw_c in teacher_classes or short_c in teacher_classes or (locals().get('full_class_names') and c in full_class_names):
+                    valid_cls.append(c)
+
             if valid_cls:
                 filtered_class_map[lvl] = valid_cls
+
         class_map = filtered_class_map
         levels = list(class_map.keys())
 
@@ -1454,6 +1472,7 @@ def analytics_dashboard(request):
         'class_map_json': json.dumps(class_map),
         'token_cost': token_cost,
         'teachers': teachers,
+        'teacher_info': teacher_info,
         'subjects_list': subjects_list,
         'selected_teacher_id': selected_teacher_id
     }

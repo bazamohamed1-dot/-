@@ -304,15 +304,18 @@
                 classFilter.innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
 
                 let classesToShow = [];
+                const teacherSelected = document.querySelector('select[name="teacher_id"]').value !== "";
+
                 if (selectedLvl) {
                     classesToShow = classMap[selectedLvl] || [];
                     classFilter.disabled = false;
                 } else {
-                    // If no level selected, show all classes but keep disabled
+                    // If no level selected, show all classes
                     Object.values(classMap).forEach(arr => {
                         classesToShow = classesToShow.concat(arr);
                     });
-                    classFilter.disabled = true;
+                    // If a teacher is selected, allow class selection even without level selected
+                    classFilter.disabled = !teacherSelected;
                 }
 
                 // Remove duplicates and sort logically
@@ -839,10 +842,17 @@
         }
 
         rankingList.forEach(student => {
-            const isZero = student.score === 0;
-            const isAbsent = student.is_absent && !isZero;
+            // Note: student.is_absent represents missing data OR exactly 0.
+            // We differentiate by checking if the score is actually 0.0
+            const isZero = student.score === 0.0;
 
-            if ((type === 'zeros' && isZero) || (type === 'absences' && isAbsent)) {
+            // For absences, we only want to show it if type is absences AND they are absent.
+            // If they have 0.0, they show in zeroes.
+            // If they are absent, they show in absences.
+            const showAsZero = type === 'zeros' && isZero;
+            const showAsAbsent = type === 'absences' && student.is_absent && !isZero;
+
+            if (showAsZero || showAsAbsent) {
                 count++;
                 const tr = document.createElement('tr');
                 const badge = isZero ? '<span class="badge bg-danger">0.00</span>' : '<span class="badge bg-secondary">غائب</span>';

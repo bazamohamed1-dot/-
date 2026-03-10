@@ -80,8 +80,13 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
                 general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
         # Separate absent vs active students based on general average
-        # An absent student is defined as having a general average of exactly 0.0 or NaN
-        active_students_df = general_avg_df[general_avg_df['score'] > 0]
+        # We consider a student active if their score is NOT exactly 0 or NaN, UNLESS include_zeros is True,
+        # but semantically absent/zero students are those with score == 0.
+        # Since we want to find zeroes/absentees properly, we need to capture them.
+        active_students_df = general_avg_df[general_avg_df['score'] >= 0] # Zeros should be included if include_zeros is true
+        if not include_zeros:
+            active_students_df = general_avg_df[general_avg_df['score'] > 0]
+
         absent_students_df = general_avg_df[(general_avg_df['score'] == 0) | (general_avg_df['score'].isna())]
 
         # 2. General Stats (Calculated ONLY on active students)
@@ -169,7 +174,7 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
         student_ranking_df['score'] = student_ranking_df['score'].round(2)
 
         # Mark absent students
-        student_ranking_df['is_absent'] = student_ranking_df['score'].apply(lambda x: pd.isna(x) or x == 0)
+        student_ranking_df['is_absent'] = student_ranking_df['score'].apply(lambda x: pd.isna(x) or float(x) == 0.0)
 
         ranking_list = student_ranking_df.to_dict('records')
         ranking_list_json = json.dumps(ranking_list)
