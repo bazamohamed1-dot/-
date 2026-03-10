@@ -1819,19 +1819,79 @@ def run_statistical_test(request):
     if not grades_qs.exists():
         return JsonResponse({'error': 'لا توجد بيانات كافية'})
 
-    # We aggregate by student to get their general average for the test
-    df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
+    if grouping == 'teacher':
+        # To compare teachers accurately, we must not average by student globally.
+        # We must link specific grades (by subject and class) to the teacher who teaches that subject to that class.
+        df = pd.DataFrame(list(grades_qs.values('student__id', 'student__academic_year', 'student__class_name', 'subject', 'score')))
+        df = df[df['score'] > 0] # remove absences
 
-    # Calculate mean score per student to avoid repeated measures bias in simple tests
-    student_means = df.groupby(['student__id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
-    student_means = student_means[student_means['score'] > 0] # remove absences
+        if df.empty:
+            return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
 
-    if student_means.empty:
-        return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
+        from .models import TeacherAssignment
+        import re
 
-    group_col = 'student__' + grouping
-    if group_col not in student_means.columns:
-        return JsonResponse({'error': 'متغير التجميع غير صالح'})
+        # Build mapping: (shortcut_class, subject) -> teacher_name
+        class_subj_to_teacher = {}
+        for assign in TeacherAssignment.objects.all():
+            t_name = f"{assign.teacher.last_name} {assign.teacher.first_name}"
+            subj = assign.subject
+            for c in assign.classes:
+                class_subj_to_teacher[(c, subj)] = t_name
+
+        def get_teacher_for_grade(row):
+            lvl = row['student__academic_year']
+            cls = row['student__class_name']
+            subj = row['subject']
+
+            # Map to shortcut (e.g. 1م1)
+            lvl_digit = "1"
+            if "ثانية" in lvl or "2" in lvl: lvl_digit = "2"
+            elif "ثالثة" in lvl or "3" in lvl: lvl_digit = "3"
+            elif "رابعة" in lvl or "4" in lvl: lvl_digit = "4"
+
+            cls_digit = "".join(re.findall(r'\d+', cls))
+            if not cls_digit: cls_digit = "1"
+
+            shortcut = f"{lvl_digit}م{cls_digit}"
+
+            # Exact match
+            if (shortcut, subj) in class_subj_to_teacher:
+                return class_subj_to_teacher[(shortcut, subj)]
+
+            # Fallback: fuzzy match on subject name (e.g. "رياضيات" vs "الرياضيات")
+            for (c, s), t_name in class_subj_to_teacher.items():
+                if c == shortcut and (s in subj or subj in s):
+                    return t_name
+
+            return "غير مسند"
+
+        df['teacher_name'] = df.apply(get_teacher_for_grade, axis=1)
+        # Filter out unassigned grades
+        df = df[df['teacher_name'] != "غير مسند"]
+
+        if df.empty:
+            return JsonResponse({'error': 'لم يتم العثور على تقاطعات صحيحة بين العلامات والأساتذة'})
+
+        # Now group by student and teacher so we don't have repeated measures for the same student/teacher pair (e.g. multiple terms)
+        student_means = df.groupby(['student__id', 'teacher_name'])['score'].mean().reset_index()
+        group_col = 'teacher_name'
+
+    else:
+        # Normal grouping (gender, class, etc.)
+        # We aggregate by student to get their general average for the test
+        df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
+
+        # Calculate mean score per student to avoid repeated measures bias in simple tests
+        student_means = df.groupby(['student__id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
+        student_means = student_means[student_means['score'] > 0] # remove absences
+
+        if student_means.empty:
+            return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
+
+        group_col = 'student__' + grouping
+        if group_col not in student_means.columns:
+            return JsonResponse({'error': 'متغير التجميع غير صالح'})
 
     groups_data = {}
     arrays_for_test = []
@@ -2033,6 +2093,17 @@ def get_gauss_data(request):
 
 def rename_subject_ajax(request):
     """Renames an imported subject globally in the Grade table to fix import typos"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'غير مصرح'})
+
+    # Must be director, superuser, or have access_analytics permission
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+
+    if not has_access:
+        return JsonResponse({'success': False, 'error': 'ليس لديك صلاحية لتعديل المواد'})
+
     if request.method == 'POST':
         old_name = request.POST.get('old_name')
         new_name = request.POST.get('new_name')

@@ -113,7 +113,17 @@
 
         /* Toggle Button */
         .toggle-sidebar {
-            display: none;
+            display: block;
+            font-size: 1.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            margin-left: 15px; /* Add some spacing */
+        }
+        @media (min-width: 1025px) {
+            .toggle-sidebar {
+                display: none !important;
+            }
         }
 
         /* Bottom Navigation for Mobile */
@@ -162,13 +172,6 @@
                 top: 0;
                 height: 100%;
                 z-index: 9999;
-            }
-            .toggle-sidebar {
-                display: block !important; /* Show toggle for Director */
-                font-size: 1.5rem;
-                background: none;
-                border: none;
-                cursor: pointer;
             }
 
             /* Hide Bottom Nav for Non-Director on Mobile/Tablet as requested previously */
