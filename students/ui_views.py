@@ -1461,30 +1461,21 @@ def analytics_dashboard(request):
         for lvl, clist in class_map.items():
             valid_cls = []
             for c in clist:
+                # We check if 'c' (e.g. "1 متوسط 1") matches any of the teacher's full class names or shortcuts
                 from .analytics_utils import unformat_class_name
-                import re
-
-                # Extract digits to make robust comparison
-                lvl_digit = "1"
-                if "ثانية" in lvl or "2" in lvl: lvl_digit = "2"
-                elif "ثالثة" in lvl or "3" in lvl: lvl_digit = "3"
-                elif "رابعة" in lvl or "4" in lvl: lvl_digit = "4"
-
-                cls_digit = "1"
-                m_cls = re.search(r'\d+', c)
-                if m_cls:
-                    cls_digit = m_cls.group()
-
-                short_c = f"{lvl_digit}م{cls_digit}"
-
                 raw_c = unformat_class_name(c)
+                # also build short format like 1م1
+                import re
+                short_c = c
+                m = re.search(r'(\d+)\s*متوسط\s*(\d+)', c)
+                if m:
+                    short_c = f"{m.group(1)}م{m.group(2)}"
 
                 if c in teacher_classes or raw_c in teacher_classes or short_c in teacher_classes or (locals().get('full_class_names') and c in full_class_names):
                     valid_cls.append(c)
 
             if valid_cls:
                 filtered_class_map[lvl] = valid_cls
-
 
         class_map = filtered_class_map
         levels = list(class_map.keys())
