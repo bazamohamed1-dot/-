@@ -198,16 +198,32 @@ class EmployeeProfile(models.Model):
         if self.role == 'director' or self.user.is_superuser:
             return True
 
-        # Guard against malformed stringified JSON being saved accidentally
         if isinstance(self.permissions, str):
             import json
+            import ast
             try:
                 perms_list = json.loads(self.permissions.replace("'", '"'))
-                return perm in perms_list
+                if isinstance(perms_list, list):
+                    return perm in perms_list
             except Exception:
-                return perm in self.permissions
+                pass
 
-        return perm in self.permissions
+            try:
+                perms_list = ast.literal_eval(self.permissions)
+                if isinstance(perms_list, list):
+                    return perm in perms_list
+            except Exception:
+                pass
+
+            if "," in self.permissions:
+                return perm in [p.strip() for p in self.permissions.split(',')]
+
+            return perm in self.permissions
+
+        if isinstance(self.permissions, (list, tuple, set)):
+            return perm in self.permissions
+
+        return False
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"

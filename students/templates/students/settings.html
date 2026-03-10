@@ -1014,7 +1014,7 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
 
     // Collect permissions
     const permissions = [];
-    document.querySelectorAll('.perm-check:checked').forEach(c => permissions.push(c.value));
+    document.querySelectorAll('#userModal .perm-check:checked').forEach(c => permissions.push(c.value));
 
     const url = id ? `/canteen/api/users/${id}/update_creds/` : '/canteen/api/users/';
 
