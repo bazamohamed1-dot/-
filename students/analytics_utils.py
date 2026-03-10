@@ -172,6 +172,7 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
         student_ranking_df['is_absent'] = student_ranking_df['score'].apply(lambda x: pd.isna(x) or x == 0)
 
         ranking_list = student_ranking_df.to_dict('records')
+        ranking_list_json = json.dumps(ranking_list)
 
         # Safely dump dictionaries to JSON strings to pass to template to avoid JS parsing issues with quotes
         # We explicitly cast keys and values to avoid Pandas/Numpy types that break json.dumps silently
@@ -221,6 +222,7 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
             'detailed_subject_stats': detailed_subject_stats,
             'detailed_subject_stats_json': detailed_subject_stats_json,
             'ranking_list': ranking_list,
+            'ranking_list_json': ranking_list_json,
             'markdown_data': markdown_table
         }
 
