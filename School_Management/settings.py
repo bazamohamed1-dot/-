@@ -167,6 +167,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Keep whitenoise for serving static files efficiently even locally
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'students/static'),
+]
+
 # Local Media Storage
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

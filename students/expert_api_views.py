@@ -21,8 +21,15 @@ def api_expert_run(request):
             current_term = data.get('current_term', 'الفصل الأول')
             prev_year = data.get('prev_year', '2023-2024')
 
-            # Run in a background thread
-            thread = threading.Thread(target=run_expert_engine, args=(current_year, current_term, prev_year))
+            # Run in a background thread with proper DB connection cleanup
+            def background_task():
+                from django.db import connection
+                try:
+                    run_expert_engine(current_year, current_term, prev_year)
+                finally:
+                    connection.close()
+
+            thread = threading.Thread(target=background_task)
             thread.start()
 
             return JsonResponse({'status': 'success', 'message': 'تم بدء تشغيل محرك الخبراء في الخلفية'})
