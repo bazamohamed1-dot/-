@@ -926,6 +926,14 @@ async function postSystemMessage(e) {
     const msg = document.getElementById('sysMsgText').value;
     const recipient = document.getElementById('sysMsgRecipient').value || null;
 
+    // Send null instead of empty string for global messages
+    const payload = { message: msg, active: true };
+    if (recipient) {
+        payload.recipient = recipient;
+    } else {
+        payload.recipient = null;
+    }
+
     try {
         const res = await fetch('/canteen/api/system_messages/', {
             method: 'POST',
@@ -933,7 +941,7 @@ async function postSystemMessage(e) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
-            body: JSON.stringify({ message: msg, recipient: recipient, active: true })
+            body: JSON.stringify(payload)
         });
         if(res.ok) {
             alert("تم إرسال الرسالة");

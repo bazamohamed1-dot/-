@@ -196,10 +196,15 @@ def process_grades_file(file_path, term):
 
             for subject, col_idx in subject_indices.items():
                 if len(row) > col_idx:
-                    try:
-                        score_val = str(row[col_idx]).replace(',', '.').strip()
-                        if score_val:
-                            score = float(score_val)
+                    score_val = str(row[col_idx]).replace(',', '.').strip()
+                    if score_val:
+                        try:
+                            # Handle explicit 'غ' or 'غائب' or 'غياب' as 0.0
+                            if 'غ' in score_val.lower() or 'abs' in score_val.lower():
+                                score = 0.0
+                            else:
+                                score = float(score_val)
+
                             # Update or create
                             Grade.objects.update_or_create(
                                 student=student,
@@ -208,8 +213,8 @@ def process_grades_file(file_path, term):
                                 defaults={'score': score}
                             )
                             grades_created += 1
-                    except ValueError:
-                        pass # Ignore empty or invalid strings like 'غ' for absent
+                        except ValueError:
+                            pass # Ignore other empty or invalid strings
 
     return grades_created, f'تم استيراد {grades_created} علامة بنجاح للقسم {lvl} {cls}.'
 
@@ -323,7 +328,11 @@ def process_grades_file_ai(file_path, term):
 
             for subject, score in grades.items():
                 try:
-                    score_val = float(score)
+                    if isinstance(score, str) and ('غ' in score.lower() or 'abs' in score.lower()):
+                        score_val = 0.0
+                    else:
+                        score_val = float(score)
+
                     Grade.objects.update_or_create(
                         student=student,
                         subject=subject,

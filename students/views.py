@@ -1275,6 +1275,11 @@ class SystemMessageViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'director':
-            serializer.save()
+            # Ensure empty string for recipient is saved as None so it applies to everyone
+            recipient = self.request.data.get('recipient')
+            if recipient == "" or recipient == "null":
+                serializer.save(recipient=None)
+            else:
+                serializer.save()
         else:
             raise PermissionError("Only Director can create messages")
