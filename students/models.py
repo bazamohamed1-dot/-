@@ -425,3 +425,64 @@ class Grade(models.Model):
 
     def __str__(self):
         return f"{self.student.full_name} - {self.subject} ({self.term}): {self.score}"
+
+# --- Expert Analysis Data Models ---
+class ExpertAnalysisRun(models.Model):
+    academic_year = models.CharField(max_length=20, verbose_name="السنة الدراسية")
+    term = models.CharField(max_length=50, verbose_name="الفصل")
+    run_date = models.DateTimeField(auto_now_add=True, verbose_name="تاريخ المعالجة")
+    status = models.CharField(max_length=50, default='completed', verbose_name="الحالة")
+
+    class Meta:
+        verbose_name = "تشغيلة تحليل الخبراء"
+        verbose_name_plural = "تشغيلات تحليل الخبراء"
+        ordering = ['-run_date']
+
+    def __str__(self):
+        return f"{self.academic_year} - {self.term} - {self.run_date.strftime('%Y-%m-%d %H:%M')}"
+
+class StudentExpertData(models.Model):
+    run = models.ForeignKey(ExpertAnalysisRun, on_delete=models.CASCADE, related_name='student_data', verbose_name="التشغيلة")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
+    class_name = models.CharField(max_length=20, verbose_name="القسم")
+    academic_year_level = models.CharField(max_length=20, verbose_name="المستوى") # e.g. أولى
+
+    # Pattern Finder
+    residual = models.FloatField(null=True, blank=True, verbose_name="الباقي (Residual)")
+    status_pattern = models.CharField(max_length=50, null=True, blank=True, verbose_name="نمط التلميذ") # e.g. متراجع فجأة, قافز فجأة
+
+    # Future Forecast
+    current_avg = models.FloatField(null=True, blank=True, verbose_name="المعدل الحالي")
+    predicted_avg = models.FloatField(null=True, blank=True, verbose_name="المعدل المتوقع")
+    traffic_light = models.CharField(max_length=10, null=True, blank=True, verbose_name="إشارة المرور") # red, yellow, green
+    trend_history = models.JSONField(default=list, verbose_name="سجل الاتجاه") # [{"term": "العام الماضي", "score": 12}, ...]
+
+    # Net Value Added
+    net_value_added = models.FloatField(null=True, blank=True, verbose_name="القيمة المضافة الصافية")
+
+    # Z-Score
+    z_score = models.FloatField(null=True, blank=True, verbose_name="الدرجة المعيارية (Z-Score)")
+
+    class Meta:
+        verbose_name = "بيانات التلميذ (الخبراء)"
+        verbose_name_plural = "بيانات التلاميذ (الخبراء)"
+
+class CohortExpertData(models.Model):
+    run = models.ForeignKey(ExpertAnalysisRun, on_delete=models.CASCADE, related_name='cohort_data', verbose_name="التشغيلة")
+    academic_year_level = models.CharField(max_length=20, verbose_name="المستوى") # e.g. أولى
+
+    # Inter-Subject Heatmap
+    correlation_matrix = models.JSONField(default=dict, verbose_name="مصفوفة الارتباط")
+
+    # Cohort Effect
+    current_year_z_score_avg = models.FloatField(null=True, blank=True, verbose_name="متوسط Z-Score الحالي")
+    last_year_z_score_avg = models.FloatField(null=True, blank=True, verbose_name="متوسط Z-Score السابق")
+    cohort_effect_analysis = models.CharField(max_length=200, null=True, blank=True, verbose_name="تحليل أثر الفوج")
+
+    # Sensitivity Analysis
+    sensitivity_betas = models.JSONField(default=dict, verbose_name="معاملات الحساسية (Beta)")
+    ruling_subject = models.CharField(max_length=100, null=True, blank=True, verbose_name="المادة الحاكمة")
+
+    class Meta:
+        verbose_name = "بيانات الفوج (الخبراء)"
+        verbose_name_plural = "بيانات الأفواج (الخبراء)"

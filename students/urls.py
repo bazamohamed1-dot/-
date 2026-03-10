@@ -6,6 +6,8 @@ from . import qr_views
 from . import ai_views
 from . import reminder_views
 from . import mapping_views # New
+from . import expert_views
+from . import expert_api_views
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
@@ -102,4 +104,10 @@ urlpatterns = [
     path('analytics/gauss_data/', ui_views.get_gauss_data, name='get_gauss_data'),
     path('analytics/statistical_tests/', ui_views.statistical_tests_view, name='statistical_tests_view'),
     path('analytics/run_statistical_test/', ui_views.run_statistical_test, name='run_statistical_test'),
+
+    # Expert Analysis (الخبراء)
+    path('analytics/expert/', expert_views.expert_analysis_view, name='expert_analysis_view'),
+    path('api/expert/run/', expert_api_views.api_expert_run, name='api_expert_run'),
+    path('api/expert/data/', expert_api_views.api_expert_data, name='api_expert_data'),
+    path('api/expert/generate_report/', expert_api_views.api_expert_generate_report, name='api_expert_generate_report'),
 ]

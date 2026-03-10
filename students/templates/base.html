@@ -304,8 +304,13 @@
             </li>
             {% if request.user|has_perm:'access_analytics' or request.user.is_superuser or request.user.username == 'director' %}
             <li class="nav-item">
-                <a href="{% url 'analytics_dashboard' %}" class="nav-link {% if 'analytics' in request.path %}active{% endif %}">
+                <a href="{% url 'analytics_dashboard' %}" class="nav-link {% if request.path == '/analytics/' %}active{% endif %}">
                     <i class="fas fa-chart-line"></i> لوحة تحليل النتائج (AI)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'expert_analysis_view' %}" class="nav-link {% if 'expert' in request.path %}active{% endif %}">
+                    <i class="fas fa-brain text-warning"></i> تحليل خبراء التربية
                 </a>
             </li>
             {% endif %}

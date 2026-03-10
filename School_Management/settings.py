@@ -199,3 +199,4 @@ CACHES = {
         'LOCATION': 'unique-school-management',
     }
 }
+LOGIN_URL = '/canteen/auth/login/'
