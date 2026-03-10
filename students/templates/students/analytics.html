@@ -825,24 +825,6 @@
         </div>
     </div>
 </div>
-{% endif %} fs-6">
-                                {{ ts.avg_score }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="progress" style="height: 20px; border-radius: 10px; background-color: #e2e8f0;">
-                                <div class="progress-bar {% if ts.success_pct >= 50 %}bg-success{% else %}bg-danger{% endif %}" role="progressbar" style="width: {{ ts.success_pct }}%;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
-                                    <span style="font-weight:bold; color:white; padding:0 5px;">{{ ts.success_pct }}%</span>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
 {% endif %}
 
 <!-- Ranking Table & Deep Analysis Request -->
