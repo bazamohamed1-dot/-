@@ -229,6 +229,7 @@
             </form>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                {% if local_stats %}
                 <button class="btn btn-outline-light shadow" onclick="window.print()" style="white-space: nowrap;">
                     <i class="fas fa-print me-1"></i>
                     طباعة محضر مجلس القسم/المستوى
@@ -237,7 +238,7 @@
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
                     <i class="fas fa-flask me-1"></i> مختبر التحليل المتقدم
                 </a>
-
+                {% endif %}
 
                 <button class="btn btn-outline-primary fw-bold shadow-sm" style="white-space: nowrap; border-width: 2px;" onclick="document.getElementById('importMode').value='local'; document.getElementById('aiImportNotice').style.display='none'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد محلي ذكي';">
                     <i class="fas fa-file-excel"></i> استيراد محلي
@@ -749,10 +750,19 @@
     }
 </script>
 {% else %}
-<div class="alert alert-info" style="text-align:center; padding: 40px;">
+<div class="alert alert-info" style="text-align:center; padding: 40px; border-radius: 12px; margin-top: 30px;">
     <i class="fas fa-chart-line fa-3x" style="color: #cbd5e1; margin-bottom: 20px;"></i>
-    <h4>لا توجد علامات مسجلة حالياً</h4>
-    <p>يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
+    <h4 style="color: #334155; font-weight: bold;">لا توجد علامات مسجلة حالياً</h4>
+    <p style="color: #64748b; margin-bottom: 20px;">يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
+
+    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+        <button class="btn btn-outline-primary fw-bold shadow-sm" style="white-space: nowrap; border-width: 2px;" onclick="document.getElementById('importMode').value='local'; document.getElementById('aiImportNotice').style.display='none'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد محلي ذكي';">
+            <i class="fas fa-file-excel"></i> استيراد محلي
+        </button>
+        <button class="btn fw-bold shadow-sm" style="background-color: #a855f7; color: white; white-space: nowrap; border: 2px solid #9333ea;" onclick="document.getElementById('importMode').value='ai'; document.getElementById('aiImportNotice').style.display='block'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد بالذكاء الاصطناعي';">
+            <i class="fas fa-magic"></i> استيراد AI
+        </button>
+    </div>
 </div>
 {% endif %}
 
