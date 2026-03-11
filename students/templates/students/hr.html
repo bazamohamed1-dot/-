@@ -381,6 +381,7 @@
 
                 const tr = document.createElement('tr');
                 tr.setAttribute('data-id', id);
+                tr.setAttribute('data-orig-assignments', JSON.stringify(assignments));
 
                 let blocksHtml = '';
                 assignments.forEach(a => {
@@ -452,6 +453,12 @@
         })
         .then(res => res.json())
         .then(data => {
+            if (data.status !== 'success') {
+                alert('حدث خطأ أثناء الحفظ: ' + (data.message || 'Unknown Error'));
+                btnElement.innerHTML = 'حفظ';
+                btnElement.disabled = false;
+                return;
+            }
             btnElement.innerHTML = '<i class="fas fa-check"></i>';
             btnElement.classList.replace('btn-primary', 'btn-success');
             setTimeout(() => {
@@ -461,52 +468,75 @@
             }, 2000);
         })
         .catch(e => {
-            alert('حدث خطأ أثناء الحفظ');
+            alert('حدث خطأ أثناء الحفظ: ' + e);
             btnElement.innerHTML = 'حفظ';
             btnElement.disabled = false;
         });
     }
 
     function saveAllAssignments() {
-        const promises = [];
-        document.querySelectorAll('#assignmentEditorBody tr').forEach(tr => {
-            const empId = tr.getAttribute('data-id');
-            const assignments = extractRowAssignments(tr);
+        const rows = document.querySelectorAll('#assignmentEditorBody tr');
+        let index = 0;
+        let hasChanges = false;
 
-            // Skip saving empty rows to prevent network overhead / partial data loss
-            if (assignments.length === 0) return;
+        // Disable all buttons first
+        rows.forEach(r => {
+            const b = r.querySelector('.btn-save-row');
+            if (b) b.disabled = true;
+        });
 
-            const btn = tr.querySelector('.btn-save-row');
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                btn.disabled = true;
+        // Use async/await for serial saves to prevent SQLite locking
+        async function processRows() {
+            for (let tr of rows) {
+                const empId = tr.getAttribute('data-id');
+                const assignments = extractRowAssignments(tr);
+
+                const btn = tr.querySelector('.btn-save-row');
+
+                // Compare with original data to avoid saving unchanged rows
+                const origDataRaw = tr.getAttribute('data-orig-assignments');
+                let origData = [];
+                try { origData = JSON.parse(origDataRaw || '[]'); } catch(e){}
+
+                if (JSON.stringify(assignments) === JSON.stringify(origData)) {
+                    continue; // Skip if no changes
+                }
+
+                hasChanges = true;
+                if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                const formData = new FormData();
+                formData.append('employee_id', empId);
+                formData.append('assignments', JSON.stringify(assignments));
+
+                try {
+                    const res = await fetch("{% url 'class_mapping_view' %}?action=quick_save", {
+                        method: 'POST',
+                        headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.status !== 'success') {
+                        console.error('Save failed:', data.message);
+                        if (btn) btn.innerHTML = '<i class="fas fa-exclamation-triangle text-danger"></i>';
+                    } else {
+                        if (btn) btn.innerHTML = '<i class="fas fa-check text-success"></i>';
+                    }
+                } catch (e) {
+                    console.error('Fetch error:', e);
+                    if (btn) btn.innerHTML = '<i class="fas fa-exclamation-triangle text-danger"></i>';
+                }
             }
 
-            const formData = new FormData();
-            formData.append('employee_id', empId);
-            formData.append('assignments', JSON.stringify(assignments));
-
-            promises.push(
-                fetch("{% url 'class_mapping_view' %}?action=quick_save", {
-                    method: 'POST',
-                    headers: {'X-CSRFToken': '{{ csrf_token }}'},
-                    body: formData
-                }).then(res => res.json())
-            );
-        });
-
-        if (promises.length === 0) {
-            alert("لم يتم العثور على تعديلات صالحة للحفظ.");
+            if (!hasChanges) {
+                alert("لم يتم إجراء أي تعديلات للحفظ.");
+            } else {
+                alert("تم حفظ التعديلات بنجاح!");
+            }
             toggleEditAssignments();
-            return;
         }
 
-        Promise.all(promises).then(() => {
-            alert("تم حفظ جميع التعديلات بنجاح!");
-            toggleEditAssignments();
-        }).catch(() => {
-            alert("حدث خطأ أثناء الحفظ الجماعي.");
-        });
+        processRows();
     }
 
 function openImportModal() { document.getElementById('importModal').style.display = 'block'; }
