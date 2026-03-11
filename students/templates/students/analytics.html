@@ -985,9 +985,14 @@
                         <input type="text" id="new_subject_{{ forloop.counter }}" class="form-control" value="{{ s }}">
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-success" onclick="renameSubject('{{ s|escapejs }}', document.getElementById('new_subject_{{ forloop.counter }}').value)">
-                            <i class="fas fa-save"></i> حفظ
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-success" onclick="renameSubject('{{ s|escapejs }}', document.getElementById('new_subject_{{ forloop.counter }}').value)">
+                                <i class="fas fa-save"></i> حفظ
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSubject('{{ s|escapejs }}')">
+                                <i class="fas fa-trash"></i> حذف
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -1026,6 +1031,32 @@ async function renameSubject(oldName, newName) {
         const data = await res.json();
         if (data.success) {
             alert("تم تغيير اسم المادة بنجاح.");
+            window.location.reload();
+        } else {
+            alert("حدث خطأ: " + data.error);
+        }
+    } catch(e) {
+        alert("خطأ في الاتصال بالخادم.");
+        console.error(e);
+    }
+}
+
+async function deleteSubject(subjectName) {
+    if (!confirm(`هل أنت متأكد من حذف المادة "${subjectName}" وجميع علاماتها المرتبطة بجميع التلاميذ؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+
+    try {
+        const formData = new FormData();
+        formData.append('subject_name', subjectName);
+
+        const res = await fetch("{% url 'delete_subject_ajax' %}", {
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            body: formData
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            alert(`تم حذف المادة بنجاح (تم حذف ${data.deleted_count} علامة).`);
             window.location.reload();
         } else {
             alert("حدث خطأ: " + data.error);

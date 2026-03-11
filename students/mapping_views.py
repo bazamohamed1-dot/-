@@ -29,19 +29,22 @@ def class_mapping_view(request):
             emp = Employee.objects.get(id=emp_id)
 
             assignments_data_raw = request.POST.get('assignments')
-            if assignments_data_raw:
+            if assignments_data_raw is not None:
                 assignments_data = json.loads(assignments_data_raw)
 
-                # Only process if valid data is sent, preventing accidental deletion of assignments
-                if assignments_data and isinstance(assignments_data, list) and len(assignments_data) > 0:
-                    # Filter out empty blocks
-                    valid_assignments = [a for a in assignments_data if a.get('subject', '').strip()]
+                if isinstance(assignments_data, list):
+                    # Filter out completely empty blocks
+                    valid_assignments = [a for a in assignments_data if a.get('subject', '').strip() or a.get('classes', [])]
+
+                    # Delete old assignments
+                    TeacherAssignment.objects.filter(teacher=emp).delete()
 
                     if valid_assignments:
-                        TeacherAssignment.objects.filter(teacher=emp).delete()
-
-                        emp.subject = valid_assignments[0].get('subject', '').strip()
-                        emp.save()
+                        # Update main subject to the first valid assignment's subject
+                        main_subject = valid_assignments[0].get('subject', '').strip()
+                        if main_subject:
+                            emp.subject = main_subject
+                            emp.save(update_fields=['subject'])
 
                         for assign_data in valid_assignments:
                             subject = assign_data.get('subject', '').strip()
@@ -52,6 +55,11 @@ def class_mapping_view(request):
                                 subject=subject,
                                 classes=classes
                             )
+                    else:
+                        # If no valid assignments, clear main subject
+                        emp.subject = ""
+                        emp.save(update_fields=['subject'])
+
 
             return JsonResponse({'status': 'success'})
         except Exception as e:

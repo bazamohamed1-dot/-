@@ -2143,9 +2143,41 @@ def rename_subject_ajax(request):
         new_name = request.POST.get('new_name')
         if old_name and new_name:
             from .models import Grade
-            Grade.objects.filter(subject=old_name).update(subject=new_name)
-            return JsonResponse({'success': True})
+            from django.db import IntegrityError
+            try:
+                # If doing a bulk update causes a unique constraint error (e.g. merging two subjects that a student already has both of)
+                # we need to handle it gracefully.
+                Grade.objects.filter(subject=old_name).update(subject=new_name)
+                return JsonResponse({'success': True})
+            except IntegrityError:
+                return JsonResponse({'success': False, 'error': 'لا يمكن التغيير لوجود علامات مكررة لنفس التلميذ في نفس الفصل تحت هذا الاسم (تعارض). يرجى التأكد أو حذف العلامات المكررة أولاً.'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
         return JsonResponse({'success': False, 'error': 'بيانات مفقودة'})
+    return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
+
+def delete_subject_ajax(request):
+    """Deletes an imported subject globally from the Grade table"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'غير مصرح'})
+
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+
+    if not has_access:
+        return JsonResponse({'success': False, 'error': 'ليس لديك صلاحية لحذف المواد'})
+
+    if request.method == 'POST':
+        subject_name = request.POST.get('subject_name')
+        if subject_name:
+            from .models import Grade
+            try:
+                deleted_count, _ = Grade.objects.filter(subject=subject_name).delete()
+                return JsonResponse({'success': True, 'deleted_count': deleted_count})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': 'اسم المادة مفقود'})
     return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
 
 
