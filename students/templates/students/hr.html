@@ -470,12 +470,17 @@
     function saveAllAssignments() {
         const promises = [];
         document.querySelectorAll('#assignmentEditorBody tr').forEach(tr => {
-            const btn = tr.querySelector('.btn-save-row');
             const empId = tr.getAttribute('data-id');
             const assignments = extractRowAssignments(tr);
 
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            btn.disabled = true;
+            // Skip saving empty rows to prevent network overhead / partial data loss
+            if (assignments.length === 0) return;
+
+            const btn = tr.querySelector('.btn-save-row');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                btn.disabled = true;
+            }
 
             const formData = new FormData();
             formData.append('employee_id', empId);
@@ -489,6 +494,12 @@
                 }).then(res => res.json())
             );
         });
+
+        if (promises.length === 0) {
+            alert("لم يتم العثور على تعديلات صالحة للحفظ.");
+            toggleEditAssignments();
+            return;
+        }
 
         Promise.all(promises).then(() => {
             alert("تم حفظ جميع التعديلات بنجاح!");
