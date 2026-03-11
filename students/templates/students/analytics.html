@@ -1010,7 +1010,7 @@ async function renameSubject(oldName, newName) {
 
         const res = await fetch("{% url 'rename_subject_ajax' %}", {
             method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')},
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
             body: formData
         });
 
