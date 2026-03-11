@@ -33,7 +33,7 @@ def unformat_class_name(formatted_class):
         return digits[-1]
     return formatted_class
 
-def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zeros=True):
+def analyze_grades_locally(grades_qs: QuerySet):
     """
     Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
     Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
@@ -48,10 +48,6 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
             return None
         df = pd.DataFrame(data)
 
-        # Remove zeros from dataframe entirely if include_zeros is False
-        if not include_zeros:
-            df = df[df['score'] != 0.0]
-
         # Reconstruct full_name
         df['student_name'] = df['student__last_name'].fillna('') + ' ' + df['student__first_name'].fillna('')
 
@@ -61,32 +57,23 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
         import json
         from datetime import date
 
+        # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
         general_avg_subj = None
+        for subj in df['subject'].unique():
+            if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
+                general_avg_subj = subj
+                break
 
-        # If a specific subject filter is passed (e.g., specific teacher subject), calculate metrics based on THAT subject
-        if subject_filter:
-            general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+        if general_avg_subj:
+            general_avg_df = df[df['subject'] == general_avg_subj].copy()
         else:
-            # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
-            for subj in df['subject'].unique():
-                if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
-                    general_avg_subj = subj
-                    break
-
-            if general_avg_subj:
-                general_avg_df = df[df['subject'] == general_avg_subj].copy()
-            else:
-                # If no explicit general average subject, we calculate it per student per term
-                general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+            # If no explicit general average subject, we calculate it per student per term
+            general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
         # Separate absent vs active students based on general average
-        # We consider a student active if their score is >= 0, UNLESS include_zeros is True,
-        # Missing/Absent students have score == -1.0 or NaN
-        active_students_df = general_avg_df[general_avg_df['score'] >= 0]
-        if not include_zeros:
-            active_students_df = general_avg_df[general_avg_df['score'] > 0]
-
-        absent_students_df = general_avg_df[(general_avg_df['score'] < 0) | (general_avg_df['score'].isna())]
+        # An absent student is defined as having a general average of exactly 0.0 or NaN
+        active_students_df = general_avg_df[general_avg_df['score'] > 0]
+        absent_students_df = general_avg_df[(general_avg_df['score'] == 0) | (general_avg_df['score'].isna())]
 
         # 2. General Stats (Calculated ONLY on active students)
         total_students = general_avg_df['student_name'].nunique()
@@ -173,14 +160,9 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
         student_ranking_df['score'] = student_ranking_df['score'].round(2)
 
         # Mark absent students
-        # Explicit absentees are saved as -1.0 or result in NaN if no records exist at all
-        student_ranking_df['is_absent'] = student_ranking_df['score'].apply(lambda x: pd.isna(x) or float(x) < 0)
-
-        # We must fillna so JSON conversion works (it fails on NaN)
-        student_ranking_df['score'] = student_ranking_df['score'].where(pd.notna(student_ranking_df['score']), None)
+        student_ranking_df['is_absent'] = student_ranking_df['score'].apply(lambda x: pd.isna(x) or x == 0)
 
         ranking_list = student_ranking_df.to_dict('records')
-        ranking_list_json = json.dumps(ranking_list)
 
         # Safely dump dictionaries to JSON strings to pass to template to avoid JS parsing issues with quotes
         # We explicitly cast keys and values to avoid Pandas/Numpy types that break json.dumps silently
@@ -210,66 +192,8 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
         pivot_df = df.pivot_table(index=['student_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()
         markdown_table = pivot_df.head(20).to_markdown(index=False) + "\n... (Truncated for AI processing)" if len(pivot_df) > 20 else pivot_df.to_markdown(index=False)
 
-        # Teacher Performance Comparison
-        teacher_stats = []
-        try:
-            from .models import TeacherAssignment
-            import re
-
-            # Build mapping
-            class_subj_to_teacher = {}
-            for assign in TeacherAssignment.objects.all():
-                t_name = f"{assign.teacher.last_name} {assign.teacher.first_name}"
-                subj = assign.subject
-                for c in assign.classes:
-                    class_subj_to_teacher[(c, subj)] = t_name
-
-            def get_teacher(row):
-                lvl = row['student__academic_year']
-                cls = row['student__class_name']
-                subj = row['subject']
-
-                lvl_digit = "1"
-                if "ثانية" in lvl or "2" in lvl: lvl_digit = "2"
-                elif "ثالثة" in lvl or "3" in lvl: lvl_digit = "3"
-                elif "رابعة" in lvl or "4" in lvl: lvl_digit = "4"
-
-                cls_digit = "".join(re.findall(r'\d+', cls))
-                if not cls_digit: cls_digit = "1"
-
-                shortcut = f"{lvl_digit}م{cls_digit}"
-
-                if (shortcut, subj) in class_subj_to_teacher:
-                    return class_subj_to_teacher[(shortcut, subj)]
-
-                for (c, s), t_name in class_subj_to_teacher.items():
-                    if c == shortcut and (s in subj or subj in s):
-                        return t_name
-                return "غير مسند"
-
-            teacher_df = df[df['score'] > 0].copy()
-            teacher_df['teacher_name'] = teacher_df.apply(get_teacher, axis=1)
-            teacher_df = teacher_df[teacher_df['teacher_name'] != "غير مسند"]
-
-            for t_name, group in teacher_df.groupby('teacher_name'):
-                total_t = len(group)
-                avg_score_t = float(round(group['score'].mean(), 2)) if total_t > 0 else 0.0
-                above_10_t = int(len(group[group['score'] >= 10]))
-                success_pct_t = float(round((above_10_t / total_t) * 100, 2)) if total_t > 0 else 0.0
-                teacher_stats.append({
-                    'teacher_name': t_name,
-                    'total_tested': total_t,
-                    'avg_score': avg_score_t,
-                    'success_pct': success_pct_t
-                })
-            # Sort by average score descending
-            teacher_stats = sorted(teacher_stats, key=lambda x: x['avg_score'], reverse=True)
-        except Exception as e:
-            print("Error in teacher stats:", e)
-
         return {
             'total_students': total_students,
-            'teacher_stats': teacher_stats,
             'total_males': total_males,
             'total_females': total_females,
             'total_repeaters': total_repeaters,
@@ -288,7 +212,6 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
             'detailed_subject_stats': detailed_subject_stats,
             'detailed_subject_stats_json': detailed_subject_stats_json,
             'ranking_list': ranking_list,
-            'ranking_list_json': ranking_list_json,
             'markdown_data': markdown_table
         }
 

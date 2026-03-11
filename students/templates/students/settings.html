@@ -156,6 +156,27 @@
 </div>
 
 
+<!-- Role Management Section -->
+<div class="card" id="roleManagementSection" style="display:none; margin-bottom: 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+        <h3><i class="fas fa-user-tag"></i> إدارة الأدوار المخصصة</h3>
+        <button class="btn btn-success" onclick="openRoleModal()"><i class="fas fa-plus"></i> إضافة دور جديد</button>
+    </div>
+    <table style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background:#f8fafc; text-align:right;">
+                <th style="padding:10px;">اسم الدور</th>
+                <th style="padding:10px;">عدد الصلاحيات</th>
+                <th style="padding:10px;">إجراءات</th>
+            </tr>
+        </thead>
+        <tbody id="rolesTableBody">
+            <!-- Populated via JS -->
+        </tbody>
+    </table>
+</div>
+
+
 <!-- User Management Section -->
 <div class="card" id="userManagementSection" style="display:none; margin-bottom: 20px;">
     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
@@ -214,29 +235,23 @@
             </div>
 
             <div style="margin-bottom:15px;">
-                <label style="display:block; margin-bottom:5px;">نوع الدور</label>
-                <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                    <label><input type="radio" name="role_type" value="system" checked onchange="toggleRoleType()"> دور النظام</label>
-                    <label><input type="radio" name="role_type" value="custom" onchange="toggleRoleType()"> دور متخصص</label>
-                </div>
-
-                <div id="systemRoleContainer">
-                    <select id="uRoleSelect" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()">
-                        <option value="">اختر دور النظام...</option>
+                <label style="display:block; margin-bottom:5px;">الدور</label>
+                <select id="uRole" class="form-input" style="width:100%; padding:10px;" onchange="onRoleChange()" required>
+                    <option value="">اختر...</option>
+                    <optgroup label="أدوار النظام">
                         <option value="librarian" data-perms='["access_library","library_scan","library_loan","library_return","library_readers_list"]'>مكتبي</option>
                         <option value="storekeeper" data-perms='["access_canteen","canteen_scan","canteen_manual","canteen_export"]'>مخزني (مطعم)</option>
                         <option value="archivist" data-perms='["access_archive"]'>أرشيفي</option>
                         <option value="secretariat" data-perms='["access_management","student_add","student_edit","student_print","import_data"]'>أمانة</option>
-                    </select>
-                </div>
-
-                <div id="customRoleContainer" style="display:none;">
-                    <input type="text" id="uRoleCustom" class="form-input" style="width:100%; padding:10px;" placeholder="اكتب اسم الدور المتخصص (مثلاً: مستشار التوجيه)">
-                </div>
+                    </optgroup>
+                    <optgroup label="أدوار مخصصة" id="customRolesOptGroup">
+                        <!-- Populated via JS -->
+                    </optgroup>
+                </select>
             </div>
 
-            <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;" id="permissionsContainer">
-                <label style="display:block; margin-bottom:10px; font-weight:bold;">الصلاحيات المخصصة للمستخدم</label>
+            <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
+                <label style="display:block; margin-bottom:10px; font-weight:bold;">الصلاحيات التفصيلية</label>
 
                 <div style="max-height: 200px; overflow-y: auto; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
                     <div style="margin-bottom: 10px;">
@@ -763,34 +778,9 @@ function openRoleModal() {
     document.querySelectorAll('#rolePermsContainer input[type="checkbox"]').forEach(i => i.checked = false);
 }
 
-function toggleRoleType() {
-    const roleType = document.querySelector('input[name="role_type"]:checked').value;
-    const sysContainer = document.getElementById('systemRoleContainer');
-    const custContainer = document.getElementById('customRoleContainer');
-    const uRoleSelect = document.getElementById('uRoleSelect');
-
-    if (roleType === 'system') {
-        sysContainer.style.display = 'block';
-        custContainer.style.display = 'none';
-        uRoleSelect.required = true;
-        document.getElementById('uRoleCustom').required = false;
-        // Trigger change to update permissions
-        onRoleChange();
-    } else {
-        sysContainer.style.display = 'none';
-        custContainer.style.display = 'block';
-        uRoleSelect.required = false;
-        document.getElementById('uRoleCustom').required = true;
-        // Allow user to manually pick perms, so uncheck all default
-        document.querySelectorAll('#userModal .perm-check').forEach(c => c.checked = false);
-    }
-}
-
 function onRoleChange() {
-    const select = document.getElementById('uRoleSelect');
+    const select = document.getElementById('uRole');
     const selectedOpt = select.options[select.selectedIndex];
-    if (!selectedOpt) return;
-
     const permsData = selectedOpt.getAttribute('data-perms');
 
     if (permsData) {
@@ -926,14 +916,6 @@ async function postSystemMessage(e) {
     const msg = document.getElementById('sysMsgText').value;
     const recipient = document.getElementById('sysMsgRecipient').value || null;
 
-    // Send null instead of empty string for global messages
-    const payload = { message: msg, active: true };
-    if (recipient) {
-        payload.recipient = recipient;
-    } else {
-        payload.recipient = null;
-    }
-
     try {
         const res = await fetch('/canteen/api/system_messages/', {
             method: 'POST',
@@ -941,7 +923,7 @@ async function postSystemMessage(e) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('baza_school_csrf_v2')
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ message: msg, recipient: recipient, active: true })
         });
         if(res.ok) {
             alert("تم إرسال الرسالة");
@@ -971,23 +953,13 @@ function editUser(user) {
     document.getElementById('userModalTitle').textContent = 'تعديل مستخدم';
     document.getElementById('editUserId').value = user.id;
     document.getElementById('uUsername').value = user.username;
+    document.getElementById('uRole').value = user.role;
     document.getElementById('uEmail').value = user.email || '';
     document.getElementById('uPassword').value = '';
     document.getElementById('uPassword').required = false;
     document.getElementById('pwdHint').style.display = 'block';
 
-    // Determine if it's a system role or custom role
-    const systemRoles = ['librarian', 'storekeeper', 'archivist', 'secretariat'];
-    if (systemRoles.includes(user.role)) {
-        document.querySelector('input[name="role_type"][value="system"]').checked = true;
-        document.getElementById('uRoleSelect').value = user.role;
-    } else {
-        document.querySelector('input[name="role_type"][value="custom"]').checked = true;
-        document.getElementById('uRoleCustom').value = user.role;
-    }
-    toggleRoleType(); // Adjust UI
-
-    // Populate permissions AFTER toggle (because toggle might reset them)
+    // Populate permissions
     document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
     if (user.permissions && Array.isArray(user.permissions)) {
         user.permissions.forEach(p => {
@@ -1002,15 +974,8 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     const id = document.getElementById('editUserId').value;
     const username = document.getElementById('uUsername').value;
     const password = document.getElementById('uPassword').value;
+    const role = document.getElementById('uRole').value;
     const email = document.getElementById('uEmail').value;
-
-    const roleType = document.querySelector('input[name="role_type"]:checked').value;
-    let role = '';
-    if (roleType === 'system') {
-        role = document.getElementById('uRoleSelect').value;
-    } else {
-        role = document.getElementById('uRoleCustom').value;
-    }
 
     // Collect permissions
     const permissions = [];

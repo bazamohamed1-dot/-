@@ -32,26 +32,22 @@ def class_mapping_view(request):
             if assignments_data_raw:
                 assignments_data = json.loads(assignments_data_raw)
 
-                # Only process if valid data is sent, preventing accidental deletion of assignments
-                if assignments_data and isinstance(assignments_data, list) and len(assignments_data) > 0:
-                    # Filter out empty blocks
-                    valid_assignments = [a for a in assignments_data if a.get('subject', '').strip()]
+                TeacherAssignment.objects.filter(teacher=emp).delete()
 
-                    if valid_assignments:
-                        TeacherAssignment.objects.filter(teacher=emp).delete()
+                if assignments_data:
+                    emp.subject = assignments_data[0].get('subject', '').strip()
+                    emp.save()
 
-                        emp.subject = valid_assignments[0].get('subject', '').strip()
-                        emp.save()
+                for assign_data in assignments_data:
+                    subject = assign_data.get('subject', '').strip()
+                    classes = assign_data.get('classes', [])
 
-                        for assign_data in valid_assignments:
-                            subject = assign_data.get('subject', '').strip()
-                            classes = assign_data.get('classes', [])
-
-                            TeacherAssignment.objects.create(
-                                teacher=emp,
-                                subject=subject,
-                                classes=classes
-                            )
+                    if subject:
+                        TeacherAssignment.objects.create(
+                            teacher=emp,
+                            subject=subject,
+                            classes=classes
+                        )
 
             return JsonResponse({'status': 'success'})
         except Exception as e:

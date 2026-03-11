@@ -12,10 +12,10 @@ class DashboardRedirectionTest(TestCase):
         EmployeeProfile.objects.create(user=self.director_user, role='director')
 
         self.librarian_user = User.objects.create_user(username='librarian', password='password')
-        EmployeeProfile.objects.create(user=self.librarian_user, role='librarian', permissions=['access_library'])
+        EmployeeProfile.objects.create(user=self.librarian_user, role='librarian')
 
         self.storekeeper_user = User.objects.create_user(username='storekeeper', password='password')
-        EmployeeProfile.objects.create(user=self.storekeeper_user, role='storekeeper', permissions=['access_canteen'])
+        EmployeeProfile.objects.create(user=self.storekeeper_user, role='storekeeper')
 
     def test_director_access_dashboard(self):
         self.client.login(username='director', password='password')

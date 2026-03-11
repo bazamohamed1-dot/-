@@ -64,12 +64,15 @@
                     <td>{{ emp.phone }}</td>
                     <td>
                         {% if emp.rank == 'teacher' %}
-                        <!-- Hidden element storing assignment data for the Quick Assignment Editor -->
-                        <span class="teacher-assignment-data" style="display:none;"
-                              data-id="{{ emp.id }}"
-                              data-name="{{ emp.last_name }} {{ emp.first_name }}"
-                              data-assignments="{{ emp|get_assignments_data|escape }}">
-                        </span>
+                        <!-- Pass current assignments safely using a data attribute to avoid JS syntax errors -->
+                        <!-- Pass current assignments safely using a data attribute to avoid JS syntax errors -->
+                        <button class="btn btn-sm btn-warning btn-assign"
+                                data-id="{{ emp.id }}"
+                                data-name="{{ emp.last_name }} {{ emp.first_name }}"
+                                data-assignments="{{ emp|get_assignments_data|escape }}"
+                                title="إسناد الأقسام">
+                            <i class="fas fa-chalkboard-teacher"></i> تفاصيل الإسناد
+                        </button>
                         {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", JSON.parse("{{ emp|safe_json|escapejs }}"))' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
                         <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
@@ -294,10 +297,6 @@
     const allGlobalClasses = {{ all_classes|safe_json|safe }};
 
     function createAssignmentBlock(subject = '', classesArray = []) {
-        // Ensure no whitespace mismatch when determining checked states
-        const cleanClasses = classesArray.map(c => c.trim().replace(/\s+/g, ''));
-        const cleanGlobal = allGlobalClasses.map(c => c.trim().replace(/\s+/g, ''));
-
         let blockHtml = `
             <div class="assignment-block mb-3 p-3 border rounded" style="background: #fdfdfd;">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -311,48 +310,21 @@
                 <div class="d-flex flex-wrap gap-2 mt-1 dyn-classes-container">
         `;
 
-        // Include any custom classes not in global list based on cleaned values, but display original arrays when possible
-        const combinedCleanClasses = [...new Set([...cleanGlobal, ...cleanClasses])];
-
-        combinedCleanClasses.forEach(cleanCls => {
-            const isChecked = cleanClasses.includes(cleanCls) ? 'checked' : '';
+        allGlobalClasses.forEach(cls => {
+            const isChecked = classesArray.includes(cls) ? 'checked' : '';
             blockHtml += `
                 <div class="form-check">
-                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${cleanCls}" ${isChecked}>
-                    <label class="form-check-label">${cleanCls}</label>
+                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${cls}" ${isChecked}>
+                    <label class="form-check-label">${cls}</label>
                 </div>
             `;
         });
 
         blockHtml += `
                 </div>
-                <div class="mt-2 input-group input-group-sm" style="max-width: 250px;">
-                    <input type="text" class="form-control custom-class-input" placeholder="إضافة قسم غير موجود...">
-                    <div class="input-group-append">
-                        <button class="btn btn-outline-secondary" type="button" onclick="addCustomClass(this)">إضافة</button>
-                    </div>
-                </div>
             </div>
         `;
         return blockHtml;
-    }
-
-    function addCustomClass(btn) {
-        const block = btn.closest('.assignment-block');
-        const input = block.querySelector('.custom-class-input');
-        const container = block.querySelector('.dyn-classes-container');
-        const newClass = input.value.trim();
-
-        if (newClass) {
-            const div = document.createElement('div');
-            div.className = 'form-check';
-            div.innerHTML = `
-                <input class="form-check-input dyn-class-cb" type="checkbox" value="${newClass}" checked>
-                <label class="form-check-label">${newClass}</label>
-            `;
-            container.appendChild(div);
-            input.value = '';
-        }
     }
 
     function toggleEditAssignments() {
@@ -365,7 +337,7 @@
             editorCard.style.display = 'block';
 
             tbody.innerHTML = '';
-            document.querySelectorAll('.teacher-assignment-data').forEach(btn => {
+            document.querySelectorAll('.btn-assign').forEach(btn => {
                 const id = btn.getAttribute('data-id');
                 const name = btn.getAttribute('data-name');
                 const assignmentsRaw = btn.getAttribute('data-assignments');
@@ -470,17 +442,12 @@
     function saveAllAssignments() {
         const promises = [];
         document.querySelectorAll('#assignmentEditorBody tr').forEach(tr => {
+            const btn = tr.querySelector('.btn-save-row');
             const empId = tr.getAttribute('data-id');
             const assignments = extractRowAssignments(tr);
 
-            // Skip saving empty rows to prevent network overhead / partial data loss
-            if (assignments.length === 0) return;
-
-            const btn = tr.querySelector('.btn-save-row');
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                btn.disabled = true;
-            }
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
 
             const formData = new FormData();
             formData.append('employee_id', empId);
@@ -494,12 +461,6 @@
                 }).then(res => res.json())
             );
         });
-
-        if (promises.length === 0) {
-            alert("لم يتم العثور على تعديلات صالحة للحفظ.");
-            toggleEditAssignments();
-            return;
-        }
 
         Promise.all(promises).then(() => {
             alert("تم حفظ جميع التعديلات بنجاح!");
@@ -569,11 +530,10 @@ function addModalAssignmentBlock() {
                 const cb = child.querySelector('input[type="checkbox"]');
                 const label = child.querySelector('label');
                 if (cb && label) {
-                    const cleanCls = cb.value.trim().replace(/\s+/g, '');
                     classCheckboxes += `
                         <div class="form-check">
-                            <input class="form-check-input class-checkbox" type="checkbox" name="classes_checked_${blockIndex}[]" value="${cleanCls}">
-                            <label class="form-check-label">${cleanCls}</label>
+                            <input class="form-check-input class-checkbox" type="checkbox" name="classes_checked_${blockIndex}[]" value="${cb.value}">
+                            <label class="form-check-label">${label.innerText}</label>
                         </div>
                     `;
                 }
@@ -601,36 +561,12 @@ function addModalAssignmentBlock() {
                 <div class="d-flex flex-wrap gap-2 mt-2 class-checkbox-container">
                     ${classCheckboxes}
                 </div>
-                <div class="mt-2 input-group input-group-sm" style="max-width: 250px;">
-                    <input type="text" class="form-control custom-class-modal-input" placeholder="إضافة قسم غير موجود...">
-                    <div class="input-group-append">
-                        <button class="btn btn-outline-secondary" type="button" onclick="addCustomClassModal(this)">إضافة</button>
-                    </div>
-                </div>
             </div>
         </div>
     `;
 
     container.appendChild(block);
     return block;
-}
-
-function addCustomClassModal(btn) {
-    const block = btn.closest('.assignment-block');
-    const input = block.querySelector('.custom-class-modal-input');
-    const container = block.querySelector('.class-checkbox-container');
-    const newClass = input.value.trim();
-
-    if (newClass) {
-        const div = document.createElement('div');
-        div.className = 'form-check';
-        div.innerHTML = `
-            <input class="form-check-input class-checkbox" type="checkbox" value="${newClass}" checked>
-            <label class="form-check-label">${newClass}</label>
-        `;
-        container.appendChild(div);
-        input.value = '';
-    }
 }
 
 function openManualAssign(id, name, assignmentsJson) {
@@ -669,8 +605,7 @@ function openManualAssign(id, name, assignmentsJson) {
 
             if (assignment.classes && Array.isArray(assignment.classes)) {
                 assignment.classes.forEach(cls => {
-                    const cleanCls = cls.trim().replace(/\s+/g, '');
-                    const cb = block.querySelector(`.class-checkbox[value="${cleanCls}"]`);
+                    const cb = block.querySelector(`.class-checkbox[value="${cls}"]`);
                     if (cb) cb.checked = true;
                 });
             }

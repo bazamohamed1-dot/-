@@ -137,15 +137,7 @@ class PendingUpdateSerializer(serializers.ModelSerializer):
         model = PendingUpdate
         fields = '__all__'
 
-from django.contrib.auth.models import User
-
 class SystemMessageSerializer(serializers.ModelSerializer):
-    recipient = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-        required=False,
-        allow_null=True
-    )
-
     class Meta:
         model = SystemMessage
         fields = '__all__'

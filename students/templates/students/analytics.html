@@ -177,6 +177,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 
 <div style="text-align: center; margin-bottom: 20px;">
@@ -191,14 +192,6 @@
         <div>
             <h2 style="margin: 0; color: #38bdf8;"><i class="fas fa-chart-line"></i> لوحة تحليل النتائج الاحترافية</h2>
             <p style="margin: 5px 0 0 0; color: #cbd5e1;">مؤشرات الأداء، التحليل الإحصائي، وتصنيف التلاميذ.</p>
-            {% if request.GET.teacher_id or request.GET.class_name %}
-            <div style="margin-top: 10px; font-size: 0.85rem; padding: 5px 10px; background: rgba(56, 189, 248, 0.1); border-left: 3px solid #38bdf8; border-radius: 4px; display: inline-block;">
-                <i class="fas fa-info-circle text-info me-1"></i> البيانات معروضة بناءً على الفلترة المختارة.
-                {% if teacher_info %}
-                    <br><small style="color: #94a3b8; margin-right: 20px;">الأقسام التي دخلت في الحساب: {{ teacher_info.classes }}</small>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%;">
             <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-grow: 1;" id="analyticsFilterForm">
@@ -233,36 +226,18 @@
                         <option value="{{ subj }}" {% if request.GET.subject == subj %}selected{% endif %} style="color: black;">{{ subj }}</option>
                     {% endfor %}
                 </select>
-
-                <!-- Hidden input to track if form was explicitly submitted so we know to read unchecked state -->
-                <input type="hidden" name="filter_applied" value="1">
-
-                <div style="display: flex; gap: 8px; align-items: center; margin-right: 15px;">
-                    <input type="checkbox" id="includeZeros" name="include_zeros" value="true" onchange="document.getElementById('analyticsFilterForm').submit();" {% if not request.GET.filter_applied or request.GET.include_zeros == 'true' %}checked{% endif %}>
-                    <label for="includeZeros" style="color: white; font-size: 0.9rem; cursor: pointer; white-space: nowrap;">احتساب الأصفار</label>
-                </div>
             </form>
 
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <button class="btn btn-outline-light shadow" onclick="window.print()" style="white-space: nowrap;">
                     <i class="fas fa-print me-1"></i>
                     طباعة محضر مجلس القسم/المستوى
-                </button>
-
-                <button class="btn btn-danger shadow fw-bold" onclick="showZerosModal('zeros')" style="white-space: nowrap;">
-                    <i class="fas fa-user-times me-1"></i> عرض الأصفار
-                </button>
-                <button class="btn btn-warning shadow fw-bold" onclick="showZerosModal('absences')" style="white-space: nowrap; color: #0f172a;">
-                    <i class="fas fa-user-slash me-1"></i> عرض الغائبين
                 </button>
 
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
                     <i class="fas fa-flask me-1"></i> مختبر التحليل المتقدم
                 </a>
 
-                <button type="button" class="btn shadow fw-bold text-white" style="background-color: #0ea5e9; border: 2px solid #0284c7; white-space: nowrap;" onclick="document.getElementById('editSubjectsModal').style.display='flex';">
-                    <i class="fas fa-edit me-1"></i> تعديل المواد المستوردة
-                </button>
 
                 <button class="btn btn-outline-primary fw-bold shadow-sm" style="white-space: nowrap; border-width: 2px;" onclick="document.getElementById('importMode').value='local'; document.getElementById('aiImportNotice').style.display='none'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد محلي ذكي';">
                     <i class="fas fa-file-excel"></i> استيراد محلي
@@ -292,17 +267,14 @@
                 classFilter.innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
 
                 let classesToShow = [];
-                const teacherSelected = document.querySelector('select[name="teacher_id"]').value !== "";
-
                 if (selectedLvl) {
                     classesToShow = classMap[selectedLvl] || [];
                     classFilter.disabled = false;
                 } else {
-                    // If no level selected, show all classes
+                    // If no level selected, show all classes but keep disabled
                     Object.values(classMap).forEach(arr => {
                         classesToShow = classesToShow.concat(arr);
                     });
-                    // If a teacher is selected, allow class selection even without level selected
                     classFilter.disabled = true;
                 }
 
@@ -332,31 +304,27 @@
             }
 
             // Initialize dropdown on page load without submitting
-            document.addEventListener('DOMContentLoaded', () => {
-                const teacherSelected = document.querySelector('select[name="teacher_id"]').value !== "";
-                const levelFilter = document.getElementById('levelFilter');
-
-                // If a teacher is selected, limit the Level dropdown to only the levels they teach
-                if (teacherSelected) {
-                    const validLevels = Object.keys(classMap);
-                    // Iterate backwards so removing an option doesn't shift indices
-                    for (let i = levelFilter.options.length - 1; i >= 0; i--) {
-                        let opt = levelFilter.options[i];
-                        if (opt.value !== "" && !validLevels.includes(opt.value)) {
-                            // Using remove() instead of display:none for better browser support
-                            levelFilter.remove(i);
-                        }
-                    }
-                }
-
-                updateClassDropdown(false);
-            });
+            document.addEventListener('DOMContentLoaded', () => updateClassDropdown(false));
 
             function handleTeacherFilterChange(selectElement) {
+                // If a teacher is selected, it implies filtering by their assigned classes
+                // We should probably reset the Level and Class dropdowns to avoid conflicting filters
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
                     document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
-                    document.getElementById('subjectFilter').value = "";
+                    // Auto-select the teacher's subject if possible
+                    const selectedOption = selectElement.options[selectElement.selectedIndex];
+                    const teacherText = selectedOption.textContent;
+                    const match = teacherText.match(/\(([^)]+)\)$/);
+                    if (match && match[1] && match[1] !== '/') {
+                        const subjectDropdown = document.getElementById('subjectFilter');
+                        for(let i=0; i<subjectDropdown.options.length; i++) {
+                             if(subjectDropdown.options[i].value === match[1] || match[1].includes(subjectDropdown.options[i].value)) {
+                                 subjectDropdown.selectedIndex = i;
+                                 break;
+                             }
+                        }
+                    }
                 }
                 document.getElementById('analyticsFilterForm').submit();
             }
@@ -508,81 +476,6 @@
     </div>
 
 </div>
-
-<!-- Teacher Comparison Table -->
-{% if local_stats.teacher_stats %}
-<div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;">
-    <div class="card col-md-12" style="flex: 1; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; background: #fff;">
-        <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chalkboard-teacher text-info"></i> مقارنة أداء الأساتذة</h4>
-
-        <!-- Multi-Teacher Selector for Comparison -->
-        <div style="margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <label for="compareTeacherSelect" style="font-weight: bold; margin-bottom: 10px; display: block;">إضافة أستاذ للمقارنة:</label>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <select id="compareTeacherSelect" class="form-select" style="max-width: 300px;">
-                    <option value="">اختر أستاذ...</option>
-                    {% for ts in local_stats.teacher_stats %}
-                        <option value="{{ ts.teacher_name }}" data-avg="{{ ts.avg_score }}" data-success="{{ ts.success_pct }}">{{ ts.teacher_name }}</option>
-                    {% endfor %}
-                </select>
-                <button type="button" class="btn btn-primary" onclick="addTeacherToComparison()">
-                    <i class="fas fa-plus"></i> إضافة للمقارنة
-                </button>
-                <button type="button" class="btn btn-outline-danger" onclick="clearTeacherComparison()">
-                    <i class="fas fa-trash"></i> مسح المقارنة
-                </button>
-            </div>
-
-            <!-- Comparison Charts -->
-            <div id="teacherComparisonChartsContainer" style="display: none; margin-top: 30px; gap: 20px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 300px;">
-                    <h5 style="text-align: center; color: #475569;">متوسط العلامات (أعمدة)</h5>
-                    <canvas id="teacherAvgChart" style="max-height: 250px;"></canvas>
-                </div>
-                <div style="flex: 1; min-width: 300px;">
-                    <h5 style="text-align: center; color: #475569;">نسبة النجاح (خطي)</h5>
-                    <canvas id="teacherSuccessChart" style="max-height: 250px;"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-hover table-striped" style="direction: rtl;">
-                <thead class="table-dark">
-                    <tr>
-                        <th>الأستاذ</th>
-                        <th>عدد الاختبارات</th>
-                        <th>متوسط العلامات</th>
-                        <th>نسبة النجاح (%)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ts in local_stats.teacher_stats %}
-                    <tr>
-                        <td>{{ ts.teacher_name }}</td>
-                        <td>{{ ts.total_tested }}</td>
-                        <td>
-                            <span class="badge {% if ts.avg_score >= 10 %}bg-success{% else %}bg-danger{% endif %} fs-6">
-                                {{ ts.avg_score }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="progress" style="height: 20px; border-radius: 10px; background-color: #e2e8f0;">
-                                <div class="progress-bar {% if ts.success_pct >= 50 %}bg-success{% else %}bg-danger{% endif %}" role="progressbar" style="width: {{ ts.success_pct }}%;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
-                                    <span style="font-weight:bold; color:white; padding:0 5px;">{{ ts.success_pct }}%</span>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endif %}
-</div>
-{% endif %}
 
 <!-- Ranking Table & Deep Analysis Request -->
 <div class="row mb-4" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 15px;" id="rankingSection">
@@ -870,172 +763,12 @@
     }
 </script>
 {% else %}
-<div class="alert alert-info" style="text-align:center; padding: 40px; border-radius: 12px; margin-top: 30px;">
+<div class="alert alert-info" style="text-align:center; padding: 40px;">
     <i class="fas fa-chart-line fa-3x" style="color: #cbd5e1; margin-bottom: 20px;"></i>
-    <h4 style="color: #334155; font-weight: bold;">لا توجد علامات مسجلة حالياً</h4>
-    <p style="color: #64748b; margin-bottom: 20px;">يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
-
-    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-        <button class="btn btn-outline-primary fw-bold shadow-sm" style="white-space: nowrap; border-width: 2px;" onclick="document.getElementById('importMode').value='local'; document.getElementById('aiImportNotice').style.display='none'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد محلي ذكي';">
-            <i class="fas fa-file-excel"></i> استيراد محلي
-        </button>
-        <button class="btn fw-bold shadow-sm" style="background-color: #a855f7; color: white; white-space: nowrap; border: 2px solid #9333ea;" onclick="document.getElementById('importMode').value='ai'; document.getElementById('aiImportNotice').style.display='block'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد بالذكاء الاصطناعي';">
-            <i class="fas fa-magic"></i> استيراد AI
-        </button>
-    </div>
+    <h4>لا توجد علامات مسجلة حالياً</h4>
+    <p>يرجى استيراد العلامات من ملف إكسل لرؤية لوحة التحليل الاحترافية.</p>
 </div>
 {% endif %}
-
-<!-- Zeros & Absences Modal -->
-<div id="zerosModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height: 80vh; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom: 20px;">
-            <h3 id="zerosModalTitle" style="margin:0; color:#0f172a;"><i class="fas fa-user-times text-danger"></i> القائمة</h3>
-            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('zerosModal').style.display='none'"><i class="fas fa-times"></i> إغلاق</button>
-        </div>
-
-        <table class="table table-bordered table-striped" style="direction: rtl;">
-            <thead class="table-dark">
-                <tr>
-                    <th>التلميذ</th>
-                    <th>القسم</th>
-                    <th>المادة</th>
-                    <th>الحالة / العلامة</th>
-                </tr>
-            </thead>
-            <tbody id="zerosTableBody">
-                <!-- Populated via JS -->
-            </tbody>
-        </table>
-        <div id="zerosTableEmpty" style="display:none; text-align: center; padding: 20px; color: #64748b;">لا يوجد تلاميذ مطابقين للشرط في هذا النطاق المفلتر.</div>
-    </div>
-</div>
-
-<script>
-    // Store full ranking list for filtering
-    const rankingList = JSON.parse('{{ local_stats.ranking_list_json|escapejs|default:"[]" }}');
-    const currentSubject = '{{ request.GET.subject|default:"المعدل العام" }}';
-
-    function showZerosModal(type) {
-        document.getElementById('zerosModal').style.display = 'flex';
-        const tbody = document.getElementById('zerosTableBody');
-        const emptyDiv = document.getElementById('zerosTableEmpty');
-        const title = document.getElementById('zerosModalTitle');
-
-        tbody.innerHTML = '';
-        let count = 0;
-
-        if (type === 'zeros') {
-            title.innerHTML = '<i class="fas fa-times-circle text-danger"></i> قائمة الأصفار';
-        } else {
-            title.innerHTML = '<i class="fas fa-user-slash text-warning"></i> قائمة الغائبين';
-        }
-
-        rankingList.forEach(student => {
-            // is_absent flag is explicitly generated by backend if score < 0 or NaN
-            const isZero = student.score === 0.0;
-            const isAbsent = student.is_absent === true;
-
-            const showAsZero = type === 'zeros' && isZero && !isAbsent;
-            const showAsAbsent = type === 'absences' && isAbsent;
-
-            if (showAsZero || showAsAbsent) {
-                count++;
-                const tr = document.createElement('tr');
-                const badge = showAsZero ? '<span class="badge bg-danger">0.00</span>' : '<span class="badge bg-secondary">غائب</span>';
-                tr.innerHTML = `
-                    <td>${student.student_name}</td>
-                    <td style="direction: ltr; text-align: right;">${student.student__class_name}</td>
-                    <td>${currentSubject}</td>
-                    <td>${badge}</td>
-                `;
-                tbody.appendChild(tr);
-            }
-        });
-
-        if (count === 0) {
-            emptyDiv.style.display = 'block';
-        } else {
-            emptyDiv.style.display = 'none';
-        }
-    }
-</script>
-
-<!-- Edit Subjects Modal -->
-<div id="editSubjectsModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height: 80vh; overflow-y: auto;">
-        <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
-            <i class="fas fa-edit text-info"></i> تعديل المواد المستوردة
-        </h3>
-        <p style="color: #64748b; font-size: 0.9rem;">يمكنك تعديل أسماء المواد المستوردة لتوحيدها. سيتم تغيير الاسم في جميع العلامات المسجلة.</p>
-
-        <table class="table table-bordered mt-3">
-            <thead class="table-light">
-                <tr>
-                    <th>المادة الحالية</th>
-                    <th>الاسم الجديد</th>
-                    <th>إجراء</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in subjects_list %}
-                <tr>
-                    <td style="vertical-align: middle; font-weight: bold;">{{ s }}</td>
-                    <td>
-                        <input type="text" id="new_subject_{{ forloop.counter }}" class="form-control" value="{{ s }}">
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-success" onclick="renameSubject('{{ s|escapejs }}', document.getElementById('new_subject_{{ forloop.counter }}').value)">
-                            <i class="fas fa-save"></i> حفظ
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:15px; margin-top: 20px;">
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('editSubjectsModal').style.display='none'">إغلاق</button>
-        </div>
-    </div>
-</div>
-
-<script>
-async function renameSubject(oldName, newName) {
-    if (!newName || newName.trim() === "") {
-        alert("لا يمكن أن يكون الاسم فارغاً.");
-        return;
-    }
-    if (oldName === newName.trim()) {
-        alert("لم تقم بتغيير الاسم.");
-        return;
-    }
-    if (!confirm(`هل أنت متأكد من تغيير "${oldName}" إلى "${newName.trim()}"؟`)) return;
-
-    try {
-        const formData = new FormData();
-        formData.append('old_name', oldName);
-        formData.append('new_name', newName.trim());
-
-        const res = await fetch("{% url 'rename_subject_ajax' %}", {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCookie('baza_school_csrf_v2')},
-            body: formData
-        });
-
-        const data = await res.json();
-        if (data.success) {
-            alert("تم تغيير اسم المادة بنجاح.");
-            window.location.reload();
-        } else {
-            alert("حدث خطأ: " + data.error);
-        }
-    } catch(e) {
-        alert("خطأ في الاتصال بالخادم.");
-        console.error(e);
-    }
-}
-</script>
 
 <!-- Import Grades Modal -->
 <div id="importGradesModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
@@ -1363,120 +1096,5 @@ async function renameSubject(oldName, newName) {
     });
 </script>
 
-
-
-<script>
-    // Teacher Comparison Logic
-    let comparisonTeachers = [];
-    let teacherAvgChartObj = null;
-    let teacherSuccessChartObj = null;
-
-    function updateTeacherCharts() {
-        const container = document.getElementById('teacherComparisonChartsContainer');
-        if (comparisonTeachers.length === 0) {
-            container.style.display = 'none';
-            return;
-        }
-        container.style.display = 'flex';
-
-        const labels = comparisonTeachers.map(t => t.name);
-        const avgData = comparisonTeachers.map(t => t.avg);
-        const successData = comparisonTeachers.map(t => t.success);
-
-        const bgColors = [
-            'rgba(59, 130, 246, 0.7)', 'rgba(16, 185, 129, 0.7)',
-            'rgba(245, 158, 11, 0.7)', 'rgba(239, 68, 68, 0.7)',
-            'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)'
-        ];
-        const borderColors = bgColors.map(c => c.replace('0.7', '1'));
-
-        const chartBgColors = labels.map((_, i) => bgColors[i % bgColors.length]);
-        const chartBorderColors = labels.map((_, i) => borderColors[i % borderColors.length]);
-
-        const ctxAvg = document.getElementById('teacherAvgChart');
-        if (ctxAvg) {
-            if (teacherAvgChartObj) {
-                teacherAvgChartObj.data.labels = labels;
-                teacherAvgChartObj.data.datasets[0].data = avgData;
-                teacherAvgChartObj.data.datasets[0].backgroundColor = chartBgColors;
-                teacherAvgChartObj.data.datasets[0].borderColor = chartBorderColors;
-                teacherAvgChartObj.update();
-            } else {
-                teacherAvgChartObj = new Chart(ctxAvg.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'المتوسط',
-                            data: avgData,
-                            backgroundColor: chartBgColors,
-                            borderColor: chartBorderColors,
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: { y: { beginAtZero: true, max: 20 } },
-                        plugins: { legend: { display: false } }
-                    }
-                });
-            }
-        }
-
-        const ctxSuccess = document.getElementById('teacherSuccessChart');
-        if (ctxSuccess) {
-            if (teacherSuccessChartObj) {
-                teacherSuccessChartObj.data.labels = labels;
-                teacherSuccessChartObj.data.datasets[0].data = successData;
-                teacherSuccessChartObj.update();
-            } else {
-                teacherSuccessChartObj = new Chart(ctxSuccess.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'نسبة النجاح (%)',
-                            data: successData,
-                            borderColor: 'rgba(16, 185, 129, 1)',
-                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            pointBackgroundColor: 'rgba(16, 185, 129, 1)',
-                            pointRadius: 5
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: { y: { beginAtZero: true, max: 100 } }
-                    }
-                });
-            }
-        }
-    }
-
-    window.addTeacherToComparison = function() {
-        const select = document.getElementById('compareTeacherSelect');
-        const opt = select.options[select.selectedIndex];
-        if (!opt || !opt.value) return;
-
-        const tName = opt.value;
-        const tAvg = parseFloat(opt.getAttribute('data-avg'));
-        const tSuccess = parseFloat(opt.getAttribute('data-success'));
-
-        if (!comparisonTeachers.find(t => t.name === tName)) {
-            comparisonTeachers.push({ name: tName, avg: tAvg, success: tSuccess });
-            updateTeacherCharts();
-        }
-        select.value = "";
-    };
-
-    window.clearTeacherComparison = function() {
-        comparisonTeachers = [];
-        updateTeacherCharts();
-    };
-</script>
 
 {% endblock %}
