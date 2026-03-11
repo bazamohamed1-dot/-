@@ -95,11 +95,15 @@ def process_grades_file(file_path, term):
         'الإعلام الآلي', 'المعلوماتية'
     ]
 
+    # Determine the target term suffix explicitly to filter correctly if multiple terms exist in the file
+    target_suffix_num = "1" if term == "الفصل الأول" else ("2" if term == "الفصل الثاني" else "3")
+
     for idx, header in enumerate(headers):
-        # Clean header text aggressively
-        clean_header = header.replace('\n', ' ').replace('\r', '').strip()
-        # Remove common terms like "ف 1"
-        clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', clean_header).strip()
+        # Keep original to check for term suffixes
+        original_header = header.replace('\n', ' ').replace('\r', '').strip()
+
+        # Clean header text for subject matching
+        clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', original_header).strip()
 
         if 'اللقب' in clean_header or 'الاسم' in clean_header or 'الاسم واللقب' in clean_header or 'اللقب والاسم' in clean_header:
             if name_idx == -1: # Only set once to avoid matching wrong columns later
@@ -107,8 +111,21 @@ def process_grades_file(file_path, term):
         elif 'الإعادة' in clean_header or 'الاعادة' in clean_header:
             repeater_idx = idx
         elif 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
-            subject_indices['المعدل العام'] = idx
+            # If multiple general averages exist, only take the one matching the current term
+            # Or if it doesn't have a term marker, just take the first one
+            match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
+            if match_term:
+                if match_term.group(2) == target_suffix_num:
+                    subject_indices['المعدل العام'] = idx
+            else:
+                # If no term specified in header, just grab it
+                subject_indices['المعدل العام'] = idx
         else:
+            # If the column has a term suffix (e.g. "الرياضيات ف2"), skip it IF it's not the term we are currently importing!
+            match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
+            if match_term and match_term.group(2) != target_suffix_num:
+                continue # Skip columns belonging to other terms
+
             # Fuzzy match against known subjects
             matches = difflib.get_close_matches(clean_header, known_subjects, n=1, cutoff=0.7)
             if matches:
@@ -179,10 +196,15 @@ def process_grades_file(file_path, term):
 
             for subject, col_idx in subject_indices.items():
                 if len(row) > col_idx:
-                    try:
-                        score_val = str(row[col_idx]).replace(',', '.').strip()
-                        if score_val:
-                            score = float(score_val)
+                    score_val = str(row[col_idx]).replace(',', '.').strip()
+                    if score_val:
+                        try:
+                            # Handle explicit 'غ' or 'غائب' or 'غياب' as -1.0 (to mean absent without throwing it away)
+                            if 'غ' in score_val.lower() or 'abs' in score_val.lower():
+                                score = -1.0
+                            else:
+                                score = float(score_val)
+
                             # Update or create
                             Grade.objects.update_or_create(
                                 student=student,
@@ -191,8 +213,8 @@ def process_grades_file(file_path, term):
                                 defaults={'score': score}
                             )
                             grades_created += 1
-                    except ValueError:
-                        pass # Ignore empty or invalid strings like 'غ' for absent
+                        except ValueError:
+                            pass # Ignore other empty or invalid strings
 
     return grades_created, f'تم استيراد {grades_created} علامة بنجاح للقسم {lvl} {cls}.'
 
@@ -306,7 +328,11 @@ def process_grades_file_ai(file_path, term):
 
             for subject, score in grades.items():
                 try:
-                    score_val = float(score)
+                    if isinstance(score, str) and ('غ' in score.lower() or 'abs' in score.lower()):
+                        score_val = -1.0
+                    else:
+                        score_val = float(score)
+
                     Grade.objects.update_or_create(
                         student=student,
                         subject=subject,

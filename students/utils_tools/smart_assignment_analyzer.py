@@ -62,20 +62,24 @@ def normalize_subject(subject):
 def extract_from_excel(file_path):
     """
     Extracts assignment candidates from an Excel file (Schedule).
-    Handles merged cells by forward filling.
-    Expects rows to contain Teacher Name, Subject, and Classes.
+    Handles tabular schedules correctly without confusing horizontal columns.
     """
     candidates = []
     try:
-        # Load workbook, interpret 'nan' correctly
+        # Load workbook, without forward filling axis=1 which corrupts the row
         df = pd.read_excel(file_path, header=None)
 
-        # Forward fill merged cells (NaNs resulting from merge)
-        df = df.ffill(axis=0).ffill(axis=1)
-
-        # Iterate through rows to find patterns
+        # Iterate through rows and columns carefully
         for idx, row in df.iterrows():
-            row_text = " ".join([str(x) for x in row.values if str(x).lower() != 'nan'])
+            row_cells = [str(x).strip() for x in row.values if str(x).lower() != 'nan' and str(x).strip() != '']
+
+            if not row_cells:
+                continue
+
+            # We process cell by cell to group subjects and classes locally
+            # Or we can do a smart line by line join if it's just a simple table.
+            # But the main issue was ffill(axis=1) duplicating data across empty columns.
+            row_text = "  ".join(row_cells)
 
             # Extract basic info
             extracted = _extract_candidate_from_text(row_text)
@@ -181,6 +185,13 @@ def _extract_candidate_from_text(text):
         # Let's clean extra internal spaces
         clean_c = re.sub(r'\s+', ' ', rc).strip()
         found_classes.append(clean_c)
+
+    # Sometimes AI output or files use formats like "أولى 1", we shouldn't rely solely on "م" locally.
+    # Let's expand local extraction to catch words
+    word_classes = re.findall(r'\b(?:أولى|ثانية|ثالثة|رابعة|الاولى|الثانية|الثالثة|الرابعة|اولى|ثانيه|ثالثه|رابعه)\s*(?:متوسط)?\s*\d+\b', text)
+    for wc in word_classes:
+        clean_wc = re.sub(r'\s+', ' ', wc).strip()
+        found_classes.append(clean_wc)
 
     # If no subject and no classes, unlikely to be a schedule row
     if not subject and not found_classes:

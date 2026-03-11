@@ -140,10 +140,12 @@
     <div class="student-card">
         <img id="studentPhoto" class="student-photo" src="" alt="صورة التلميذ">
         <div class="student-info">
+            <div class="info-item"><label>رقم التعريف</label><span id="studentIdDisplay">--</span></div>
             <div class="info-item"><label>الاسم الكامل</label><span id="studentName">--</span></div>
             <div class="info-item"><label>تاريخ الميلاد</label><span id="studentDob">--</span></div>
+            <div class="info-item"><label>مكان الميلاد</label><span id="studentPob">--</span></div>
+            <div class="info-item"><label>المستوى</label><span id="studentLevel">--</span></div>
             <div class="info-item"><label>القسم</label><span id="studentClass">--</span></div>
-            <div class="info-item"><label>رقم التعريف</label><span id="studentIdDisplay">--</span></div>
         </div>
     </div>
 
@@ -423,10 +425,12 @@ function showStudent(data) {
     const s = data.student;
     currentStudentId = s.id;
 
+    document.getElementById('studentIdDisplay').textContent = s.student_id_number;
     document.getElementById('studentName').textContent = `${s.last_name} ${s.first_name}`;
     document.getElementById('studentDob').textContent = s.date_of_birth;
+    document.getElementById('studentPob').textContent = s.place_of_birth || '--';
+    document.getElementById('studentLevel').textContent = s.academic_year || '--';
     document.getElementById('studentClass').textContent = s.class_name;
-    document.getElementById('studentIdDisplay').textContent = s.student_id_number;
 
     const img = document.getElementById('studentPhoto');
     if (s.photo) {

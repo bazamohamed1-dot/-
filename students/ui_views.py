@@ -57,16 +57,20 @@ def dashboard(request):
 
             if role == 'director':
                 pass # Continue to dashboard
-            elif profile.has_perm('access_canteen'):
-                return redirect('canteen_home')
-            elif profile.has_perm('access_library'):
-                return redirect('library_home')
-            elif profile.has_perm('access_management'):
-                return redirect('students_management')
-            elif profile.has_perm('access_archive'):
-                return redirect('archive_home')
             else:
-                pass # Default dashboard for others (Teachers)
+                # Instead of allowing them to see the main dashboard (which they may not have requested explicitly),
+                # always route them to their FIRST available permitted interface.
+                # Once there, they can use the sidebar to navigate to the other interfaces they have access to.
+                if profile.has_perm('access_canteen'): return redirect('canteen_home')
+                elif profile.has_perm('access_library'): return redirect('library_home')
+                elif profile.has_perm('access_management'): return redirect('students_management')
+                elif profile.has_perm('access_archive'): return redirect('archive_home')
+                elif profile.has_perm('access_guidance'): return redirect('guidance_home')
+                elif profile.has_perm('access_hr'): return redirect('hr_home')
+                elif profile.has_perm('access_parents'): return redirect('parents_home')
+                elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'): return redirect('analytics_dashboard')
+                else:
+                    pass # Default dashboard for others (Teachers with no special interface perms)
         else:
             # No profile (e.g., admin). If not superuser, redirect
             if not request.user.is_superuser:
@@ -665,7 +669,68 @@ def assignment_matching_view(request):
             return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
 
         import json
+
+        # Make all_classes whitespace-normalized for robust matching
+        normalized_all_classes = {cl.replace(" ", ""): cl for cl in context['all_classes']}
+
+        # Advanced normalization for Arabic words extracted by AI that didn't match directly
+        arabic_level_map = {
+            'أولى': '1', 'الاولى': '1', 'الأولى': '1', 'اولى': '1',
+            'ثانية': '2', 'الثانية': '2', 'ثانيه': '2', 'الثانيه': '2',
+            'ثالثة': '3', 'الثالثة': '3', 'ثالثه': '3', 'الثالثه': '3',
+            'رابعة': '4', 'الرابعة': '4', 'رابعه': '4', 'الرابعه': '4'
+        }
+
+        import re
         for c in candidates:
+            mapped_classes = []
+            for cl in c.get('classes', []):
+                cl_orig = cl.strip()
+                cl_norm = cl_orig.replace(" ", "")
+
+                # Perfect Match
+                if cl_norm in normalized_all_classes:
+                    mapped_classes.append(normalized_all_classes[cl_norm])
+                    continue
+
+                # If it's already properly formatted (like "4م1") but just missing from normalized_all_classes
+                # (e.g., custom class not in DB yet), don't mutate it further.
+                if re.match(r'^\d+م\d+$', cl_norm):
+                     mapped_classes.append(cl_norm)
+                     continue
+
+                # Heuristic extraction for common formats (e.g. "أولى 1", "4 متوسط 2")
+                all_nums = re.findall(r'\d+', cl_orig)
+                mapped_digit = None
+                class_num = None
+
+                # Find Arabic words representing the level
+                for arb_word, digit in arabic_level_map.items():
+                    if arb_word in cl_orig:
+                        mapped_digit = digit
+                        break
+
+                if mapped_digit:
+                     class_num = all_nums[0] if len(all_nums) > 0 else None
+                else:
+                     if len(all_nums) >= 2:
+                          mapped_digit = all_nums[0]
+                          class_num = all_nums[1]
+                     elif len(all_nums) == 1:
+                          mapped_digit = all_nums[0]
+                          class_num = all_nums[0]
+
+                if mapped_digit and class_num:
+                    constructed_shortcut = f"{mapped_digit}م{class_num}"
+                    if constructed_shortcut in normalized_all_classes:
+                        mapped_classes.append(normalized_all_classes[constructed_shortcut])
+                    else:
+                        mapped_classes.append(constructed_shortcut)
+                else:
+                    mapped_classes.append(cl_orig)
+
+            c['classes'] = mapped_classes
+
             best_score = 0.0
             best_match = None
             c_norm = (c.get('name') or '').strip()
@@ -936,8 +1001,19 @@ def hr_home(request):
     }
 
     # Get All Classes for Dropdown
-    from .models_mapping import ClassShortcut
-    all_classes = list(ClassShortcut.objects.values_list('shortcut', flat=True).distinct())
+    from .models_mapping import ClassShortcut, ensure_class_shortcuts_populated
+
+    # Ensure database is fully populated with actual student classes
+    ensure_class_shortcuts_populated()
+
+    shortcut_classes = list(ClassShortcut.objects.values_list('shortcut', flat=True).distinct())
+
+    # Also fetch existing assignments so teachers don't lose custom classes
+    assigned_classes = []
+    for ta in TeacherAssignment.objects.all():
+        assigned_classes.extend(ta.classes)
+
+    all_classes = list(set(shortcut_classes + assigned_classes))
     all_classes.sort()
 
     # Auto-Select Logic (If file was uploaded previously)
@@ -1061,7 +1137,7 @@ def ai_manual_view(request):
 def ai_chat_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_chat')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_ai_chat')):
         return redirect('dashboard')
 
     if request.method == 'POST':
@@ -1101,7 +1177,7 @@ def ai_chat_view(request):
 def tasks_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_tasks')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_tasks')):
         return redirect('dashboard')
 
     # Simple permission check: must be logged in
@@ -1120,7 +1196,7 @@ def tasks_view(request):
 def ai_control_panel(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_ai_control')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_ai_control')):
         return redirect('dashboard')
 
     context = {
@@ -1133,7 +1209,7 @@ def ai_control_panel(request):
 def analytics_dashboard(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_analytics')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_analytics')):
         return redirect('dashboard')
 
     if request.method == 'POST':
@@ -1168,6 +1244,9 @@ def analytics_dashboard(request):
     from .analytics_utils import analyze_grades_locally
     import re
 
+    teacher_subjects = []
+    teacher_classes = []
+
     # Get distinct academic years (levels) and classes
     levels = list(Student.objects.values_list('academic_year', flat=True).distinct())
     levels = [lvl for lvl in levels if lvl]
@@ -1201,6 +1280,12 @@ def analytics_dashboard(request):
     selected_class = request.GET.get('class_name', '')
     selected_teacher_id = request.GET.get('teacher_id', '')
     selected_subject = request.GET.get('subject', '')
+    filter_applied = request.GET.get('filter_applied', '')
+
+    if filter_applied:
+        include_zeros = request.GET.get('include_zeros') == 'true'
+    else:
+        include_zeros = True
 
     grades_qs = Grade.objects.all()
     if selected_term:
@@ -1243,16 +1328,28 @@ def analytics_dashboard(request):
                 full_class_names.append(tc) # Also keep the raw one just in case
             full_class_names = list(set(full_class_names))
 
-            if full_class_names:
+            if teacher_classes:
                 import django.db.models as models
+                import re
                 q_classes = models.Q()
-                from .analytics_utils import unformat_class_name
-                for cls in full_class_names:
-                    raw_c = unformat_class_name(cls)
-                    if raw_c and raw_c.isdigit():
-                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
+                for hr_cls in teacher_classes:
+                    # Parse standard HR format like '1م1' or '4م2'
+                    m = re.match(r'(\d+)م(\d+)', hr_cls)
+                    if m:
+                        lvl_digit = m.group(1)
+                        cls_digit = m.group(2)
+                        arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                        q_level = models.Q(student__academic_year=lvl_digit) | models.Q(student__academic_year__icontains=lvl_digit) | models.Q(student__academic_year__icontains=arb_lvl)
+
+                        # Add pattern matching for Arabic strings like "أولى متوسط 1"
+                        q_class = models.Q(student__class_name=cls_digit) | models.Q(student__class_name__endswith=f" {cls_digit}") | models.Q(student__class_name__endswith=f"م{cls_digit}") | models.Q(student__class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(student__class_name=hr_cls) | models.Q(student__class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(student__class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                        q_classes |= (q_level & q_class)
                     else:
-                        q_classes |= models.Q(student__class_name=cls)
+                        q_classes |= models.Q(student__class_name=hr_cls)
+
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
@@ -1268,29 +1365,65 @@ def analytics_dashboard(request):
 
         except Employee.DoesNotExist:
             pass
-    else:
-        if selected_level:
-            import django.db.models as models
-            grades_qs = grades_qs.filter(
-                models.Q(student__academic_year=selected_level) |
-                models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
-            )
-        if selected_class:
-            from .analytics_utils import unformat_class_name
-            import django.db.models as models
-            raw_class = unformat_class_name(selected_class)
-            if raw_class and raw_class.isdigit():
-                grades_qs = grades_qs.filter(
-                    models.Q(student__class_name=selected_class) |
-                    models.Q(student__class_name=raw_class) |
-                    models.Q(student__class_name__endswith=f" {raw_class}") |
-                    models.Q(student__class_name__endswith=f"م{raw_class}") |
-                    models.Q(student__class_name__icontains=raw_class)
-                )
-            else:
-                grades_qs = grades_qs.filter(student__class_name=selected_class)
 
-    local_stats = analyze_grades_locally(grades_qs)
+    # Wait, the teacher block that auto-selects `selected_level` happens further down around line 1450.
+    # We must move the auto-selection UP before we filter `grades_qs` with it.
+
+    # Move auto-selection logic here:
+    if selected_teacher_id and teacher_classes:
+        # Compute valid levels early
+        temp_levels = []
+        for tc in teacher_classes:
+            import re
+            m = re.match(r'(\d+)م', tc)
+            if m:
+                lvl_digit = m.group(1)
+                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                arb_lvl = arb_map.get(lvl_digit, lvl_digit) + ' متوسط'
+                if arb_lvl not in temp_levels:
+                    temp_levels.append(arb_lvl)
+
+        if not selected_level and temp_levels:
+            selected_level = temp_levels[0]
+
+        # Try to auto select class if only 1
+        if selected_level:
+            valid_classes_for_lvl = []
+            for tc in teacher_classes:
+                if str(selected_level).split()[0] in str(tc) or str(selected_level).replace(' متوسط', '') in str(tc):
+                    valid_classes_for_lvl.append(tc)
+            if len(valid_classes_for_lvl) == 1 and not selected_class:
+                selected_class = valid_classes_for_lvl[0]
+
+    # Now apply the filters
+    if selected_level:
+        import django.db.models as models
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=selected_level) |
+            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+        )
+    if selected_class:
+        from .analytics_utils import unformat_class_name
+        import django.db.models as models
+        raw_class = unformat_class_name(selected_class)
+        if raw_class and raw_class.isdigit():
+            grades_qs = grades_qs.filter(
+                models.Q(student__class_name=selected_class) |
+                models.Q(student__class_name=raw_class) |
+                models.Q(student__class_name__endswith=f" {raw_class}") |
+                models.Q(student__class_name__endswith=f"م{raw_class}") |
+                models.Q(student__class_name__icontains=raw_class)
+            )
+        else:
+            grades_qs = grades_qs.filter(student__class_name=selected_class)
+
+    effective_subject = selected_subject
+    if selected_teacher_id and not effective_subject and teacher_subjects:
+        # If filtering by teacher but no specific subject is chosen, and they only teach one subject, use it
+        if len(teacher_subjects) == 1:
+            effective_subject = teacher_subjects[0]
+
+    local_stats = analyze_grades_locally(grades_qs, subject_filter=effective_subject, include_zeros=include_zeros)
 
     token_cost = 0
     if local_stats and local_stats.get('markdown_data'):
@@ -1305,9 +1438,62 @@ def analytics_dashboard(request):
 
     import json
 
+    import json
+
     # Get Dynamic Subjects List
-    subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
+    # We will declare teacher_subjects = [] at the top of the scope so it exists globally if missing
+    teacher_subjects = locals().get('teacher_subjects', [])
+    teacher_classes = locals().get('teacher_classes', [])
+
+    if teacher_subjects:
+        subjects_list = teacher_subjects
+    else:
+        subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
     subjects_list.sort()
+
+    # Filter class_map to only show teacher classes if selected
+    teacher_info = None
+    if selected_teacher_id and teacher_classes:
+        # Full class names are needed since class_map contains formatted names (e.g. 1 متوسط 1)
+        # but teacher_classes usually contains abbreviations (e.g. 1م1)
+        # We mapped them earlier into full_class_names list.
+        filtered_class_map = {}
+        for lvl, clist in class_map.items():
+            valid_cls = []
+            for c in clist:
+                # We check if 'c' (e.g. "1 متوسط 1") matches any of the teacher's full class names or shortcuts
+                from .analytics_utils import unformat_class_name
+                raw_c = unformat_class_name(c)
+                # also build short format like 1م1
+                import re
+                short_c = c
+                m = re.search(r'(\d+)\s*متوسط\s*(\d+)', c)
+                if m:
+                    short_c = f"{m.group(1)}م{m.group(2)}"
+
+                if c in teacher_classes or raw_c in teacher_classes or short_c in teacher_classes or (locals().get('full_class_names') and c in full_class_names):
+                    valid_cls.append(c)
+
+            if valid_cls:
+                filtered_class_map[lvl] = valid_cls
+
+        class_map = filtered_class_map
+        levels = list(class_map.keys())
+
+        # Ensure the selected_level and selected_class context matches the ones we auto-selected earlier
+        # so the template sets the correct 'selected' option in the HTML dropdowns.
+        if selected_level and selected_level not in levels:
+             selected_level = levels[0] if levels else ""
+
+        try:
+            from .models import Employee
+            teacher_obj = Employee.objects.get(id=selected_teacher_id)
+            teacher_info = {
+                'name': f"{teacher_obj.last_name} {teacher_obj.first_name}",
+                'subjects': "، ".join(teacher_subjects),
+                'classes': "، ".join(teacher_classes)
+            }
+        except Exception: pass
 
     # Get Teachers List for Dropdown
     from .models import Employee
@@ -1320,6 +1506,7 @@ def analytics_dashboard(request):
         'class_map_json': json.dumps(class_map),
         'token_cost': token_cost,
         'teachers': teachers,
+        'teacher_info': teacher_info,
         'subjects_list': subjects_list,
         'selected_teacher_id': selected_teacher_id
     }
@@ -1328,7 +1515,7 @@ def analytics_dashboard(request):
 def advanced_analytics_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_advanced_analytics')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_advanced_analytics')):
         return redirect('dashboard')
 
     from .models import Grade
@@ -1346,6 +1533,9 @@ def advanced_analytics_view(request):
     # Apply Filters to the QuerySet
     # Compute teacher subjects BEFORE filtering the assignments by selected_subject
     teacher_subjects = []
+    teacher_classes = []
+    teacher_info = None
+
     if selected_teacher_id:
         from .models import Employee, TeacherAssignment
         from .models_mapping import ClassShortcut
@@ -1389,16 +1579,27 @@ def advanced_analytics_view(request):
                 full_class_names.append(tc) # Also keep the raw one just in case
             full_class_names = list(set(full_class_names))
 
-            if full_class_names:
+            if teacher_classes:
                 import django.db.models as models
+                import re
                 q_classes = models.Q()
-                from .analytics_utils import unformat_class_name
-                for cls in full_class_names:
-                    raw_c = unformat_class_name(cls)
-                    if raw_c and raw_c.isdigit():
-                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
+                for hr_cls in teacher_classes:
+                    m = re.match(r'(\d+)م(\d+)', hr_cls)
+                    if m:
+                        lvl_digit = m.group(1)
+                        cls_digit = m.group(2)
+                        arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                        q_level = models.Q(student__academic_year=lvl_digit) | models.Q(student__academic_year__icontains=lvl_digit) | models.Q(student__academic_year__icontains=arb_lvl)
+
+                        # Add pattern matching for Arabic strings like "أولى متوسط 1"
+                        q_class = models.Q(student__class_name=cls_digit) | models.Q(student__class_name__endswith=f" {cls_digit}") | models.Q(student__class_name__endswith=f"م{cls_digit}") | models.Q(student__class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(student__class_name=hr_cls) | models.Q(student__class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(student__class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                        q_classes |= (q_level & q_class)
                     else:
-                        q_classes |= models.Q(student__class_name=cls)
+                        q_classes |= models.Q(student__class_name=hr_cls)
+
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not selected_subject:
@@ -1413,27 +1614,30 @@ def advanced_analytics_view(request):
 
         except Employee.DoesNotExist:
             pass
-    else:
-        if selected_level:
-            import django.db.models as models
+
+    # Apply global level/class filters ONLY if no teacher is selected (or if we want them to narrow down teacher classes)
+    # The user request implies: if teacher is chosen, just show their stuff. But if level/class is chosen WITH teacher, it should narrow.
+    # However, to be safe, we just apply them sequentially.
+    if selected_level:
+        import django.db.models as models
+        grades_qs = grades_qs.filter(
+            models.Q(student__academic_year=selected_level) |
+            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+        )
+    if selected_class:
+        from .analytics_utils import unformat_class_name
+        import django.db.models as models
+        raw_class = unformat_class_name(selected_class)
+        if raw_class and raw_class.isdigit():
             grades_qs = grades_qs.filter(
-                models.Q(student__academic_year=selected_level) |
-                models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+                models.Q(student__class_name=selected_class) |
+                models.Q(student__class_name=raw_class) |
+                models.Q(student__class_name__endswith=f" {raw_class}") |
+                models.Q(student__class_name__endswith=f"م{raw_class}") |
+                models.Q(student__class_name__icontains=raw_class)
             )
-        if selected_class:
-            from .analytics_utils import unformat_class_name
-            import django.db.models as models
-            raw_class = unformat_class_name(selected_class)
-            if raw_class and raw_class.isdigit():
-                grades_qs = grades_qs.filter(
-                    models.Q(student__class_name=selected_class) |
-                    models.Q(student__class_name=raw_class) |
-                    models.Q(student__class_name__endswith=f" {raw_class}") |
-                    models.Q(student__class_name__endswith=f"م{raw_class}") |
-                    models.Q(student__class_name__icontains=raw_class)
-                )
-            else:
-                grades_qs = grades_qs.filter(student__class_name=selected_class)
+        else:
+            grades_qs = grades_qs.filter(student__class_name=selected_class)
 
     if not grades_qs.exists():
         messages.warning(request, "لا توجد علامات مسجلة للقيام بتحليل متقدم (أو لا توجد نتائج مطابقة للفلتر).")
@@ -1585,7 +1789,10 @@ def advanced_analytics_view(request):
                 class_map[lvl].append(cls)
 
     # Get Dynamic Subjects List
-    subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
+    if teacher_subjects:
+        subjects_list = teacher_subjects
+    else:
+        subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
     subjects_list.sort()
 
     # Get Teachers List for Dropdown
@@ -1604,6 +1811,7 @@ def advanced_analytics_view(request):
         'class_map_json': json.dumps(class_map),
         'teachers': teachers,
         'subjects_list': subjects_list,
+        'teacher_info': teacher_info,
         'selected_level': selected_level,
         'selected_class': selected_class,
         'selected_teacher_id': selected_teacher_id,
@@ -1614,7 +1822,7 @@ def advanced_analytics_view(request):
 def statistical_tests_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    if not (request.user.is_superuser or request.user.username == 'director' or request.user.employeeprofile.has_perm('access_advanced_analytics')):
+    if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_advanced_analytics')):
         return redirect('dashboard')
 
     levels = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
@@ -1645,19 +1853,79 @@ def run_statistical_test(request):
     if not grades_qs.exists():
         return JsonResponse({'error': 'لا توجد بيانات كافية'})
 
-    # We aggregate by student to get their general average for the test
-    df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
+    if grouping == 'teacher':
+        # To compare teachers accurately, we must not average by student globally.
+        # We must link specific grades (by subject and class) to the teacher who teaches that subject to that class.
+        df = pd.DataFrame(list(grades_qs.values('student__id', 'student__academic_year', 'student__class_name', 'subject', 'score')))
+        df = df[df['score'] > 0] # remove absences
 
-    # Calculate mean score per student to avoid repeated measures bias in simple tests
-    student_means = df.groupby(['student__id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
-    student_means = student_means[student_means['score'] > 0] # remove absences
+        if df.empty:
+            return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
 
-    if student_means.empty:
-        return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
+        from .models import TeacherAssignment
+        import re
 
-    group_col = 'student__' + grouping
-    if group_col not in student_means.columns:
-        return JsonResponse({'error': 'متغير التجميع غير صالح'})
+        # Build mapping: (shortcut_class, subject) -> teacher_name
+        class_subj_to_teacher = {}
+        for assign in TeacherAssignment.objects.all():
+            t_name = f"{assign.teacher.last_name} {assign.teacher.first_name}"
+            subj = assign.subject
+            for c in assign.classes:
+                class_subj_to_teacher[(c, subj)] = t_name
+
+        def get_teacher_for_grade(row):
+            lvl = row['student__academic_year']
+            cls = row['student__class_name']
+            subj = row['subject']
+
+            # Map to shortcut (e.g. 1م1)
+            lvl_digit = "1"
+            if "ثانية" in lvl or "2" in lvl: lvl_digit = "2"
+            elif "ثالثة" in lvl or "3" in lvl: lvl_digit = "3"
+            elif "رابعة" in lvl or "4" in lvl: lvl_digit = "4"
+
+            cls_digit = "".join(re.findall(r'\d+', cls))
+            if not cls_digit: cls_digit = "1"
+
+            shortcut = f"{lvl_digit}م{cls_digit}"
+
+            # Exact match
+            if (shortcut, subj) in class_subj_to_teacher:
+                return class_subj_to_teacher[(shortcut, subj)]
+
+            # Fallback: fuzzy match on subject name (e.g. "رياضيات" vs "الرياضيات")
+            for (c, s), t_name in class_subj_to_teacher.items():
+                if c == shortcut and (s in subj or subj in s):
+                    return t_name
+
+            return "غير مسند"
+
+        df['teacher_name'] = df.apply(get_teacher_for_grade, axis=1)
+        # Filter out unassigned grades
+        df = df[df['teacher_name'] != "غير مسند"]
+
+        if df.empty:
+            return JsonResponse({'error': 'لم يتم العثور على تقاطعات صحيحة بين العلامات والأساتذة'})
+
+        # Now group by student and teacher so we don't have repeated measures for the same student/teacher pair (e.g. multiple terms)
+        student_means = df.groupby(['student__id', 'teacher_name'])['score'].mean().reset_index()
+        group_col = 'teacher_name'
+
+    else:
+        # Normal grouping (gender, class, etc.)
+        # We aggregate by student to get their general average for the test
+        df = pd.DataFrame(list(grades_qs.values('student__id', 'student__gender', 'student__academic_year', 'student__class_name', 'score')))
+
+        # Calculate mean score per student to avoid repeated measures bias in simple tests
+        student_means = df.groupby(['student__id', 'student__gender', 'student__academic_year', 'student__class_name'])['score'].mean().reset_index()
+        student_means = student_means[student_means['score'] > 0] # remove absences
+
+        if student_means.empty:
+            return JsonResponse({'error': 'لا توجد بيانات صحيحة بعد الفلترة'})
+
+        group_col = 'student__' + grouping
+        if group_col not in student_means.columns:
+            return JsonResponse({'error': 'متغير التجميع غير صالح'})
 
     groups_data = {}
     arrays_for_test = []
@@ -1741,14 +2009,25 @@ def get_gauss_data(request):
 
             if teacher_classes:
                 import django.db.models as models
+                import re
                 q_classes = models.Q()
-                from .analytics_utils import unformat_class_name
-                for cls in teacher_classes:
-                    raw_c = unformat_class_name(cls)
-                    if raw_c and raw_c.isdigit():
-                        q_classes |= models.Q(student__class_name=cls) | models.Q(student__class_name=raw_c) | models.Q(student__class_name__endswith=f" {raw_c}") | models.Q(student__class_name__endswith=f"م{raw_c}") | models.Q(student__class_name__icontains=raw_c)
+                for hr_cls in teacher_classes:
+                    m = re.match(r'(\d+)م(\d+)', hr_cls)
+                    if m:
+                        lvl_digit = m.group(1)
+                        cls_digit = m.group(2)
+                        arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                        q_level = models.Q(student__academic_year=lvl_digit) | models.Q(student__academic_year__icontains=lvl_digit) | models.Q(student__academic_year__icontains=arb_lvl)
+
+                        # Add pattern matching for Arabic strings like "أولى متوسط 1"
+                        q_class = models.Q(student__class_name=cls_digit) | models.Q(student__class_name__endswith=f" {cls_digit}") | models.Q(student__class_name__endswith=f"م{cls_digit}") | models.Q(student__class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(student__class_name=hr_cls) | models.Q(student__class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(student__class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                        q_classes |= (q_level & q_class)
                     else:
-                        q_classes |= models.Q(student__class_name=cls)
+                        q_classes |= models.Q(student__class_name=hr_cls)
+
                 grades_qs = grades_qs.filter(q_classes)
 
             if teacher_subjects and not subject:
@@ -1845,6 +2124,30 @@ def get_gauss_data(request):
         'conclusion': conclusion
     }
     return JsonResponse(gauss_data)
+
+def rename_subject_ajax(request):
+    """Renames an imported subject globally in the Grade table to fix import typos"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'غير مصرح'})
+
+    # Must be director, superuser, or have access_analytics permission
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+
+    if not has_access:
+        return JsonResponse({'success': False, 'error': 'ليس لديك صلاحية لتعديل المواد'})
+
+    if request.method == 'POST':
+        old_name = request.POST.get('old_name')
+        new_name = request.POST.get('new_name')
+        if old_name and new_name:
+            from .models import Grade
+            Grade.objects.filter(subject=old_name).update(subject=new_name)
+            return JsonResponse({'success': True})
+        return JsonResponse({'success': False, 'error': 'بيانات مفقودة'})
+    return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
+
 
 def upload_grades_ajax(request):
     """Handles bulk uploading of multiple grade files with AJAX progress"""
