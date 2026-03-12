@@ -111,4 +111,6 @@ urlpatterns = [
     path('api/expert/run/', expert_api_views.api_expert_run, name='api_expert_run'),
     path('api/expert/data/', expert_api_views.api_expert_data, name='api_expert_data'),
     path('api/expert/generate_report/', expert_api_views.api_expert_generate_report, name='api_expert_generate_report'),
+    path('api/expert/available_years/', expert_api_views.api_expert_available_years, name='api_expert_available_years'),
+    path('api/expert/import_historical/', expert_api_views.api_import_historical_expert_data, name='api_import_historical_expert_data'),
 ]
