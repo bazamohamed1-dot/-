@@ -63,7 +63,15 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     // Ignore API calls and Auth calls (Network First or Custom Offline Logic handled by App)
-    if (url.pathname.includes('/api/') || url.pathname.includes('/auth/')) {
+    // Also ignore all main app navigation paths to prevent data reverting
+    if (url.pathname.includes('/api/') ||
+        url.pathname.includes('/auth/') ||
+        url.pathname.includes('/analytics/') ||
+        url.pathname.includes('/expert/') ||
+        url.pathname.includes('/hr/') ||
+        url.pathname.includes('/management/') ||
+        url.pathname.includes('/students/') ||
+        url.pathname.includes('/tasks/')) {
         return;
     }
 

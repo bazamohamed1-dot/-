@@ -329,6 +329,10 @@
                     <i class="fas fa-user-times me-1"></i> عرض الأصفار
                 </button>
 
+                <button class="btn btn-warning shadow fw-bold text-dark" onclick="showZerosModal('absentees')" style="white-space: nowrap;">
+                    <i class="fas fa-user-slash me-1"></i> الغيابات
+                </button>
+
 
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
                     <i class="fas fa-flask me-1"></i> مختبر التحليل المتقدم
@@ -490,12 +494,28 @@
             <div>
                 <h5 class="mb-1" style="color: #0f172a; margin: 0 0 5px 0;"><i class="fas fa-info-circle me-2" style="color:#38bdf8;"></i> نطاق التحليل الحالي</h5>
                 <p class="mb-0 text-muted" style="margin: 0; font-size: 0.95rem;">
-                    المستوى: <strong style="color: #38bdf8;">{{ request.GET.level|default:"الكل" }}</strong> |
-                    القسم: <strong style="color: #38bdf8;">{{ request.GET.class_name|default:"الكل" }}</strong> |
-                    الفصل: <strong style="color: #38bdf8;">{{ request.GET.term|default:"الكل" }}</strong>
+                    {% if request.GET.teacher_id %}
+                        أستاذ: <strong style="color: #38bdf8;" id="currentTeacherNameSpan">محدد</strong> |
+                        الفصل: <strong style="color: #38bdf8;">{{ request.GET.term|default:"الكل" }}</strong>
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const select = document.querySelector('select[name="teacher_id"]');
+                                if(select) {
+                                    const opt = select.options[select.selectedIndex];
+                                    if(opt) {
+                                        document.getElementById('currentTeacherNameSpan').innerText = opt.text;
+                                    }
+                                }
+                            });
+                        </script>
+                    {% else %}
+                        المستوى: <strong style="color: #38bdf8;">{{ request.GET.level|default:"الكل" }}</strong> |
+                        القسم: <strong style="color: #38bdf8;">{{ request.GET.class_name|default:"الكل" }}</strong> |
+                        الفصل: <strong style="color: #38bdf8;">{{ request.GET.term|default:"الكل" }}</strong>
+                    {% endif %}
                 </p>
             </div>
-            {% if request.GET.class_name or request.GET.level or request.GET.term %}
+            {% if request.GET.class_name or request.GET.level or request.GET.term or request.GET.teacher_id %}
             <a href="{% url 'analytics_dashboard' %}" class="btn btn-sm btn-outline-secondary" style="border-radius: 6px;">إعادة ضبط</a>
             {% endif %}
         </div>
@@ -593,6 +613,14 @@
     <div class="card col-md-12" style="flex: 1; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; background: #fff;">
         <h4 style="color: #334155; margin-bottom: 20px;"><i class="fas fa-chalkboard-teacher text-info"></i> مقارنة أداء الأساتذة</h4>
 
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="showAllTeachersComparison()" id="showAllTeachersBtn">
+                    <i class="fas fa-users"></i> عرض كل الأساتذة
+                </button>
+            </div>
+        </div>
+
         <!-- Multi-Teacher Selector for Comparison -->
         <div style="margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
             <label for="compareTeacherSelect" style="font-weight: bold; margin-bottom: 10px; display: block;">إضافة أستاذ للمقارنة:</label>
@@ -625,7 +653,7 @@
         </div>
 
         <div class="table-responsive">
-            <table class="table table-hover table-striped" style="direction: rtl;">
+            <table class="table table-hover table-striped" style="direction: rtl;" id="teacherComparisonTable">
                 <thead class="table-dark">
                     <tr>
                         <th>الأستاذ</th>
@@ -636,7 +664,7 @@
                 </thead>
                 <tbody>
                     {% for ts in local_stats.teacher_stats %}
-                    <tr>
+                    <tr class="teacher-row" data-teacher-name="{{ ts.teacher_name }}">
                         <td>{{ ts.teacher_name }}</td>
                         <td>{{ ts.total_tested }}</td>
                         <td>
@@ -646,7 +674,7 @@
                         </td>
                         <td>
                             <div class="progress" style="height: 20px; border-radius: 10px; background-color: #e2e8f0;">
-                                <div class="progress-bar {% if ts.success_pct >= 50 %}bg-success{% else %}bg-danger{% endif %}" role="progressbar" style="width: {{ ts.success_pct }}%;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ ts.success_pct }}%;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
                                     <span style="font-weight:bold; color:white; padding:0 5px;">{{ ts.success_pct }}%</span>
                                 </div>
                             </div>
@@ -1580,12 +1608,62 @@ async function deleteSubject(subjectName) {
             updateTeacherCharts();
         }
         select.value = "";
+
+        // Show the row in table if it exists
+        const row = document.querySelector(`.teacher-row[data-teacher-name="${tName}"]`);
+        if (row) {
+            row.style.display = '';
+        }
     };
 
     window.clearTeacherComparison = function() {
         comparisonTeachers = [];
         updateTeacherCharts();
+
+        // Hide all rows in table
+        document.querySelectorAll('.teacher-row').forEach(row => {
+            row.style.display = 'none';
+        });
+
+        document.getElementById('showAllTeachersBtn').style.display = 'inline-block';
     };
+
+    window.showAllTeachersComparison = function() {
+        document.querySelectorAll('.teacher-row').forEach(row => {
+            row.style.display = '';
+        });
+        document.getElementById('showAllTeachersBtn').style.display = 'none';
+    };
+
+    // On load, hide all rows if no teacher is pre-selected
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectedTeacherFilter = document.querySelector('select[name="teacher_id"]');
+        if (selectedTeacherFilter && selectedTeacherFilter.value) {
+            const selectedText = selectedTeacherFilter.options[selectedTeacherFilter.selectedIndex].text;
+            document.querySelectorAll('.teacher-row').forEach(row => {
+                if(row.getAttribute('data-teacher-name') === selectedText) {
+                    row.style.display = '';
+
+                    // Also auto-add to charts
+                    const select = document.getElementById('compareTeacherSelect');
+                    for(let i=0; i<select.options.length; i++) {
+                        if(select.options[i].value === selectedText) {
+                            select.selectedIndex = i;
+                            window.addTeacherToComparison();
+                            break;
+                        }
+                    }
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        } else {
+            // Default: hide all, require user to select
+            document.querySelectorAll('.teacher-row').forEach(row => {
+                row.style.display = 'none';
+            });
+        }
+    });
 </script>
 
 {% endblock %}

@@ -77,8 +77,11 @@ window.fetch = async (...args) => {
     // Ensure we are dealing with a URL string, Request object handled less gracefully here but standard usage passes string
     const url = resource instanceof Request ? resource.url : resource;
 
+    // Exclude specific endpoints from interception (like bulk import / file uploads)
+    const isExcluded = url.includes('/api/import_historical_expert_data/') || url.includes('/api/import_eleve/');
+
     // Only intercept mutations (POST, PUT, DELETE) to our API
-    if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && url.includes(API_BASE)) {
+    if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && url.includes(API_BASE) && !isExcluded) {
 
         // 1. Explicit Offline Check
         if (!navigator.onLine) {
@@ -92,7 +95,7 @@ window.fetch = async (...args) => {
         return await originalFetch(...args);
     } catch (error) {
         // Double check: if network error on mutation, queue it
-        if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && url.includes(API_BASE)) {
+        if (config && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method) && url.includes(API_BASE) && !isExcluded) {
              console.log("Network error interception triggered for:", url);
              return await queueRequest(url, config);
         }
