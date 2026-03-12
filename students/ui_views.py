@@ -1425,6 +1425,56 @@ def analytics_dashboard(request):
 
     local_stats = analyze_grades_locally(grades_qs, subject_filter=effective_subject, include_zeros=include_zeros)
 
+    # Re-calculate exact total students from Student model based on filters to account for students without grades yet
+    if local_stats is not None:
+        from .models import Student
+        import django.db.models as models
+        import re
+        student_qs = Student.objects.all()
+
+        if selected_teacher_id and teacher_classes:
+            q_classes_st = models.Q()
+            for hr_cls in teacher_classes:
+                m = re.match(r'(\d+)م(\d+)', hr_cls)
+                if m:
+                    lvl_digit = m.group(1)
+                    cls_digit = m.group(2)
+                    arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                    arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+
+                    q_level = models.Q(academic_year=lvl_digit) | models.Q(academic_year__icontains=lvl_digit) | models.Q(academic_year__icontains=arb_lvl)
+                    q_class = models.Q(class_name=cls_digit) | models.Q(class_name__endswith=f" {cls_digit}") | models.Q(class_name__endswith=f"م{cls_digit}") | models.Q(class_name__icontains=f"{lvl_digit}AM {cls_digit}") | models.Q(class_name=hr_cls) | models.Q(class_name__icontains=f"{arb_lvl} متوسط {cls_digit}") | models.Q(class_name__icontains=f"{arb_lvl} {cls_digit}")
+
+                    q_classes_st |= (q_level & q_class)
+                else:
+                    q_classes_st |= models.Q(class_name=hr_cls)
+            student_qs = student_qs.filter(q_classes_st)
+
+        if selected_level:
+            student_qs = student_qs.filter(
+                models.Q(academic_year=selected_level) |
+                models.Q(academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+            )
+
+        if selected_class:
+            from .analytics_utils import unformat_class_name
+            raw_class = unformat_class_name(selected_class)
+            if raw_class and raw_class.isdigit():
+                student_qs = student_qs.filter(
+                    models.Q(class_name=selected_class) |
+                    models.Q(class_name=raw_class) |
+                    models.Q(class_name__endswith=f" {raw_class}") |
+                    models.Q(class_name__endswith=f"م{raw_class}") |
+                    models.Q(class_name__icontains=raw_class)
+                )
+            else:
+                student_qs = student_qs.filter(class_name=selected_class)
+
+        local_stats['total_students'] = student_qs.count()
+        local_stats['total_males'] = student_qs.filter(gender='ذكر').count()
+        local_stats['total_females'] = student_qs.filter(gender='أنثى').count()
+        local_stats['total_repeaters'] = student_qs.filter(is_repeater=True).count()
+
     token_cost = 0
     if local_stats and local_stats.get('markdown_data'):
         request.session['analytics_markdown'] = local_stats['markdown_data']

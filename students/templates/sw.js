@@ -1,5 +1,5 @@
 {% load static %}
-const CACHE_NAME = 'school-pwa-v3'; // Bump version
+const CACHE_NAME = 'school-pwa-v5'; // Bump version
 const STATIC_ASSETS = [
     '/canteen/',
     '/canteen/dashboard/',
@@ -51,6 +51,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     // Ignore non-HTTP(S) schemes (like chrome-extension://) to prevent Cache API TypeError
     if (!event.request.url.startsWith('http')) {
+        return;
+    }
+
+    // 0. Bypass caching for Analytics (always need fresh data from server)
+    if (event.request.url.includes('/analytics/')) {
+        event.respondWith(fetch(event.request));
         return;
     }
 

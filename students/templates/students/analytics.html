@@ -6,6 +6,34 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<div class="row mb-4 px-3">
+    <div class="col-12">
+        <ul class="nav nav-pills nav-fill bg-white shadow-sm rounded p-1" style="border: 1px solid #e2e8f0;">
+            <li class="nav-item">
+                <a class="nav-link active" href="{% url 'analytics_dashboard' %}" style="font-weight: bold; border-radius: 8px; background-color: #3b82f6; color: white;">
+                    <i class="fas fa-chart-line me-1"></i> Executive Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'advanced_analytics_view' %}" style="font-weight: bold; border-radius: 8px; color: #475569;">
+                    <i class="fas fa-flask me-1"></i> مختبر التحليل المتقدم
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'statistical_tests_view' %}" style="font-weight: bold; border-radius: 8px; color: #475569;">
+                    <i class="fas fa-balance-scale me-1"></i> الاختبارات الاحصائية
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'expert_analysis_view' %}" style="font-weight: bold; border-radius: 8px; color: #475569;">
+                    <i class="fas fa-brain me-1"></i> تحليل خبراء التربية
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+
 <style>
     @media print {
         /* Hide everything by default in print mode */
@@ -252,9 +280,7 @@
                 <button class="btn btn-danger shadow fw-bold" onclick="showZerosModal('zeros')" style="white-space: nowrap;">
                     <i class="fas fa-user-times me-1"></i> عرض الأصفار
                 </button>
-                <button class="btn btn-warning shadow fw-bold" onclick="showZerosModal('absences')" style="white-space: nowrap; color: #0f172a;">
-                    <i class="fas fa-user-slash me-1"></i> عرض الغائبين
-                </button>
+
 
                 <a href="{% url 'advanced_analytics_view' %}" class="btn shadow fw-bold" style="background-color: #facc15; color: #0f172a; border: 2px solid #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.5) !important; white-space: nowrap;">
                     <i class="fas fa-flask me-1"></i> مختبر التحليل المتقدم
@@ -303,7 +329,11 @@
                         classesToShow = classesToShow.concat(arr);
                     });
                     // If a teacher is selected, allow class selection even without level selected
-                    classFilter.disabled = true;
+                    if (teacherSelected) {
+                        classFilter.disabled = false;
+                    } else {
+                        classFilter.disabled = true;
+                    }
                 }
 
                 // Remove duplicates and sort logically
