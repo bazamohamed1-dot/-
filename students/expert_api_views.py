@@ -174,111 +174,24 @@ def api_expert_available_years(request):
 def api_import_historical_expert_data(request):
     """
     Imports historical Excel files with previous years data.
-    Format Example (Filename or Row 5): "تحليل النتائج الفصل الثالث 2024-2025-أولى متوسط 01.xlsx"
-    Subjects Example: "الرياضيات ف1", "الرياضيات ف2"
+    Supports bulk import (multiple files).
     """
     if not request.user.profile.has_perm('access_analytics'):
         return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
 
-    if request.method == 'POST' and request.FILES.get('file'):
-        file = request.FILES['file']
-        filename = file.name
+    if request.method == 'POST':
+        files = request.FILES.getlist('files') or request.FILES.getlist('file')
+        if not files:
+            return JsonResponse({'status': 'error', 'message': 'لم يتم العثور على ملفات للرفع.'}, status=400)
 
         from .import_utils import extract_rows_from_file
         from .models import Student, Grade
         import re
 
-        rows = list(extract_rows_from_file(file, override_filename=filename))
-
-        # 1. Extract Metadata (Year, Term, Class)
-        # Regex to find year (e.g. 2024-2025 or 2024/2025)
-        year_pattern = r'20\d{2}[-/]20\d{2}'
-        # Regex to find Class (e.g. أولى متوسط 01)
-        class_pattern = r'(أولى|ثانية|ثالثة|رابعة)\s*متوسط\s*\d+'
-
-        detected_year = None
-        detected_class = None
-
-        # Try filename first
-        m_year = re.search(year_pattern, filename)
-        if m_year: detected_year = m_year.group(0).replace('/', '-')
-        m_class = re.search(class_pattern, filename)
-        if m_class: detected_class = m_class.group(0)
-
-        # Try row 5 (index 4) or first 10 rows if missing
-        if not detected_year or not detected_class:
-            for row in rows[:10]:
-                row_text = " ".join([str(cell) for cell in row if cell])
-                if not detected_year:
-                    m = re.search(year_pattern, row_text)
-                    if m: detected_year = m.group(0).replace('/', '-')
-                if not detected_class:
-                    m = re.search(class_pattern, row_text)
-                    if m: detected_class = m.group(0)
-
-        if not detected_year:
-            return JsonResponse({'status': 'error', 'message': 'لم يتم العثور على السنة الدراسية في الملف (مثل 2024-2025).'}, status=400)
-
-        # Detect Level from Class
-        detected_level = None
-        if detected_class:
-            if 'أولى' in detected_class: detected_level = 'أولى متوسط'
-            elif 'ثانية' in detected_class: detected_level = 'ثانية متوسط'
-            elif 'ثالثة' in detected_class: detected_level = 'ثالثة متوسط'
-            elif 'رابعة' in detected_class: detected_level = 'رابعة متوسط'
-
-        # 2. Find Header Row and Subject Columns
-        header_row_idx = -1
-        subjects_map = {} # {col_idx: (subject_name, term)}
-
-        # Terms mapping
-        term_map = {
-            'ف1': 'الفصل الأول', 'ف 1': 'الفصل الأول',
-            'ف2': 'الفصل الثاني', 'ف 2': 'الفصل الثاني',
-            'ف3': 'الفصل الثالث', 'ف 3': 'الفصل الثالث'
-        }
-
-        for i, row in enumerate(rows[:20]):
-            row_text = " ".join([str(cell) for cell in row if cell])
-            # Check if this row looks like a header (contains اللقب or الاسم)
-            if 'اللقب' in row_text or 'الاسم' in row_text or 'الرقم' in row_text:
-                header_row_idx = i
-
-                # Parse subject columns like "الرياضيات ف1"
-                for col_idx, cell in enumerate(row):
-                    if not cell: continue
-                    val = str(cell).strip()
-                    # Skip common non-subject headers
-                    if any(x in val for x in ['اللقب', 'الاسم', 'تاريخ', 'الرقم', 'رقم', 'ملاحظة', 'المعدل']):
-                        continue
-
-                    # Extract subject and term
-                    # e.g., "الرياضيات ف1" -> subject="الرياضيات", term="ف1"
-                    m = re.search(r'(.*?)\s*(ف\s*[123])$', val)
-                    if m:
-                        subj = m.group(1).strip()
-                        raw_term = m.group(2).strip().replace(' ', '')
-                        db_term = term_map.get(raw_term, 'الفصل الأول')
-                        subjects_map[col_idx] = (subj, db_term)
-                    else:
-                        # If no explicit term, fallback to "الفصل الأول" or we can skip.
-                        # Usually the file has it. We'll add it to الفصل الأول to be safe.
-                        subjects_map[col_idx] = (val, 'الفصل الأول')
-                break
-
-        if header_row_idx == -1:
-            return JsonResponse({'status': 'error', 'message': 'لم يتم العثور على عناوين الجدول (اللقب، الاسم).'}, status=400)
-
-        if not subjects_map:
-            return JsonResponse({'status': 'error', 'message': 'لم يتم العثور على أعمدة المواد بصيغة "المادة ف1" الخ.'}, status=400)
-
-        # 3. Process Students and Grades
-        students_processed = 0
-        grades_added = 0
-
-        # Find indices for student ID/Name
-        headers = [str(x).strip() if x else '' for x in rows[header_row_idx]]
-
+        total_students_processed = 0
+        total_grades_added = 0
+        files_processed = 0
+        errors = []
 
         def fuzzy_match_header(header, possible_matches):
             h = str(header).strip()
@@ -287,69 +200,158 @@ def api_import_historical_expert_data(request):
                     return 100
             return 0
 
-        # fuzzy match headers
-        id_col = -1
-        ln_col = -1
-        fn_col = -1
-        for idx, h in enumerate(headers):
-            if fuzzy_match_header(h, ['الرقم', 'رقم تسلسلي', 'رقم وطني']) > 80: id_col = idx
-            if fuzzy_match_header(h, ['اللقب']) > 80: ln_col = idx
-            if fuzzy_match_header(h, ['الاسم']) > 80: fn_col = idx
+        for file in files:
+            try:
+                filename = file.name
+                rows = list(extract_rows_from_file(file, override_filename=filename))
 
-        for row in rows[header_row_idx+1:]:
-            if not any(row): continue
+                # 1. Extract Metadata (Year, Term, Class)
+                year_pattern = r'20\d{2}[-/]20\d{2}'
+                class_pattern = r'(أولى|ثانية|ثالثة|رابعة)\s*متوسط\s*\d+'
 
-            s_id = str(row[id_col]).strip() if id_col != -1 and len(row) > id_col and row[id_col] else None
-            last_name = str(row[ln_col]).strip() if ln_col != -1 and len(row) > ln_col and row[ln_col] else ""
-            first_name = str(row[fn_col]).strip() if fn_col != -1 and len(row) > fn_col and row[fn_col] else ""
+                detected_year = None
+                detected_class = None
 
-            if not last_name and not first_name: continue
+                # Try filename first
+                m_year = re.search(year_pattern, filename)
+                if m_year: detected_year = m_year.group(0).replace('/', '-')
+                m_class = re.search(class_pattern, filename)
+                if m_class: detected_class = m_class.group(0)
 
-            # Find or Create Student
-            # For historical data, we match by name if ID is missing or invalid
-            student = None
-            if s_id and s_id.isdigit():
-                student = Student.objects.filter(student_id_number=s_id).first()
-            if not student:
-                student = Student.objects.filter(last_name=last_name, first_name=first_name).first()
+                # Try first 10 rows if missing
+                if not detected_year or not detected_class:
+                    for row in rows[:10]:
+                        row_text = " ".join([str(cell) for cell in row if cell])
+                        if not detected_year:
+                            m = re.search(year_pattern, row_text)
+                            if m: detected_year = m.group(0).replace('/', '-')
+                        if not detected_class:
+                            m = re.search(class_pattern, row_text)
+                            if m: detected_class = m.group(0)
 
-            if not student:
-                # Create historical student
-                import random
-                fake_id = s_id if s_id else str(random.randint(10000000, 99999999))
-                student = Student.objects.create(
-                    student_id_number=fake_id,
-                    last_name=last_name,
-                    first_name=first_name,
-                    date_of_birth='2000-01-01', # Default value required by model
-                    enrollment_date='2000-01-01', # Default value required by model
-                    academic_year=detected_level or 'أولى متوسط',
-                    class_name=detected_class or 'أولى 1'
-                )
+                if not detected_year:
+                    errors.append(f"الملف {filename}: لم يتم العثور على السنة الدراسية.")
+                    continue
 
-            students_processed += 1
+                detected_level = None
+                if detected_class:
+                    if 'أولى' in detected_class: detected_level = 'أولى متوسط'
+                    elif 'ثانية' in detected_class: detected_level = 'ثانية متوسط'
+                    elif 'ثالثة' in detected_class: detected_level = 'ثالثة متوسط'
+                    elif 'رابعة' in detected_class: detected_level = 'رابعة متوسط'
 
-            # Add Grades
-            for col_idx, (subj, term) in subjects_map.items():
-                if col_idx < len(row):
-                    val = row[col_idx]
-                    try:
-                        score = float(str(val).replace(',', '.'))
-                        if 0 <= score <= 20:
-                            Grade.objects.update_or_create(
-                                student=student,
-                                subject=subj,
-                                term=term,
-                                academic_year=detected_year,
-                                defaults={'score': score}
-                            )
-                            grades_added += 1
-                    except (ValueError, TypeError):
-                        pass
+                # 2. Find Header Row and Subject Columns
+                header_row_idx = -1
+                subjects_map = {}
 
-        return JsonResponse({
-            'status': 'success',
-            'message': f'تم استيراد {grades_added} علامة لـ {students_processed} تلميذ عن السنة {detected_year}.'
-        })
+                term_map = {
+                    'ف1': 'الفصل الأول', 'ف 1': 'الفصل الأول',
+                    'ف2': 'الفصل الثاني', 'ف 2': 'الفصل الثاني',
+                    'ف3': 'الفصل الثالث', 'ف 3': 'الفصل الثالث'
+                }
+
+                for i, row in enumerate(rows[:20]):
+                    row_text = " ".join([str(cell) for cell in row if cell])
+                    if 'اللقب' in row_text or 'الاسم' in row_text or 'الرقم' in row_text:
+                        header_row_idx = i
+                        for col_idx, cell in enumerate(row):
+                            if not cell: continue
+                            val = str(cell).strip()
+                            if any(x in val for x in ['اللقب', 'الاسم', 'تاريخ', 'الرقم', 'رقم', 'ملاحظة', 'المعدل']):
+                                continue
+
+                            m = re.search(r'(.*?)\s*(ف\s*[123])$', val)
+                            if m:
+                                subj = m.group(1).strip()
+                                raw_term = m.group(2).strip().replace(' ', '')
+                                db_term = term_map.get(raw_term, 'الفصل الأول')
+                                subjects_map[col_idx] = (subj, db_term)
+                            else:
+                                subjects_map[col_idx] = (val, 'الفصل الأول')
+                        break
+
+                if header_row_idx == -1:
+                    errors.append(f"الملف {filename}: لم يتم العثور على عناوين الجدول.")
+                    continue
+
+                if not subjects_map:
+                    errors.append(f"الملف {filename}: لم يتم العثور على أعمدة المواد.")
+                    continue
+
+                # 3. Process Students and Grades
+                headers = [str(x).strip() if x else '' for x in rows[header_row_idx]]
+
+                id_col = -1
+                ln_col = -1
+                fn_col = -1
+                for idx, h in enumerate(headers):
+                    if fuzzy_match_header(h, ['الرقم', 'رقم تسلسلي', 'رقم وطني']) > 80: id_col = idx
+                    if fuzzy_match_header(h, ['اللقب']) > 80: ln_col = idx
+                    if fuzzy_match_header(h, ['الاسم']) > 80: fn_col = idx
+
+                file_students = 0
+                for row in rows[header_row_idx+1:]:
+                    if not any(row): continue
+
+                    s_id = str(row[id_col]).strip() if id_col != -1 and len(row) > id_col and row[id_col] else None
+                    last_name = str(row[ln_col]).strip() if ln_col != -1 and len(row) > ln_col and row[ln_col] else ""
+                    first_name = str(row[fn_col]).strip() if fn_col != -1 and len(row) > fn_col and row[fn_col] else ""
+
+                    if not last_name and not first_name: continue
+
+                    student = None
+                    if s_id and s_id.isdigit():
+                        student = Student.objects.filter(student_id_number=s_id).first()
+                    if not student:
+                        student = Student.objects.filter(last_name=last_name, first_name=first_name).first()
+
+                    if not student:
+                        import random
+                        fake_id = s_id if s_id else str(random.randint(10000000, 99999999))
+                        student = Student.objects.create(
+                            student_id_number=fake_id,
+                            last_name=last_name,
+                            first_name=first_name,
+                            date_of_birth='2000-01-01',
+                            enrollment_date='2000-01-01',
+                            academic_year=detected_level or 'أولى متوسط',
+                            class_name=detected_class or 'أولى 1'
+                        )
+
+                    file_students += 1
+
+                    for col_idx, (subj, term) in subjects_map.items():
+                        if col_idx < len(row):
+                            val = row[col_idx]
+                            try:
+                                score = float(str(val).replace(',', '.'))
+                                if 0 <= score <= 20:
+                                    Grade.objects.update_or_create(
+                                        student=student,
+                                        subject=subj,
+                                        term=term,
+                                        academic_year=detected_year,
+                                        defaults={'score': score}
+                                    )
+                                    total_grades_added += 1
+                            except (ValueError, TypeError):
+                                pass
+
+                if file_students > 0:
+                    total_students_processed += file_students
+                    files_processed += 1
+                else:
+                    errors.append(f"الملف {filename}: لم يتم العثور على بيانات تلاميذ صالحة.")
+
+            except Exception as e:
+                errors.append(f"الملف {filename}: حدث خطأ داخلي أثناء المعالجة ({str(e)})")
+
+        if files_processed > 0:
+            msg = f"تم استيراد {total_grades_added} علامة لـ {total_students_processed} تلميذ بنجاح من {files_processed} ملف(ات)."
+            if errors:
+                msg += " \nملاحظة: " + " | ".join(errors)
+            return JsonResponse({'status': 'success', 'message': msg})
+        else:
+            return JsonResponse({'status': 'error', 'message': "فشل الاستيراد.\n" + " \n".join(errors)}, status=400)
 
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)

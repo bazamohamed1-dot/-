@@ -308,11 +308,6 @@
                     <i class="fas fa-chart-line"></i> لوحة تحليل النتائج (AI)
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="{% url 'expert_analysis_view' %}" class="nav-link {% if 'expert' in request.path %}active{% endif %}">
-                    <i class="fas fa-brain text-warning"></i> تحليل خبراء التربية
-                </a>
-            </li>
             {% endif %}
             {% if request.user|has_perm:'access_management' %}
             <li class="nav-item">
