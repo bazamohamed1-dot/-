@@ -493,12 +493,23 @@
 
                 const btn = tr.querySelector('.btn-save-row');
 
-                // Compare with original data to avoid saving unchanged rows
+                // Clean data for robust comparison (sort classes arrays)
+                const cleanAssignments = assignments.map(a => ({
+                    subject: a.subject,
+                    classes: [...a.classes].sort()
+                })).sort((a,b) => a.subject.localeCompare(b.subject));
+
                 const origDataRaw = tr.getAttribute('data-orig-assignments');
                 let origData = [];
-                try { origData = JSON.parse(origDataRaw || '[]'); } catch(e){}
+                try {
+                    origData = JSON.parse(origDataRaw || '[]');
+                    origData = origData.map(a => ({
+                        subject: a.subject,
+                        classes: [...a.classes].sort()
+                    })).sort((a,b) => a.subject.localeCompare(b.subject));
+                } catch(e){}
 
-                if (JSON.stringify(assignments) === JSON.stringify(origData)) {
+                if (JSON.stringify(cleanAssignments) === JSON.stringify(origData)) {
                     continue; // Skip if no changes
                 }
 
@@ -521,6 +532,8 @@
                         if (btn) btn.innerHTML = '<i class="fas fa-exclamation-triangle text-danger"></i>';
                     } else {
                         if (btn) btn.innerHTML = '<i class="fas fa-check text-success"></i>';
+                        // Update original data tracking so consecutive saves work
+                        tr.setAttribute('data-orig-assignments', JSON.stringify(assignments));
                     }
                 } catch (e) {
                     console.error('Fetch error:', e);
@@ -530,10 +543,18 @@
 
             if (!hasChanges) {
                 alert("لم يتم إجراء أي تعديلات للحفظ.");
+                // Re-enable buttons if no changes were made so user can try again without refresh
+                rows.forEach(r => {
+                    const b = r.querySelector('.btn-save-row');
+                    if (b) {
+                        b.disabled = false;
+                        if (b.innerHTML.includes('spinner')) b.innerHTML = 'حفظ';
+                    }
+                });
             } else {
                 alert("تم حفظ التعديلات بنجاح!");
+                toggleEditAssignments();
             }
-            toggleEditAssignments();
         }
 
         processRows();
