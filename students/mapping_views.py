@@ -24,6 +24,7 @@ def class_mapping_view(request):
 
     if request.method == 'POST' and request.GET.get('action') == 'quick_save':
         emp_id = request.POST.get('employee_id')
+        from django.db import transaction
         try:
             import json
             emp = Employee.objects.get(id=emp_id)
@@ -36,29 +37,36 @@ def class_mapping_view(request):
                     # Filter out completely empty blocks
                     valid_assignments = [a for a in assignments_data if a.get('subject', '').strip() or a.get('classes', [])]
 
-                    # Delete old assignments
-                    TeacherAssignment.objects.filter(teacher=emp).delete()
+                    # Wrap inside a transaction to prevent database locking errors during high concurrency
+                    with transaction.atomic():
+                        # Delete old assignments
+                        TeacherAssignment.objects.filter(teacher=emp).delete()
 
-                    if valid_assignments:
-                        # Update main subject to the first valid assignment's subject
-                        main_subject = valid_assignments[0].get('subject', '').strip()
-                        if main_subject:
-                            emp.subject = main_subject
+                        if valid_assignments:
+                            # Update main subject to the first valid assignment's subject
+                            main_subject = valid_assignments[0].get('subject', '').strip()
+                            if main_subject:
+                                emp.subject = main_subject
+                                emp.save(update_fields=['subject'])
+
+                            # Bulk create all valid assignments
+                            new_assignments = []
+                            for assign_data in valid_assignments:
+                                subject = assign_data.get('subject', '').strip()
+                                classes = assign_data.get('classes', [])
+
+                                new_assignments.append(
+                                    TeacherAssignment(
+                                        teacher=emp,
+                                        subject=subject,
+                                        classes=classes
+                                    )
+                                )
+                            TeacherAssignment.objects.bulk_create(new_assignments)
+                        else:
+                            # If no valid assignments, clear main subject
+                            emp.subject = ""
                             emp.save(update_fields=['subject'])
-
-                        for assign_data in valid_assignments:
-                            subject = assign_data.get('subject', '').strip()
-                            classes = assign_data.get('classes', [])
-
-                            TeacherAssignment.objects.create(
-                                teacher=emp,
-                                subject=subject,
-                                classes=classes
-                            )
-                    else:
-                        # If no valid assignments, clear main subject
-                        emp.subject = ""
-                        emp.save(update_fields=['subject'])
 
 
             return JsonResponse({'status': 'success'})

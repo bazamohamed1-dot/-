@@ -98,3 +98,18 @@ class TeacherAlias(models.Model):
 
     def __str__(self):
         return f"{self.alias_name} -> {self.employee.full_name}"
+
+class SubjectAlias(models.Model):
+    """
+    Maps various subject names found in imported files (e.g., "الاعلام الآلي", "تربية فنية")
+    to the standardized canonical subject name used in the system (e.g., "المعلوماتية", "التربية التشكيلية").
+    """
+    alias = models.CharField(max_length=100, unique=True, verbose_name="الاسم المستعار (من الملف)")
+    canonical_name = models.CharField(max_length=100, verbose_name="المادة الموافقة (في القاعدة)")
+
+    class Meta:
+        verbose_name = "تعيين اسم المادة"
+        verbose_name_plural = "تعيينات أسماء المواد"
+
+    def __str__(self):
+        return f"{self.alias} -> {self.canonical_name}"
