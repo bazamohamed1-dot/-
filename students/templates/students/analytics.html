@@ -442,80 +442,12 @@
             });
 
             function handleTeacherFilterChange(selectElement) {
-                if (selectElement.value !== "") {
-                    document.getElementById('levelFilter').value = "";
-                    document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
-                    // Don't clear subject filter immediately, wait for backend to process
-                }
                 document.getElementById('analyticsFilterForm').submit();
             }
 
             function handleSubjectFilterChange(selectElement) {
-                // If a subject is selected, disable/hide teachers that don't teach this subject
-                const subj = selectElement.value;
-                const teacherFilter = document.getElementById('teacherFilter');
-
-                if (subj) {
-                    let firstValidTeacherFound = false;
-                    let currentSelectedIsValid = false;
-
-                    for (let i = 0; i < teacherFilter.options.length; i++) {
-                        let opt = teacherFilter.options[i];
-                        if (opt.value === "") continue; // Skip 'All' option
-
-                        const tSubj = opt.getAttribute('data-subject');
-                        if (tSubj && tSubj !== '/' && tSubj !== subj) {
-                            opt.style.display = 'none';
-                            opt.disabled = true;
-                        } else {
-                            opt.style.display = 'block';
-                            opt.disabled = false;
-                            if (!firstValidTeacherFound) firstValidTeacherFound = true;
-                            if (opt.selected) currentSelectedIsValid = true;
-                        }
-                    }
-
-                    // If the currently selected teacher does not teach the new subject, clear the teacher filter
-                    if (!currentSelectedIsValid && teacherFilter.value !== "") {
-                        teacherFilter.value = "";
-                    }
-                } else {
-                    // Reset all teachers
-                    for (let i = 0; i < teacherFilter.options.length; i++) {
-                        teacherFilter.options[i].style.display = 'block';
-                        teacherFilter.options[i].disabled = false;
-                    }
-                }
-
                 document.getElementById('analyticsFilterForm').submit();
             }
-
-            // Run subject check on load without triggering form submission
-            document.addEventListener('DOMContentLoaded', () => {
-                const subjectFilter = document.getElementById('subjectFilter');
-                const teacherFilter = document.getElementById('teacherFilter');
-                const subj = subjectFilter.value;
-                if (subj) {
-                    let currentSelectedIsValid = false;
-                    for (let i = 0; i < teacherFilter.options.length; i++) {
-                        let opt = teacherFilter.options[i];
-                        if (opt.value === "") continue;
-
-                        const tSubj = opt.getAttribute('data-subject');
-                        if (tSubj && tSubj !== '/' && tSubj !== subj) {
-                            opt.style.display = 'none';
-                            opt.disabled = true;
-                        } else {
-                            opt.style.display = 'block';
-                            opt.disabled = false;
-                            if (opt.selected) currentSelectedIsValid = true;
-                        }
-                    }
-                    if (!currentSelectedIsValid && teacherFilter.value !== "") {
-                        teacherFilter.value = "";
-                    }
-                }
-            });
 
             function toggleChartFullscreen(container) {
                 if (!document.fullscreenElement) {
@@ -1165,7 +1097,7 @@
             <select id="teacherSelect" class="form-select" onchange="loadTeacherAnalyticsAssignment(this.value)">
                 <option value="">-- اختر أستاذاً --</option>
                 {% for t in teachers %}
-                <option value="{{ t.id }}" data-assignments='{{ t.analytics_assignments|safe_json|escapejs }}' data-name="{{ t.last_name }} {{ t.first_name }}">{{ t.last_name }} {{ t.first_name }}</option>
+                <option value="{{ t.id }}" data-assignments='{{ t.analytics_assignments|safe_json|escapejs }}' data-hr-assignments='{{ t|get_assignments_data|escapejs }}' data-name="{{ t.last_name }} {{ t.first_name }}">{{ t.last_name }} {{ t.first_name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -1209,11 +1141,30 @@
             assignments = JSON.parse(opt.getAttribute('data-assignments') || '[]');
         } catch(e) {}
 
+        let hrAssignments = [];
+        try {
+            hrAssignments = JSON.parse(opt.getAttribute('data-hr-assignments') || '[]');
+        } catch(e) {}
+
         const container = document.getElementById('analyticsAssignmentBlocksContainer');
         container.innerHTML = '';
 
         if (assignments.length === 0) {
-            addAnalyticsAssignmentBlock();
+            // Default to HR assigned classes, but empty subject as requested
+            let defaultClasses = [];
+            hrAssignments.forEach(ha => {
+                defaultClasses = defaultClasses.concat(ha.classes);
+            });
+            defaultClasses = [...new Set(defaultClasses)];
+
+            // Map HR full names to "1م1" format
+            defaultClasses = defaultClasses.map(c => {
+                 let m = c.match(/(\d+)\s*متوسط\s*(\d+)/);
+                 if (m) return `${m[1]}م${m[2]}`;
+                 return c;
+            });
+
+            addAnalyticsAssignmentBlock('', defaultClasses);
         } else {
             assignments.forEach(a => addAnalyticsAssignmentBlock(a.subject, a.classes));
         }
@@ -1231,7 +1182,7 @@
         let flatClasses = [];
         Object.values(allGlobalClasses).forEach(arr => flatClasses = flatClasses.concat(arr));
 
-        // Remove duplicates and map to format like "1م1" if needed
+        // Remove duplicates and map to format like "1م1"
         let cleanGlobal = [...new Set(flatClasses)].map(c => {
              let m = c.match(/(\d+)\s*متوسط\s*(\d+)/);
              if (m) return `${m[1]}م${m[2]}`;
