@@ -54,14 +54,22 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 0. Bypass caching for Analytics (always need fresh data from server)
-    if (event.request.url.includes('/analytics/')) {
-        event.respondWith(fetch(event.request));
+    // 0. Bypass caching for Analytics and dynamic views (always need fresh data from server)
+    if (event.request.url.includes('/analytics/') || event.request.url.includes('/hr/') || event.request.url.includes('/mapping/')) {
+        // To be extra safe, send no-cache headers in fetch
+        event.respondWith(
+            fetch(event.request, { cache: "no-store" })
+        );
         return;
     }
 
     // 1. Handle Navigation Requests (HTML Pages)
     if (event.request.mode === 'navigate') {
+        if (event.request.url.includes('/hr/') || event.request.url.includes('/analytics/')) {
+            event.respondWith(fetch(event.request, { cache: "no-store" }));
+            return;
+        }
+
         event.respondWith(
             fetch(event.request)
                 .then((response) => {
@@ -92,6 +100,12 @@ self.addEventListener('fetch', (event) => {
     // 2. Handle GET API Requests (Data) - Network First, Cache Fallback
     // This ensures we always try to get fresh data (like student lists) but fallback if offline.
     if (event.request.url.includes('/api/') || event.request.url.includes('/canteen/')) {
+         // Do not cache API endpoints or dynamic dashboards with POST dependencies
+         if (event.request.url.includes('/hr/') || event.request.url.includes('/analytics/')) {
+              event.respondWith(fetch(event.request));
+              return;
+         }
+
          event.respondWith(
             fetch(event.request)
                 .then((response) => {

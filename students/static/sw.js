@@ -69,9 +69,13 @@ self.addEventListener('fetch', (event) => {
         url.pathname.includes('/analytics/') ||
         url.pathname.includes('/expert/') ||
         url.pathname.includes('/hr/') ||
+        url.pathname.includes('/mapping/') ||
         url.pathname.includes('/management/') ||
         url.pathname.includes('/students/') ||
         url.pathname.includes('/tasks/')) {
+
+        // Ensure no cache headers are sent for these dynamic paths to fully bypass service worker cache
+        event.respondWith(fetch(event.request, { cache: "no-store" }));
         return;
     }
 

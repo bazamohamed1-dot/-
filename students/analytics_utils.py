@@ -168,7 +168,7 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
 
         # Sorted students list (Ranking Table)
         # Average per student across all terms in the queryset
-        student_ranking_df = general_avg_df.groupby(['student_name', 'student__class_name'])['score'].mean().reset_index()
+        student_ranking_df = general_avg_df.groupby(['student_name', 'student__class_name', 'student__academic_year'])['score'].mean().reset_index()
         student_ranking_df = student_ranking_df.sort_values(by='score', ascending=False)
         student_ranking_df['score'] = student_ranking_df['score'].round(2)
 
