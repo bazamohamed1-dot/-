@@ -265,9 +265,13 @@ def api_import_historical_expert_data(request):
                                 subj = m.group(1).strip()
                                 raw_term = m.group(2).strip().replace(' ', '')
                                 db_term = term_map.get(raw_term, 'الفصل الأول')
+                                from .import_utils import standardize_subject_name
+                                subj = standardize_subject_name(subj)
                                 subjects_map[col_idx] = (subj, db_term)
                             else:
-                                subjects_map[col_idx] = (val, 'الفصل الأول')
+                                from .import_utils import standardize_subject_name
+                                subj = standardize_subject_name(val)
+                                subjects_map[col_idx] = (subj, 'الفصل الأول')
                         break
 
                 if header_row_idx == -1:
@@ -308,6 +312,11 @@ def api_import_historical_expert_data(request):
                     if not student:
                         import random
                         fake_id = s_id if s_id else str(random.randint(10000000, 99999999))
+
+                        # Use generate_class_code to ensure uniform class_code creation
+                        temp_student = Student(academic_year=detected_level or 'أولى متوسط', class_name=detected_class or 'أولى 1')
+                        class_code = temp_student.generate_class_code()
+
                         student = Student.objects.create(
                             student_id_number=fake_id,
                             last_name=last_name,
@@ -315,11 +324,13 @@ def api_import_historical_expert_data(request):
                             date_of_birth='2000-01-01',
                             enrollment_date='2000-01-01',
                             academic_year=detected_level or 'أولى متوسط',
-                            class_name=detected_class or 'أولى 1'
+                            class_name=detected_class or 'أولى 1',
+                            class_code=class_code
                         )
 
                     file_students += 1
 
+                    # Store multiple terms in the same loop if they exist across columns
                     for col_idx, (subj, term) in subjects_map.items():
                         if col_idx < len(row):
                             val = row[col_idx]

@@ -26,6 +26,7 @@ class Student(models.Model):
     place_of_birth = models.CharField(max_length=100, verbose_name="مكان الميلاد")
     academic_year = models.CharField(max_length=20, verbose_name="المستوى") # مثال: أولى
     class_name = models.CharField(max_length=20, verbose_name="القسم") # مثال: أولى 1
+    class_code = models.CharField(max_length=20, null=True, blank=True, verbose_name="رمز القسم") # مثال: 1م1
     is_repeater = models.BooleanField(default=False, verbose_name="معيد")
     attendance_system = models.CharField(max_length=50, verbose_name="نظام التمدرس")
     enrollment_number = models.CharField(max_length=50, verbose_name="رقم القيد")
@@ -41,7 +42,33 @@ class Student(models.Model):
     def full_name(self):
         return f"{self.last_name} {self.first_name}"
 
+    def generate_class_code(self):
+        import re
+        level_str = self.academic_year or ""
+        class_str = self.class_name or ""
+
+        # Already formatted?
+        if class_str and re.match(r'^\d+م\d+$', class_str):
+            return class_str
+
+        level_num = ""
+        if "1" in level_str or "أولى" in level_str: level_num = "1"
+        elif "2" in level_str or "ثانية" in level_str: level_num = "2"
+        elif "3" in level_str or "ثالثة" in level_str: level_num = "3"
+        elif "4" in level_str or "رابعة" in level_str: level_num = "4"
+
+        class_num_match = re.search(r'\d+', class_str)
+        class_num = class_num_match.group(0) if class_num_match else ""
+
+        if level_num and class_num:
+            return f"{level_num}م{class_num}"
+        return class_str # Fallback to original if can't parse
+
     def save(self, *args, **kwargs):
+        # Auto-generate class code
+        if not self.class_code or self.class_code == "":
+            self.class_code = self.generate_class_code()
+
         # Handle Force Photo Replacement and Renaming
         if self.pk:
             try:
