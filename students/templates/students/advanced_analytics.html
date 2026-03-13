@@ -146,6 +146,21 @@
                 <i class="fas fa-filter text-primary"></i> <strong style="color: #334155;">فلترة البيانات لجميع المقاييس:</strong>
             </div>
             <form id="globalFiltersForm" method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+
+                <select name="subject" id="globalSubjectSelector" class="form-select form-select-sm shadow-sm" style="min-width: 130px; font-weight: bold;" onchange="handleGlobalSubjectChange(this)">
+                    <option value="">كل المواد (المعدل العام)</option>
+                    {% for subj in subjects_list %}
+                        <option value="{{ subj }}" {% if selected_subject == subj %}selected{% endif %}>{{ subj }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="teacher_id" id="globalTeacherSelector" class="form-select form-select-sm shadow-sm" style="min-width: 150px; font-weight: bold;" onchange="handleGlobalTeacherChange()">
+                    <option value="">كل الأساتذة</option>
+                    {% for t in teachers %}
+                        <option value="{{ t.id }}" data-subject="{{ t.subject|default:'' }}" {% if selected_teacher_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
+                    {% endfor %}
+                </select>
+
                 <select name="level" id="globalLevelSelector" class="form-select form-select-sm shadow-sm" style="min-width: 130px; font-weight: bold;" onchange="updateGlobalClassDropdown(true)">
                     <option value="">كل المستويات</option>
                     {% for level in levels %}
@@ -155,18 +170,7 @@
                 <select name="class_name" id="globalClassSelector" class="form-select form-select-sm shadow-sm" style="min-width: 130px; font-weight: bold;" onchange="document.getElementById('globalFiltersForm').submit();">
                     <option value="">كل الأقسام</option>
                 </select>
-                <select name="teacher_id" id="globalTeacherSelector" class="form-select form-select-sm shadow-sm" style="min-width: 150px; font-weight: bold;" onchange="handleGlobalTeacherChange()">
-                    <option value="">كل الأساتذة</option>
-                    {% for t in teachers %}
-                        <option value="{{ t.id }}" {% if selected_teacher_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
-                    {% endfor %}
-                </select>
-                <select name="subject" id="globalSubjectSelector" class="form-select form-select-sm shadow-sm" style="min-width: 130px; font-weight: bold;" onchange="document.getElementById('globalFiltersForm').submit();">
-                    <option value="">كل المواد (المعدل العام)</option>
-                    {% for subj in subjects_list %}
-                        <option value="{{ subj }}" {% if selected_subject == subj %}selected{% endif %}>{{ subj }}</option>
-                    {% endfor %}
-                </select>
+
             </form>
         </div>
     </div>
@@ -694,34 +698,112 @@ function updateGaussStatsDisplay(data) {
         // When global teacher changes, trigger form submission to refresh server context
         document.getElementById('globalLevelSelector').value = "";
         document.getElementById('globalClassSelector').innerHTML = '<option value="">كل الأقسام</option>';
-        document.getElementById('globalSubjectSelector').value = ""; // Reset subject dropdown too
         document.getElementById('globalFiltersForm').submit();
     }
 
-    function updateGlobalClassDropdown() {
+    function handleGlobalSubjectChange(selectElement) {
+        const subj = selectElement.value;
+        const teacherFilter = document.getElementById('globalTeacherSelector');
+
+        if (subj) {
+            let currentSelectedIsValid = false;
+            for (let i = 0; i < teacherFilter.options.length; i++) {
+                let opt = teacherFilter.options[i];
+                if (opt.value === "") continue;
+
+                const tSubj = opt.getAttribute('data-subject');
+                if (tSubj && tSubj !== '/' && tSubj !== subj) {
+                    opt.style.display = 'none';
+                    opt.disabled = true;
+                } else {
+                    opt.style.display = 'block';
+                    opt.disabled = false;
+                    if (opt.selected) currentSelectedIsValid = true;
+                }
+            }
+            if (!currentSelectedIsValid && teacherFilter.value !== "") {
+                teacherFilter.value = "";
+            }
+        } else {
+            for (let i = 0; i < teacherFilter.options.length; i++) {
+                teacherFilter.options[i].style.display = 'block';
+                teacherFilter.options[i].disabled = false;
+            }
+        }
+        document.getElementById('globalFiltersForm').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const globalSubjectFilter = document.getElementById('globalSubjectSelector');
+        if (globalSubjectFilter && globalSubjectFilter.value) {
+            handleGlobalSubjectChange(globalSubjectFilter);
+        }
+
+        // Initial setup for the level filter based on teacher
+        const globalTeacherFilter = document.getElementById('globalTeacherSelector');
+        const globalLevelFilter = document.getElementById('globalLevelSelector');
+
+        if (globalTeacherFilter && globalTeacherFilter.value !== "") {
+            const validLevels = Object.keys(classMap);
+            for (let i = globalLevelFilter.options.length - 1; i >= 0; i--) {
+                let opt = globalLevelFilter.options[i];
+                if (opt.value !== "" && !validLevels.includes(opt.value)) {
+                    globalLevelFilter.remove(i);
+                }
+            }
+        }
+
+        updateGlobalClassDropdown(false);
+    });
+
+    function updateGlobalClassDropdown(submitAfter = false) {
         const levelSelect = document.getElementById('globalLevelSelector');
         const classSelect = document.getElementById('globalClassSelector');
         const selectedLvl = levelSelect.value;
 
         classSelect.innerHTML = '<option value="">كل الأقسام</option>';
 
-        if (selectedLvl && classMap[selectedLvl]) {
-            let classesToShow = [...new Set(classMap[selectedLvl])].sort((a, b) => {
-                 const numA = parseInt(a.replace(/\D/g, '')) || 0;
-                 const numB = parseInt(b.replace(/\D/g, '')) || 0;
-                 if (numA === numB) return a.localeCompare(b);
-                 return numA - numB;
-            });
+        let classesToShow = [];
+        const teacherSelected = document.querySelector('select[name="teacher_id"]').value !== "";
 
-            classesToShow.forEach(cls => {
-                const opt = document.createElement('option');
-                opt.value = cls;
-                opt.textContent = cls;
-                classSelect.appendChild(opt);
+        if (selectedLvl) {
+            classesToShow = classMap[selectedLvl] || [];
+            classSelect.disabled = false;
+        } else {
+            Object.values(classMap).forEach(arr => {
+                classesToShow = classesToShow.concat(arr);
             });
+            if (teacherSelected) {
+                classSelect.disabled = false;
+            } else {
+                classSelect.disabled = true;
+            }
         }
 
-        fetchAdvancedStats();
+        classesToShow = [...new Set(classesToShow)].sort((a, b) => {
+             const numA = parseInt(a.replace(/\D/g, '')) || 0;
+             const numB = parseInt(b.replace(/\D/g, '')) || 0;
+             if (numA === numB) return a.localeCompare(b);
+             return numA - numB;
+        });
+
+        const currentClass = "{{ selected_class|escapejs }}" || "{{ request.GET.class_name|escapejs }}";
+
+        classesToShow.forEach(cls => {
+            const opt = document.createElement('option');
+            opt.value = cls;
+            opt.textContent = cls;
+            if (cls === currentClass && !submitAfter) {
+                opt.selected = true;
+            }
+            classSelect.appendChild(opt);
+        });
+
+        if (submitAfter) {
+            document.getElementById('globalFiltersForm').submit();
+        } else {
+            fetchAdvancedStats();
+        }
     }
 
     // Global filters update
