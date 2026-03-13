@@ -1,3 +1,6 @@
 from django.contrib import admin
+from .models_mapping import SubjectAlias, ClassAlias, ClassShortcut
 
-# Register your models here.
+admin.site.register(SubjectAlias)
+admin.site.register(ClassAlias)
+admin.site.register(ClassShortcut)

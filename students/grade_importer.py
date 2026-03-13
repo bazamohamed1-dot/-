@@ -13,25 +13,40 @@ def process_grades_file(file_path, term):
         return 0, 'الملف فارغ أو لا يحتوي على بنية علامات صحيحة'
 
     import os
-    # Robust Class Extraction: Scan the first 10 rows for patterns like 'أولى متوسط 1'
+    # Robust Class Extraction: Scan the first 10 rows for patterns like 'أولى متوسط 1' or '1م1'
     lvl, cls = None, None
+    class_code = None
     class_name_raw = ""
 
     # Regex to capture Level (أولى/ثانية/ثالثة/رابعة) and Class Number (\d+)
     # It handles cases like "قسم: أولى متوسط 1", "أولى 1", "رابعة متوسط 01" etc.
     pattern = re.compile(r'(أولى|ثانية|ثالثة|رابعة)(?:\s+متوسط)?\s*[-_]?\s*(\d+)')
+    # Regex for class codes like '1م1', '1AM1', '1 م 1'
+    code_pattern = re.compile(r'([1234])\s*(?:م|متوسط|AM)\s*(\d+)', re.IGNORECASE)
 
     for r_idx in range(min(10, len(rows))):
         for cell in rows[r_idx]:
             cell_str = str(cell).strip()
+
+            # Check for standard arabic name first
             match = pattern.search(cell_str)
             if match:
                 class_name_raw = cell_str
                 lvl = match.group(1) # e.g., 'أولى'
-                cls = match.group(2) # e.g., '01'
-                # Strip leading zeros so '01' becomes '1'
-                cls = str(int(cls))
+                cls = str(int(match.group(2))) # e.g., '1'
                 break
+
+            # Then check for class code format
+            code_match = code_pattern.search(cell_str)
+            if code_match:
+                class_name_raw = cell_str
+                lvl_digit = code_match.group(1)
+                cls = str(int(code_match.group(2)))
+                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                lvl = arb_map.get(lvl_digit, lvl_digit)
+                class_code = f"{lvl_digit}م{cls}"
+                break
+
         if lvl and cls:
             break
 
@@ -43,8 +58,17 @@ def process_grades_file(file_path, term):
             class_name_raw = filename
             lvl = match.group(1)
             cls = str(int(match.group(2)))
+        else:
+            code_match = code_pattern.search(filename)
+            if code_match:
+                class_name_raw = filename
+                lvl_digit = code_match.group(1)
+                cls = str(int(code_match.group(2)))
+                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                lvl = arb_map.get(lvl_digit, lvl_digit)
+                class_code = f"{lvl_digit}م{cls}"
 
-    # If regex failed, maybe it's in a known Alias format (e.g., '1م1') in the first cell of row 4 or 5
+    # If regex failed, maybe it's in a known Alias format in the first cell of row 4 or 5
     if not lvl or not cls:
         possible_strings = []
         if len(rows) > 3 and len(rows[3]) > 0: possible_strings.append(str(rows[3][0]))
@@ -59,12 +83,28 @@ def process_grades_file(file_path, term):
                 break
 
     if not lvl or not cls:
-        return 0, f'تعذر تحديد القسم (المستوى والرقم) من الملف. تأكد من وجود اسم القسم مثل "أولى متوسط 1". النص الذي تم قراءته: {class_name_raw}'
+        return 0, f'تعذر تحديد القسم (المستوى والرقم) من الملف. تأكد من وجود اسم القسم مثل "أولى متوسط 1" أو "1م1". النص الذي تم قراءته: {class_name_raw}'
 
-    # Ensure class exists in our DB
-    students_in_class = Student.objects.filter(academic_year=lvl, class_name=cls)
+    # Ensure class exists in our DB. Check by level+class or class_code.
+    from django.db.models import Q
+
+    # Try creating a class code if we don't have one but have lvl and cls
+    if not class_code:
+        lvl_digit = ""
+        if "أولى" in lvl or "1" in lvl: lvl_digit = "1"
+        elif "ثانية" in lvl or "2" in lvl: lvl_digit = "2"
+        elif "ثالثة" in lvl or "3" in lvl: lvl_digit = "3"
+        elif "رابعة" in lvl or "4" in lvl: lvl_digit = "4"
+        if lvl_digit:
+            class_code = f"{lvl_digit}م{cls}"
+
+    students_in_class = Student.objects.filter(
+        Q(academic_year=lvl, class_name=cls) |
+        Q(class_code=class_code)
+    )
+
     if not students_in_class.exists():
-        return 0, f'القسم {lvl} {cls} غير موجود أو لا يحتوي على تلاميذ.'
+        return 0, f'القسم {lvl} {cls} (الرمز {class_code}) غير موجود أو لا يحتوي على تلاميذ.'
 
     # Find the right suffix for the term
     if term == 'الفصل الأول':
@@ -80,74 +120,78 @@ def process_grades_file(file_path, term):
     headers = [str(c).strip() for c in rows[5]] # Row 6 is index 5
 
 
-    # Map Subject Name -> Column Index
-    subject_indices = {}
+    # Map Subject Name -> (Column Index, Term)
+    # Allows storing multiple terms from the same file
+    # Format: {(subject_name, term): col_idx}
+    subject_indices_multi = {}
     name_idx = -1
     repeater_idx = -1
 
     import difflib
+    from .models_mapping import SubjectAlias
 
     known_subjects = [
         'اللغة العربية', 'الرياضيات', 'العلوم الفيزيائية', 'الفيزياء', 'علوم الطبيعة والحياة', 'العلوم الطبيعية',
         'التربية الإسلامية', 'التربية المدنية', 'التاريخ والجغرافيا', 'التاريخ', 'الجغرافيا',
         'اللغة الفرنسية', 'الفرنسية', 'اللغة الإنجليزية', 'الإنجليزية', 'اللغة الأمازيغية', 'الأمازيغية',
         'التربية الفنية', 'الفنية', 'الرسم', 'التربية الموسيقية', 'الموسيقى', 'التربية البدنية', 'الرياضة',
-        'الإعلام الآلي', 'المعلوماتية'
+        'الإعلام الآلي', 'المعلوماتية', 'ع الطبيعة والحياة', 'ع الفيزيائية والتكنولوجيا', 'التربية التشكيلية'
     ]
 
-    # Determine the target term suffix explicitly to filter correctly if multiple terms exist in the file
-    target_suffix_num = "1" if term == "الفصل الأول" else ("2" if term == "الفصل الثاني" else "3")
+    # Map numbers to Term Strings
+    term_map = {
+        '1': 'الفصل الأول',
+        '2': 'الفصل الثاني',
+        '3': 'الفصل الثالث'
+    }
+
+    # Fetch dynamic aliases from DB
+    db_aliases = {alias.alias: alias.canonical_name for alias in SubjectAlias.objects.all()}
 
     for idx, header in enumerate(headers):
-        # Keep original to check for term suffixes
         original_header = header.replace('\n', ' ').replace('\r', '').strip()
-
-        # Clean header text for subject matching
         clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', original_header).strip()
 
+        # Apply Subject Aliases
+        if clean_header in db_aliases:
+            clean_header = db_aliases[clean_header]
+
         if 'اللقب' in clean_header or 'الاسم' in clean_header or 'الاسم واللقب' in clean_header or 'اللقب والاسم' in clean_header:
-            if name_idx == -1: # Only set once to avoid matching wrong columns later
+            if name_idx == -1:
                 name_idx = idx
         elif 'الإعادة' in clean_header or 'الاعادة' in clean_header:
             repeater_idx = idx
-        elif 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
-            # If multiple general averages exist, only take the one matching the current term
-            # Or if it doesn't have a term marker, just take the first one
-            match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
-            if match_term:
-                if match_term.group(2) == target_suffix_num:
-                    subject_indices['المعدل العام'] = idx
-            else:
-                # If no term specified in header, just grab it
-                subject_indices['المعدل العام'] = idx
         else:
-            # If the column has a term suffix (e.g. "الرياضيات ف2"), skip it IF it's not the term we are currently importing!
+            # Determine the explicit term for this column if it exists
             match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
-            if match_term and match_term.group(2) != target_suffix_num:
-                continue # Skip columns belonging to other terms
+            col_term = term_map.get(match_term.group(2)) if match_term else term
 
-            # Fuzzy match against known subjects
-            matches = difflib.get_close_matches(clean_header, known_subjects, n=1, cutoff=0.7)
-            if matches:
-                subject_indices[matches[0]] = idx
-            elif clean_header and len(clean_header) > 3 and clean_header not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب']:
-                # If it's a completely new subject name not in our known list
-                subject_indices[clean_header] = idx
+            if 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
+                subject_indices_multi[('المعدل العام', col_term)] = idx
+            else:
+                matches = difflib.get_close_matches(clean_header, known_subjects, n=1, cutoff=0.7)
+                final_subject = matches[0] if matches else clean_header
 
-    # Fallback if no subjects found (try to read by index 5 to 18)
-    if len(subject_indices) == 0:
+                # Exclude unwanted columns that don't look like subjects
+                if final_subject and len(final_subject) > 3 and final_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب']:
+                    subject_indices_multi[(final_subject, col_term)] = idx
 
+    if len(subject_indices_multi) == 0:
         for idx in range(5, min(19, len(headers))):
             header = headers[idx]
-            clean_header = header.replace('\n', ' ').strip()
-            # Try to remove any suffix if present
-            clean_header = re.sub(r'ف\s*\d+', '', clean_header).strip()
+            original_header = header.replace('\n', ' ').strip()
+            clean_header = re.sub(r'ف\s*\d+', '', original_header).strip()
 
-            # Map average column correctly
+            if clean_header in db_aliases:
+                clean_header = db_aliases[clean_header]
+
+            match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
+            col_term = term_map.get(match_term.group(2)) if match_term else term
+
             if 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
-                subject_indices['المعدل العام'] = idx
+                subject_indices_multi[('المعدل العام', col_term)] = idx
             elif clean_header and clean_header != '':
-                subject_indices[clean_header] = idx
+                subject_indices_multi[(clean_header, col_term)] = idx
 
     # Fallback to column index 1 (second column) as per user instruction if regex fails
     if name_idx == -1:
@@ -194,7 +238,7 @@ def process_grades_file(file_path, term):
                     student.is_repeater = is_repeater
                     student.save(update_fields=['is_repeater'])
 
-            for subject, col_idx in subject_indices.items():
+            for (subject, sub_term), col_idx in subject_indices_multi.items():
                 if len(row) > col_idx:
                     score_val = str(row[col_idx]).replace(',', '.').strip()
                     if score_val:
@@ -205,11 +249,11 @@ def process_grades_file(file_path, term):
                             else:
                                 score = float(score_val)
 
-                            # Update or create
+                            # Update or create using the specific term found for this column
                             Grade.objects.update_or_create(
                                 student=student,
                                 subject=subject,
-                                term=term,
+                                term=sub_term,
                                 defaults={'score': score}
                             )
                             grades_created += 1

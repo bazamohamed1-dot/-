@@ -792,98 +792,101 @@ def hr_home(request):
                 from .import_utils import parse_hr_file
                 employees_data = parse_hr_file(temp_path)
 
+                from django.db import transaction
                 count = 0
-                for emp in employees_data:
-                    # Parse Rank: Use what's in the file, map to system keys
-                    raw_rank = emp.get('rank', '').strip()
 
-                    # Logic: If 'أستاذ' is in rank, it's a teacher.
-                    # If 'عامل مهني' is in rank, it's a worker.
-                    # Everything else (Director, Admin, Steward, Data Entry) is 'admin'.
+                with transaction.atomic():
+                    for emp in employees_data:
+                        # Parse Rank: Use what's in the file, map to system keys
+                        raw_rank = emp.get('rank', '').strip()
 
-                    sys_rank = 'admin' # Default to admin for general staff
+                        # Logic: If 'أستاذ' is in rank, it's a teacher.
+                        # If 'عامل مهني' is in rank, it's a worker.
+                        # Everything else (Director, Admin, Steward, Data Entry) is 'admin'.
 
-                    # Improved Classification Logic based on User Feedback
-                    if 'أستاذ' in raw_rank:
-                        sys_rank = 'teacher'
-                    # Explicitly catch "Aoun Khidma" (Service Agent) regardless of level (1, 2, 3...)
-                    elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
-                         # "Service Agent", "Prevention Agent", "Worker", "Cleaner", "Guard" -> Worker
-                         sys_rank = 'worker'
-                    elif 'عون' in raw_rank:
-                         # "Agent" alone (Admin Agent, Office Agent, Data Entry Agent) -> Admin
-                         # Check if explicitly admin-related keywords follow "Agent"
-                         if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
-                             sys_rank = 'admin'
-                         else:
-                             # Default fallback for generic "Agent" to Admin as per "First point" in request
-                             sys_rank = 'admin'
+                        sys_rank = 'admin' # Default to admin for general staff
 
-                    # Validation: Filter out header rows that might have slipped through
-                    # If 'rank' literally contains "الرتبة" or "rank", skip
-                    if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
-                        continue
+                        # Improved Classification Logic based on User Feedback
+                        if 'أستاذ' in raw_rank:
+                            sys_rank = 'teacher'
+                        # Explicitly catch "Aoun Khidma" (Service Agent) regardless of level (1, 2, 3...)
+                        elif 'عامل مهني' in raw_rank or 'عون الخدمة' in raw_rank or 'عون خدمة' in raw_rank or 'عون وقاية' in raw_rank or 'منظف' in raw_rank or 'حارس' in raw_rank:
+                             # "Service Agent", "Prevention Agent", "Worker", "Cleaner", "Guard" -> Worker
+                             sys_rank = 'worker'
+                        elif 'عون' in raw_rank:
+                             # "Agent" alone (Admin Agent, Office Agent, Data Entry Agent) -> Admin
+                             # Check if explicitly admin-related keywords follow "Agent"
+                             if any(x in raw_rank for x in ['إدارة', 'مكتب', 'حفظ', 'رقن', 'بيانات', 'محاسب']):
+                                 sys_rank = 'admin'
+                             else:
+                                 # Default fallback for generic "Agent" to Admin as per "First point" in request
+                                 sys_rank = 'admin'
 
-                    # Handle Subject
-                    subject = emp.get('subject', '/')
-                    if sys_rank != 'teacher':
-                        subject = "/"
+                        # Validation: Filter out header rows that might have slipped through
+                        # If 'rank' literally contains "الرتبة" or "rank", skip
+                        if 'الرتبة' in raw_rank or 'اللقب' in emp.get('last_name', ''):
+                            continue
 
-                    # Dates Parsing
-                    def parse_d(val):
-                        if not val: return None
-                        if isinstance(val, (date, datetime)): return val
-                        try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
-                        except: pass
-                        try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
-                        except: pass
-                        return None
+                        # Handle Subject
+                        subject = emp.get('subject', '/')
+                        if sys_rank != 'teacher':
+                            subject = "/"
 
-                    dob = parse_d(emp.get('date_of_birth'))
-                    eff_date = parse_d(emp.get('effective_date'))
+                        # Dates Parsing
+                        def parse_d(val):
+                            if not val: return None
+                            if isinstance(val, (date, datetime)): return val
+                            try: return datetime.strptime(str(val).strip(), '%Y-%m-%d').date()
+                            except: pass
+                            try: return datetime.strptime(str(val).strip(), '%d/%m/%Y').date()
+                            except: pass
+                            return None
 
-                    # Duplicate Prevention Logic:
-                    # 1. Try to find by unique Employee Code if present
-                    # 2. Try to find by Name + DOB if Code is generic/missing
+                        dob = parse_d(emp.get('date_of_birth'))
+                        eff_date = parse_d(emp.get('effective_date'))
 
-                    emp_code = emp.get('employee_code')
-                    ln = emp.get('last_name', '')
-                    fn = emp.get('first_name', '')
+                        # Duplicate Prevention Logic:
+                        # 1. Try to find by unique Employee Code if present
+                        # 2. Try to find by Name + DOB if Code is generic/missing
 
-                    # Search for existing
-                    existing = None
-                    if emp_code:
-                        existing = Employee.objects.filter(employee_code=emp_code).first()
+                        emp_code = emp.get('employee_code')
+                        ln = emp.get('last_name', '')
+                        fn = emp.get('first_name', '')
 
-                    if not existing and ln and fn:
-                        existing = Employee.objects.filter(
-                            last_name=ln,
-                            first_name=fn,
-                            date_of_birth=dob
-                        ).first()
+                        # Search for existing
+                        existing = None
+                        if emp_code:
+                            existing = Employee.objects.filter(employee_code=emp_code).first()
 
-                    # Data dict
-                    defaults={
-                        'last_name': ln,
-                        'first_name': fn,
-                        'date_of_birth': dob,
-                        'rank': sys_rank,
-                        'role': raw_rank,
-                        'subject': subject,
-                        'grade': emp.get('grade', ''),
-                        'effective_date': eff_date,
-                        'phone': emp.get('phone', ''),
-                        'email': emp.get('email', ''),
-                    }
+                        if not existing and ln and fn:
+                            existing = Employee.objects.filter(
+                                last_name=ln,
+                                first_name=fn,
+                                date_of_birth=dob
+                            ).first()
 
-                    if existing:
-                        for key, value in defaults.items():
-                            setattr(existing, key, value)
-                        existing.save()
-                    else:
-                        Employee.objects.create(employee_code=emp_code, **defaults)
+                        # Data dict
+                        defaults={
+                            'last_name': ln,
+                            'first_name': fn,
+                            'date_of_birth': dob,
+                            'rank': sys_rank,
+                            'role': raw_rank,
+                            'subject': subject,
+                            'grade': emp.get('grade', ''),
+                            'effective_date': eff_date,
+                            'phone': emp.get('phone', ''),
+                            'email': emp.get('email', ''),
+                        }
 
-                    count += 1
+                        if existing:
+                            for key, value in defaults.items():
+                                setattr(existing, key, value)
+                            existing.save()
+                        else:
+                            Employee.objects.create(employee_code=emp_code, **defaults)
+
+                        count += 1
 
                 messages.success(request, f"تم استيراد/تحديث {count} موظف.")
             except Exception as e:
@@ -927,35 +930,44 @@ def hr_home(request):
             return redirect('hr_home')
 
         elif action == 'manual_assign_single':
+            from django.db import transaction
             try:
                 teacher_id = request.POST.get('teacher_id')
                 payload = request.POST.get('assignments_payload')
 
                 teacher = Employee.objects.get(id=teacher_id)
-                TeacherAssignment.objects.filter(teacher=teacher).delete()
 
-                assignments = []
-                if payload:
-                    import json
-                    try:
-                        assignments = json.loads(payload)
-                    except:
-                        pass
+                with transaction.atomic():
+                    TeacherAssignment.objects.filter(teacher=teacher).delete()
 
-                main_subject = ''
-                for assign in assignments:
-                    subj = assign.get('subject', '').strip()
-                    if subj:
-                        if not main_subject: main_subject = subj
-                        TeacherAssignment.objects.create(
-                            teacher=teacher,
-                            subject=subj,
-                            classes=assign.get('classes', [])
-                        )
+                    assignments = []
+                    if payload:
+                        import json
+                        try:
+                            assignments = json.loads(payload)
+                        except:
+                            pass
 
-                if main_subject:
-                    teacher.subject = main_subject
-                    teacher.save()
+                    main_subject = ''
+                    new_assignments = []
+                    for assign in assignments:
+                        subj = assign.get('subject', '').strip()
+                        if subj:
+                            if not main_subject: main_subject = subj
+                            new_assignments.append(
+                                TeacherAssignment(
+                                    teacher=teacher,
+                                    subject=subj,
+                                    classes=assign.get('classes', [])
+                                )
+                            )
+
+                    if new_assignments:
+                        TeacherAssignment.objects.bulk_create(new_assignments)
+
+                    if main_subject:
+                        teacher.subject = main_subject
+                        teacher.save(update_fields=['subject'])
 
                 messages.success(request, f'تم إسناد المادة {main_subject} للأستاذ بنجاح.')
             except Exception as e:
