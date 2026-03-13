@@ -1318,18 +1318,32 @@ def analytics_dashboard(request):
         from .models import Employee, TeacherAssignment
         try:
             teacher = Employee.objects.get(id=selected_teacher_id)
-            assignments = TeacherAssignment.objects.filter(teacher=teacher)
 
-            if selected_subject:
-                assignments = assignments.filter(subject__icontains=selected_subject)
-
+            # Use analytics_assignments if available, else fallback to HR TeacherAssignment
             teacher_classes = []
             teacher_subjects = []
-            for assign in assignments:
-                if assign.classes:
-                    teacher_classes.extend(assign.classes)
-                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
-                    teacher_subjects.append(assign.subject)
+
+            if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
+                 # Check if filtered by subject
+                 for assign in teacher.analytics_assignments:
+                      subj = assign.get('subject', '').strip()
+                      if selected_subject and selected_subject.lower() not in subj.lower():
+                           continue
+                      if subj and subj != '/' and subj not in teacher_subjects:
+                           teacher_subjects.append(subj)
+                      if assign.get('classes'):
+                           teacher_classes.extend(assign.get('classes'))
+            else:
+                assignments = TeacherAssignment.objects.filter(teacher=teacher)
+
+                if selected_subject:
+                    assignments = assignments.filter(subject__icontains=selected_subject)
+
+                for assign in assignments:
+                    if assign.classes:
+                        teacher_classes.extend(assign.classes)
+                    if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                        teacher_subjects.append(assign.subject)
 
             teacher_classes = list(set(teacher_classes))
 
@@ -1573,10 +1587,16 @@ def advanced_analytics_view(request):
         from .models import Employee, TeacherAssignment
         try:
             teacher = Employee.objects.get(id=selected_teacher_id)
-            assignments = TeacherAssignment.objects.filter(teacher=teacher)
-            for assign in assignments:
-                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
-                    teacher_subjects.append(assign.subject)
+            if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
+                for assign in teacher.analytics_assignments:
+                    subj = assign.get('subject', '').strip()
+                    if subj and subj != '/' and subj not in teacher_subjects:
+                        teacher_subjects.append(subj)
+            else:
+                assignments = TeacherAssignment.objects.filter(teacher=teacher)
+                for assign in assignments:
+                    if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                        teacher_subjects.append(assign.subject)
         except Employee.DoesNotExist:
             pass
 
@@ -1589,15 +1609,24 @@ def advanced_analytics_view(request):
         from .models import Employee, TeacherAssignment
         try:
             teacher = Employee.objects.get(id=selected_teacher_id)
-            assignments = TeacherAssignment.objects.filter(teacher=teacher)
-
-            if selected_subject:
-                assignments = assignments.filter(subject__icontains=selected_subject)
-
             teacher_classes = []
-            for assign in assignments:
-                if assign.classes:
-                    teacher_classes.extend(assign.classes)
+
+            if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
+                 for assign in teacher.analytics_assignments:
+                      subj = assign.get('subject', '').strip()
+                      if selected_subject and selected_subject.lower() not in subj.lower():
+                           continue
+                      if assign.get('classes'):
+                           teacher_classes.extend(assign.get('classes'))
+            else:
+                assignments = TeacherAssignment.objects.filter(teacher=teacher)
+
+                if selected_subject:
+                    assignments = assignments.filter(subject__icontains=selected_subject)
+
+                for assign in assignments:
+                    if assign.classes:
+                        teacher_classes.extend(assign.classes)
 
             teacher_classes = list(set(teacher_classes))
 
@@ -1867,11 +1896,19 @@ def run_statistical_test(request):
 
         # Build mapping: (shortcut_class, subject) -> teacher_name
         class_subj_to_teacher = {}
-        for assign in TeacherAssignment.objects.all():
-            t_name = f"{assign.teacher.last_name} {assign.teacher.first_name}"
-            subj = assign.subject
-            for c in assign.classes:
-                class_subj_to_teacher[(c, subj)] = t_name
+        from .models import Employee
+        for teacher in Employee.objects.filter(rank='teacher'):
+            t_name = f"{teacher.last_name} {teacher.first_name}"
+            if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
+                for assign in teacher.analytics_assignments:
+                    subj = assign.get('subject', '').strip()
+                    for c in assign.get('classes', []):
+                        class_subj_to_teacher[(c, subj)] = t_name
+            else:
+                for assign in TeacherAssignment.objects.filter(teacher=teacher):
+                    subj = assign.subject
+                    for c in assign.classes:
+                        class_subj_to_teacher[(c, subj)] = t_name
 
         def get_teacher_for_grade(row):
             lvl = row['student__academic_year']
@@ -1996,14 +2033,25 @@ def get_gauss_data(request):
         from .models import Employee, TeacherAssignment
         try:
             teacher = Employee.objects.get(id=teacher_id)
-            assignments = TeacherAssignment.objects.filter(teacher=teacher)
             teacher_classes = []
             teacher_subjects = []
-            for assign in assignments:
-                if assign.classes:
-                    teacher_classes.extend(assign.classes)
-                if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
-                    teacher_subjects.append(assign.subject)
+
+            if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
+                 for assign in teacher.analytics_assignments:
+                      subj = assign.get('subject', '').strip()
+                      if subject and subject.lower() not in subj.lower():
+                           continue
+                      if subj and subj != '/' and subj not in teacher_subjects:
+                           teacher_subjects.append(subj)
+                      if assign.get('classes'):
+                           teacher_classes.extend(assign.get('classes'))
+            else:
+                assignments = TeacherAssignment.objects.filter(teacher=teacher)
+                for assign in assignments:
+                    if assign.classes:
+                        teacher_classes.extend(assign.classes)
+                    if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                        teacher_subjects.append(assign.subject)
 
             teacher_classes = list(set(teacher_classes))
 
@@ -2109,6 +2157,106 @@ def get_gauss_data(request):
     }
     return JsonResponse(gauss_data)
 
+def save_analytics_teacher_assignment(request):
+    """Saves teacher assignment specifically for analytics"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'status': 'error', 'message': 'غير مصرح'})
+
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+
+    if not has_access:
+        return JsonResponse({'status': 'error', 'message': 'ليس لديك صلاحية'})
+
+    if request.method == 'POST':
+        emp_id = request.POST.get('employee_id')
+        assignments_data_raw = request.POST.get('assignments')
+
+        try:
+            import json
+            from .models import Employee
+
+            emp = Employee.objects.get(id=emp_id)
+            if assignments_data_raw is not None:
+                assignments_data = json.loads(assignments_data_raw)
+                # Filter out empty blocks
+                valid_assignments = [a for a in assignments_data if a.get('subject', '').strip() or a.get('classes', [])]
+                emp.analytics_assignments = valid_assignments
+                emp.save(update_fields=['analytics_assignments'])
+
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)})
+
+    return JsonResponse({'status': 'error', 'message': 'طلب غير صالح'})
+
+
+def upload_grades_preview_ajax(request):
+    """Parses uploaded grade files and returns unique subjects found to allow user mapping before saving"""
+    if request.method == 'POST' and request.FILES.get('file'):
+        file = request.FILES['file']
+        term = request.POST.get('term')
+
+        import tempfile
+        import os
+        from .grade_importer import process_grades_file
+
+        # We need a custom extraction logic here just to get subjects without saving
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
+                for chunk in file.chunks():
+                    tmp.write(chunk)
+                temp_path = tmp.name
+
+            from .import_utils import extract_rows_from_file
+            with open(temp_path, 'rb') as f:
+                rows = list(extract_rows_from_file(f, override_filename=temp_path))
+
+            if not rows or len(rows) < 7:
+                return JsonResponse({'success': False, 'message': 'الملف فارغ أو لا يحتوي على بنية علامات صحيحة'})
+
+            headers = [str(c).strip() for c in rows[5]]
+
+            # Extract subjects using a simplified version of the logic in process_grades_file
+            found_subjects = []
+
+            import re
+            for idx, header in enumerate(headers):
+                original_header = header.replace('\n', ' ').replace('\r', '').strip()
+                clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', original_header).strip()
+
+                # Ignore non-subjects
+                if 'اللقب' in clean_header or 'الاسم' in clean_header or 'الإعادة' in clean_header or clean_header in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب']:
+                    continue
+
+                if len(clean_header) > 2:
+                    found_subjects.append(clean_header)
+
+            # Fallback if none found
+            if not found_subjects:
+                for idx in range(5, min(19, len(headers))):
+                    header = headers[idx]
+                    original_header = header.replace('\n', ' ').strip()
+                    clean_header = re.sub(r'ف\s*\d+', '', original_header).strip()
+
+                    if clean_header and len(clean_header) > 2 and 'اللقب' not in clean_header and 'الاسم' not in clean_header:
+                         found_subjects.append(clean_header)
+
+            return JsonResponse({
+                'success': True,
+                'subjects': list(set(found_subjects)),
+                'temp_file': temp_path # Return the path so we can process it in the next step
+            })
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f"خطأ: {str(e)}"})
+        # We don't delete temp_path here because we need it for the actual import
+
+    return JsonResponse({'success': False, 'message': 'طلب غير صالح'})
+
+
 def rename_subject_ajax(request):
     """Renames an imported subject globally in the Grade table to fix import typos"""
     if not request.user.is_authenticated:
@@ -2167,26 +2315,46 @@ def delete_subject_ajax(request):
 
 def upload_grades_ajax(request):
     """Handles bulk uploading of multiple grade files with AJAX progress"""
-    if request.method == 'POST' and request.FILES.get('file'):
-        file = request.FILES['file']
+    if request.method == 'POST':
         term = request.POST.get('term')
         import_mode = request.POST.get('import_mode', 'local')
+        temp_file_path = request.POST.get('temp_file_path')
+
+        # Load user subject mappings if provided
+        import json
+        subject_mappings = None
+        mappings_json = request.POST.get('subject_mappings')
+        if mappings_json:
+            try:
+                subject_mappings = json.loads(mappings_json)
+            except json.JSONDecodeError:
+                pass
 
         import tempfile
         import os
         from .grade_importer import process_grades_file, process_grades_file_ai
 
-        temp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
-                for chunk in file.chunks():
-                    tmp.write(chunk)
-                temp_path = tmp.name
+        temp_path = temp_file_path
 
+        # If a new file is uploaded instead of relying on temp_file_path
+        if request.FILES.get('file'):
+            file = request.FILES['file']
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.name}") as tmp:
+                    for chunk in file.chunks():
+                        tmp.write(chunk)
+                    temp_path = tmp.name
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': f"خطأ في حفظ الملف: {str(e)}", 'count': 0})
+
+        if not temp_path or not os.path.exists(temp_path):
+             return JsonResponse({'success': False, 'message': "الملف غير موجود.", 'count': 0})
+
+        try:
             if import_mode == 'ai':
                 count, msg = process_grades_file_ai(temp_path, term)
             else:
-                count, msg = process_grades_file(temp_path, term)
+                count, msg = process_grades_file(temp_path, term, subject_mappings=subject_mappings)
 
             success = count > 0
             return JsonResponse({'success': success, 'message': msg, 'count': count})

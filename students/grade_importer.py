@@ -2,7 +2,7 @@
 import re
 from .models import Grade, Student, ClassAlias
 
-def process_grades_file(file_path, term):
+def process_grades_file(file_path, term, subject_mappings=None):
     from .import_utils import extract_rows_from_file
     from .mapping_views import resolve_class_alias
 
@@ -152,25 +152,39 @@ def process_grades_file(file_path, term):
         original_header = header.replace('\n', ' ').replace('\r', '').strip()
         clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', original_header).strip()
 
-        # Apply Subject Aliases
-        if clean_header in db_aliases:
-            clean_header = db_aliases[clean_header]
+        # If user provided mappings via UI, use those explicitly.
+        # Otherwise, fall back to database aliases and fuzzy matching.
+        mapped_subject = None
+        if subject_mappings and clean_header in subject_mappings:
+            mapped_subject = subject_mappings[clean_header]
+            # Even if mapped_subject is empty string or "ignore", we want to skip if it's explicitly ignored
+            if mapped_subject == "ignore":
+                continue
 
-        if 'اللقب' in clean_header or 'الاسم' in clean_header or 'الاسم واللقب' in clean_header or 'اللقب والاسم' in clean_header:
+        if not mapped_subject:
+            # Apply Subject Aliases
+            if clean_header in db_aliases:
+                clean_header = db_aliases[clean_header]
+            mapped_subject = clean_header
+
+        if 'اللقب' in mapped_subject or 'الاسم' in mapped_subject or 'الاسم واللقب' in mapped_subject or 'اللقب والاسم' in mapped_subject:
             if name_idx == -1:
                 name_idx = idx
-        elif 'الإعادة' in clean_header or 'الاعادة' in clean_header:
+        elif 'الإعادة' in mapped_subject or 'الاعادة' in mapped_subject:
             repeater_idx = idx
         else:
             # Determine the explicit term for this column if it exists
             match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
             col_term = term_map.get(match_term.group(2)) if match_term else term
 
-            if 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
+            if 'المعدل العام' in mapped_subject or 'معدل الفصل' in mapped_subject:
                 subject_indices_multi[('المعدل العام', col_term)] = idx
             else:
-                matches = difflib.get_close_matches(clean_header, known_subjects, n=1, cutoff=0.7)
-                final_subject = matches[0] if matches else clean_header
+                if subject_mappings and clean_header in subject_mappings:
+                     final_subject = mapped_subject # We trust the user mapping
+                else:
+                    matches = difflib.get_close_matches(mapped_subject, known_subjects, n=1, cutoff=0.7)
+                    final_subject = matches[0] if matches else mapped_subject
 
                 # Exclude unwanted columns that don't look like subjects
                 if final_subject and len(final_subject) > 3 and final_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب']:
@@ -182,16 +196,24 @@ def process_grades_file(file_path, term):
             original_header = header.replace('\n', ' ').strip()
             clean_header = re.sub(r'ف\s*\d+', '', original_header).strip()
 
-            if clean_header in db_aliases:
-                clean_header = db_aliases[clean_header]
+            mapped_subject = None
+            if subject_mappings and clean_header in subject_mappings:
+                mapped_subject = subject_mappings[clean_header]
+                if mapped_subject == "ignore":
+                    continue
+
+            if not mapped_subject:
+                if clean_header in db_aliases:
+                    clean_header = db_aliases[clean_header]
+                mapped_subject = clean_header
 
             match_term = re.search(r'(ف|الفصل)\s*(\d+)', original_header)
             col_term = term_map.get(match_term.group(2)) if match_term else term
 
-            if 'المعدل العام' in clean_header or 'معدل الفصل' in clean_header:
+            if 'المعدل العام' in mapped_subject or 'معدل الفصل' in mapped_subject:
                 subject_indices_multi[('المعدل العام', col_term)] = idx
-            elif clean_header and clean_header != '':
-                subject_indices_multi[(clean_header, col_term)] = idx
+            elif mapped_subject and mapped_subject != '':
+                subject_indices_multi[(mapped_subject, col_term)] = idx
 
     # Fallback to column index 1 (second column) as per user instruction if regex fails
     if name_idx == -1:
