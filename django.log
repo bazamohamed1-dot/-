@@ -1,121 +1,136 @@
-/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+[13/Mar/2026 18:05:27] "GET / HTTP/1.1" 200 25851
+/home/jules/.pyenv/versions/3.12.13/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
   mw_instance = middleware(adapted_handler)
-[07/Mar/2026 10:49:30] "GET /canteen/ HTTP/1.1" 200 25768
-[07/Mar/2026 10:49:33] "POST /canteen/auth/login/ HTTP/1.1" 200 188
-[07/Mar/2026 10:49:35] "GET /canteen/analytics/ HTTP/1.1" 200 80577
-[07/Mar/2026 10:49:35] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:35] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:35] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
-[07/Mar/2026 10:49:35] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:35] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
-[07/Mar/2026 10:49:35] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:35] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
-/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/rest_framework/pagination.py:207: UnorderedObjectListWarning: Pagination may yield inconsistent results with an unordered object_list: <class 'students.models.SystemMessage'> QuerySet.
-  paginator = self.django_paginator_class(queryset, page_size)
-[07/Mar/2026 10:49:35] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
-[07/Mar/2026 10:49:35] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
-[07/Mar/2026 10:49:36] "GET /service-worker.js HTTP/1.1" 200 4714
-[07/Mar/2026 10:49:36] "GET /canteen/dashboard/ HTTP/1.1" 200 37938
-[07/Mar/2026 10:49:36] "GET /canteen/ui/ HTTP/1.1" 200 58481
-[07/Mar/2026 10:49:36] "GET /canteen/ HTTP/1.1" 302 0
-[07/Mar/2026 10:49:36] "GET /canteen/management/ HTTP/1.1" 200 81054
-[07/Mar/2026 10:49:36] "GET /canteen/pending_updates/ HTTP/1.1" 200 40220
-[07/Mar/2026 10:49:36] "GET /canteen/settings/ HTTP/1.1" 200 93015
-[07/Mar/2026 10:49:36] "GET /static_v2/manifest.json HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
-[07/Mar/2026 10:49:36] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:52:04] "HEAD /canteen/analytics/advanced/ HTTP/1.1" 302 0
-[07/Mar/2026 10:53:13] "GET /canteen/ HTTP/1.1" 200 25768
-[07/Mar/2026 10:53:14] "POST /canteen/auth/login/ HTTP/1.1" 200 188
-[07/Mar/2026 10:53:16] "GET /canteen/analytics/advanced/ HTTP/1.1" 200 69533
-[07/Mar/2026 10:53:16] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:16] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:16] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:16] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
-[07/Mar/2026 10:53:16] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:16] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
-[07/Mar/2026 10:53:16] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
-/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/rest_framework/pagination.py:207: UnorderedObjectListWarning: Pagination may yield inconsistent results with an unordered object_list: <class 'students.models.SystemMessage'> QuerySet.
-  paginator = self.django_paginator_class(queryset, page_size)
-[07/Mar/2026 10:53:17] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
-[07/Mar/2026 10:53:17] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
-[07/Mar/2026 10:53:17] "GET /service-worker.js HTTP/1.1" 200 4714
-[07/Mar/2026 10:53:17] "GET /canteen/ HTTP/1.1" 302 0
-[07/Mar/2026 10:53:17] "GET /canteen/ui/ HTTP/1.1" 200 58481
-[07/Mar/2026 10:53:17] "GET /canteen/dashboard/ HTTP/1.1" 200 37938
-[07/Mar/2026 10:53:17] "GET /canteen/management/ HTTP/1.1" 200 81054
-[07/Mar/2026 10:53:17] "GET /static_v2/manifest.json HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /canteen/pending_updates/ HTTP/1.1" 200 40220
-[07/Mar/2026 10:53:17] "GET /canteen/settings/ HTTP/1.1" 200 93015
-[07/Mar/2026 10:53:17] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:17] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /canteen/analytics/ HTTP/1.1" 200 80577
-[07/Mar/2026 10:53:20] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
-[07/Mar/2026 10:53:20] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
-[07/Mar/2026 10:53:22] "GET /service-worker.js HTTP/1.1" 200 4714
-Performing system checks...
-
-System check identified no issues (0 silenced).
-Running migrations on startup...
-Operations to perform:
-  Apply all migrations: admin, auth, contenttypes, sessions, students
-Running migrations:
-  No migrations to apply.
-March 07, 2026 - 10:49:26
-Django version 6.0.3, using settings 'School_Management.settings'
-Starting development server at http://0.0.0.0:8000/
-Quit the server with CONTROL-C.
-
-WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
-For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
-/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
-  mw_instance = middleware(adapted_handler)
-Performing system checks...
-
-System check identified no issues (0 silenced).
-Running migrations on startup...
-Operations to perform:
-  Apply all migrations: admin, auth, contenttypes, sessions, students
-Running migrations:
-  No migrations to apply.
-March 07, 2026 - 11:34:57
-Django version 6.0.3, using settings 'School_Management.settings'
-Starting development server at http://0.0.0.0:8000/
-Quit the server with CONTROL-C.
-
-WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
-For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
-/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
-  mw_instance = middleware(adapted_handler)
-Performing system checks...
-
-System check identified no issues (0 silenced).
-Running migrations on startup...
-Operations to perform:
-  Apply all migrations: admin, auth, contenttypes, sessions, students
-Running migrations:
-  No migrations to apply.
-March 07, 2026 - 11:36:07
-Django version 6.0.3, using settings 'School_Management.settings'
-Starting development server at http://0.0.0.0:8000/
-Quit the server with CONTROL-C.
-
-WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
-For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
-/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
-  mw_instance = middleware(adapted_handler)
+Error: That port is already in use.
+[13/Mar/2026 18:05:29] "POST /canteen/auth/login/ HTTP/1.1" 200 188
+[13/Mar/2026 18:05:31] "GET /canteen/hr/ HTTP/1.1" 200 67830
+[13/Mar/2026 18:05:31] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
+[13/Mar/2026 18:05:31] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
+[13/Mar/2026 18:05:31] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:05:31] "GET /canteen/ HTTP/1.1" 302 0
+[13/Mar/2026 18:05:31] "GET /canteen/ui/ HTTP/1.1" 200 60999
+[13/Mar/2026 18:05:31] "GET /canteen/dashboard/ HTTP/1.1" 200 40489
+[13/Mar/2026 18:05:31] "GET /canteen/management/ HTTP/1.1" 200 84534
+[13/Mar/2026 18:05:31] "GET /static_v2/manifest.json HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /canteen/pending_updates/ HTTP/1.1" 200 42634
+[13/Mar/2026 18:05:31] "GET /canteen/settings/ HTTP/1.1" 200 97194
+[13/Mar/2026 18:05:31] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
+[13/Mar/2026 18:05:31] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:32] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:32] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:32] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:32] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:32] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /canteen/analytics/ HTTP/1.1" 200 87183
+[13/Mar/2026 18:05:36] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:36] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:05:38] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:09:37] "GET / HTTP/1.1" 200 25851
+[13/Mar/2026 18:09:40] "POST /canteen/auth/login/ HTTP/1.1" 200 188
+[13/Mar/2026 18:09:42] "GET /canteen/hr/ HTTP/1.1" 200 67830
+[13/Mar/2026 18:09:42] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
+[13/Mar/2026 18:09:42] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
+[13/Mar/2026 18:09:42] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:09:42] "GET /canteen/ HTTP/1.1" 302 0
+[13/Mar/2026 18:09:42] "GET /canteen/ui/ HTTP/1.1" 200 60999
+[13/Mar/2026 18:09:42] "GET /canteen/dashboard/ HTTP/1.1" 200 40489
+[13/Mar/2026 18:09:42] "GET /canteen/management/ HTTP/1.1" 200 84534
+[13/Mar/2026 18:09:42] "GET /canteen/settings/ HTTP/1.1" 200 97194
+[13/Mar/2026 18:09:42] "GET /canteen/pending_updates/ HTTP/1.1" 200 42634
+[13/Mar/2026 18:09:42] "GET /static_v2/manifest.json HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:42] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /canteen/analytics/ HTTP/1.1" 200 87183
+[13/Mar/2026 18:09:46] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:46] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:48] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:09:51] "GET /canteen/analytics/ HTTP/1.1" 200 87183
+[13/Mar/2026 18:09:51] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:51] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:51] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:51] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:09:51] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:51] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:51] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:09:53] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:10:17] "GET / HTTP/1.1" 200 25851
+[13/Mar/2026 18:10:20] "POST /canteen/auth/login/ HTTP/1.1" 200 188
+[13/Mar/2026 18:10:22] "GET /canteen/analytics/ HTTP/1.1" 200 87183
+[13/Mar/2026 18:10:22] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:10:22] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
+[13/Mar/2026 18:10:22] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
+[13/Mar/2026 18:10:22] "GET /canteen/ HTTP/1.1" 302 0
+[13/Mar/2026 18:10:22] "GET /canteen/ui/ HTTP/1.1" 200 60999
+[13/Mar/2026 18:10:22] "GET /canteen/dashboard/ HTTP/1.1" 200 40489
+[13/Mar/2026 18:10:22] "GET /canteen/management/ HTTP/1.1" 200 84534
+[13/Mar/2026 18:10:22] "GET /static_v2/manifest.json HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /canteen/pending_updates/ HTTP/1.1" 200 42634
+[13/Mar/2026 18:10:22] "GET /canteen/settings/ HTTP/1.1" 200 97194
+[13/Mar/2026 18:10:22] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:22] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:50] "GET / HTTP/1.1" 200 25851
+[13/Mar/2026 18:10:53] "POST /canteen/auth/login/ HTTP/1.1" 200 188
+[13/Mar/2026 18:10:54] "GET /canteen/analytics/ HTTP/1.1" 200 87183
+[13/Mar/2026 18:10:54] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/auth_manager.js?v=1.1 HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/pwa_install.js?v=1.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/offline_manager.js?v=2.0 HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/camera_helper.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /canteen/api/pending_updates/count/ HTTP/1.1" 200 11
+[13/Mar/2026 18:10:54] "GET /canteen/api/system_messages/ HTTP/1.1" 200 52
+[13/Mar/2026 18:10:54] "GET /service-worker.js HTTP/1.1" 200 5680
+[13/Mar/2026 18:10:54] "GET /canteen/ HTTP/1.1" 302 0
+[13/Mar/2026 18:10:54] "GET /canteen/ui/ HTTP/1.1" 200 60999
+[13/Mar/2026 18:10:54] "GET /canteen/dashboard/ HTTP/1.1" 200 40489
+[13/Mar/2026 18:10:54] "GET /canteen/management/ HTTP/1.1" 200 84534
+[13/Mar/2026 18:10:54] "GET /canteen/settings/ HTTP/1.1" 200 97194
+[13/Mar/2026 18:10:54] "GET /static_v2/manifest.json HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /canteen/pending_updates/ HTTP/1.1" 200 42634
+[13/Mar/2026 18:10:54] "GET /static_v2/images/logo.png HTTP/1.1" 404 179
+[13/Mar/2026 18:10:54] "GET /static_v2/js/auth_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:55] "GET /static_v2/js/offline_manager.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:55] "GET /static_v2/js/dexie.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:55] "GET /static_v2/js/xlsx.full.min.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:55] "GET /static_v2/js/browser-image-compression.js HTTP/1.1" 404 179
+[13/Mar/2026 18:10:55] "GET /static_v2/js/html5-qrcode.min.js HTTP/1.1" 404 179

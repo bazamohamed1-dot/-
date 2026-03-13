@@ -316,6 +316,9 @@ class Employee(models.Model):
     full_name = models.CharField(max_length=200, null=True, blank=True, verbose_name="الاسم الكامل (قديم)")
     role = models.CharField(max_length=100, null=True, blank=True, verbose_name="الوظيفة (قديم)")
 
+    # Analytics Assignments
+    analytics_assignments = models.JSONField(default=list, blank=True, verbose_name="الإسنادات الخاصة بالتحليل")
+
     class Meta:
         verbose_name = "موظف"
         verbose_name_plural = "الموارد البشرية"

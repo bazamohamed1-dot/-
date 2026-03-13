@@ -435,7 +435,7 @@
         return assignments;
     }
 
-    function saveSingleAssignment(empId, btnElement) {
+    async function saveSingleAssignment(empId, btnElement) {
         const tr = btnElement.closest('tr');
         const assignments = extractRowAssignments(tr);
 
@@ -446,32 +446,37 @@
         formData.append('employee_id', empId);
         formData.append('assignments', JSON.stringify(assignments));
 
-        fetch("{% url 'class_mapping_view' %}?action=quick_save", {
-            method: 'POST',
-            headers: {'X-CSRFToken': '{{ csrf_token }}'},
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
+        try {
+            const res = await fetch("{% url 'class_mapping_view' %}?action=quick_save", {
+                method: 'POST',
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                body: formData
+            });
+            const data = await res.json();
+
             if (data.status !== 'success') {
                 alert('حدث خطأ أثناء الحفظ: ' + (data.message || 'Unknown Error'));
                 btnElement.innerHTML = 'حفظ';
                 btnElement.disabled = false;
                 return;
             }
+
             btnElement.innerHTML = '<i class="fas fa-check"></i>';
             btnElement.classList.replace('btn-primary', 'btn-success');
+
+            // Update original data tracking so consecutive saves work correctly
+            tr.setAttribute('data-orig-assignments', JSON.stringify(assignments));
+
             setTimeout(() => {
                 btnElement.innerHTML = 'حفظ';
                 btnElement.classList.replace('btn-success', 'btn-primary');
                 btnElement.disabled = false;
             }, 2000);
-        })
-        .catch(e => {
+        } catch (e) {
             alert('حدث خطأ أثناء الحفظ: ' + e);
             btnElement.innerHTML = 'حفظ';
             btnElement.disabled = false;
-        });
+        }
     }
 
     function saveAllAssignments() {

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load student_tags %}
 {% block title %}لوحة تحليل النتائج (Executive Dashboard){% endblock %}
 {% block header_title %}تحليل النتائج - Executive Dashboard{% endblock %}
 
@@ -342,6 +343,10 @@
 
                 <button type="button" class="btn shadow fw-bold text-white" style="background-color: #0ea5e9; border: 2px solid #0284c7; white-space: nowrap;" onclick="document.getElementById('editSubjectsModal').style.display='flex';">
                     <i class="fas fa-edit me-1"></i> تعديل المواد المستوردة
+                </button>
+
+                <button type="button" class="btn shadow fw-bold text-white" style="background-color: #f97316; border: 2px solid #ea580c; white-space: nowrap;" onclick="openAnalyticsTeacherAssignmentsModal()">
+                    <i class="fas fa-chalkboard-teacher me-1"></i> إدارة إسناد الأساتذة للتحليل
                 </button>
 
                 <button class="btn btn-outline-primary fw-bold shadow-sm" style="white-space: nowrap; border-width: 2px;" onclick="document.getElementById('importMode').value='local'; document.getElementById('aiImportNotice').style.display='none'; document.getElementById('importGradesModal').style.display='flex'; document.getElementById('modalTitleText').innerText='استيراد محلي ذكي';">
@@ -1146,6 +1151,210 @@
     }
 </script>
 
+<!-- Analytics Teacher Assignments Modal -->
+<div id="analyticsTeacherAssignmentsModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+    <div class="modal-content" style="background:#fff; width:90%; max-width:800px; padding:25px; border-radius:12px; max-height: 85vh; overflow-y: auto;">
+        <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+            <i class="fas fa-chalkboard-teacher text-warning"></i> إدارة إسناد الأساتذة للتحليل
+        </h3>
+        <p style="color: #64748b; font-size: 0.9rem;">
+            هذا الإسناد خاص بلوحة التحليل فقط ولا يؤثر على واجهة الموارد البشرية. إذا تُرك فارغاً، سيتم الاعتماد على إسناد الموارد البشرية.
+        </p>
+
+        <div class="mb-3">
+            <select id="teacherSelect" class="form-select" onchange="loadTeacherAnalyticsAssignment(this.value)">
+                <option value="">-- اختر أستاذاً --</option>
+                {% for t in teachers %}
+                <option value="{{ t.id }}" data-assignments='{{ t.analytics_assignments|safe_json|escapejs }}' data-name="{{ t.last_name }} {{ t.first_name }}">{{ t.last_name }} {{ t.first_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="teacherAssignmentEditor" style="display:none; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; background: #f8fafc;">
+            <h5 id="selectedTeacherName" class="text-primary mb-3"></h5>
+            <div id="analyticsAssignmentBlocksContainer"></div>
+            <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addAnalyticsAssignmentBlock()">
+                <i class="fas fa-plus"></i> إضافة مادة أخرى
+            </button>
+            <div class="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
+                <button type="button" class="btn btn-success" onclick="saveAnalyticsTeacherAssignment()"><i class="fas fa-save"></i> حفظ إسناد الأستاذ</button>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:15px; margin-top: 20px;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('analyticsTeacherAssignmentsModal').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openAnalyticsTeacherAssignmentsModal() {
+        document.getElementById('analyticsTeacherAssignmentsModal').style.display = 'flex';
+        document.getElementById('teacherSelect').value = '';
+        document.getElementById('teacherAssignmentEditor').style.display = 'none';
+    }
+
+    function loadTeacherAnalyticsAssignment(teacherId) {
+        if (!teacherId) {
+            document.getElementById('teacherAssignmentEditor').style.display = 'none';
+            return;
+        }
+
+        const select = document.getElementById('teacherSelect');
+        const opt = select.options[select.selectedIndex];
+        document.getElementById('selectedTeacherName').innerText = opt.getAttribute('data-name');
+
+        let assignments = [];
+        try {
+            assignments = JSON.parse(opt.getAttribute('data-assignments') || '[]');
+        } catch(e) {}
+
+        const container = document.getElementById('analyticsAssignmentBlocksContainer');
+        container.innerHTML = '';
+
+        if (assignments.length === 0) {
+            addAnalyticsAssignmentBlock();
+        } else {
+            assignments.forEach(a => addAnalyticsAssignmentBlock(a.subject, a.classes));
+        }
+
+        document.getElementById('teacherAssignmentEditor').style.display = 'block';
+    }
+
+    function addAnalyticsAssignmentBlock(subject = '', classesArray = []) {
+        const container = document.getElementById('analyticsAssignmentBlocksContainer');
+        const block = document.createElement('div');
+        block.className = 'analytics-assignment-block mb-3 p-3 border rounded bg-white position-relative';
+
+        let classesHtml = '';
+        const allGlobalClasses = {{ class_map_json|safe }};
+        let flatClasses = [];
+        Object.values(allGlobalClasses).forEach(arr => flatClasses = flatClasses.concat(arr));
+
+        // Remove duplicates and map to format like "1م1" if needed
+        let cleanGlobal = [...new Set(flatClasses)].map(c => {
+             let m = c.match(/(\d+)\s*متوسط\s*(\d+)/);
+             if (m) return `${m[1]}م${m[2]}`;
+             return c;
+        });
+
+        const cleanClasses = classesArray.map(c => c.trim().replace(/\s+/g, ''));
+        const combinedClasses = [...new Set([...cleanGlobal, ...cleanClasses])].sort();
+
+        combinedClasses.forEach(c => {
+            const isChecked = cleanClasses.includes(c) ? 'checked' : '';
+            classesHtml += `
+                <div class="form-check" style="display:inline-block; margin-left:15px; margin-bottom:5px;">
+                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${c}" ${isChecked}>
+                    <label class="form-check-label">${c}</label>
+                </div>
+            `;
+        });
+
+        // Subject options based on subjects_list
+        let subjectOptions = '<option value="">-- اكتب المادة أو اختر --</option>';
+        const subjectsList = {{ subjects_list|safe_json|safe }};
+        subjectsList.forEach(s => {
+             const selected = (s === subject) ? 'selected' : '';
+             subjectOptions += `<option value="${s}" ${selected}>${s}</option>`;
+        });
+        // Allow custom if not in list
+        if (subject && !subjectsList.includes(subject)) {
+             subjectOptions += `<option value="${subject}" selected>${subject}</option>`;
+        }
+
+        block.innerHTML = `
+            <button type="button" class="btn btn-sm btn-danger position-absolute" style="top: 10px; left: 10px;" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>
+            <div class="row">
+                <div class="col-md-12 mb-2">
+                    <label class="font-weight-bold">المادة</label>
+                    <div class="input-group">
+                        <select class="form-control dyn-subject-select">${subjectOptions}</select>
+                        <input type="text" class="form-control dyn-subject-input" placeholder="أو اكتب مادة جديدة" style="max-width: 200px;">
+                    </div>
+                </div>
+                <div class="col-md-12">
+                    <label class="font-weight-bold">الأقسام</label>
+                    <div class="mt-2 class-checkbox-container border p-2 rounded" style="max-height:150px; overflow-y:auto;">
+                        ${classesHtml}
+                    </div>
+                    <div class="mt-2 input-group input-group-sm" style="max-width: 250px;">
+                        <input type="text" class="form-control custom-class-input" placeholder="إضافة قسم (مثال: 1م1)">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" onclick="addCustomClassToAnalytics(this)">إضافة</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(block);
+    }
+
+    function addCustomClassToAnalytics(btn) {
+        const block = btn.closest('.analytics-assignment-block');
+        const input = block.querySelector('.custom-class-input');
+        const container = block.querySelector('.class-checkbox-container');
+        const newClass = input.value.trim();
+
+        if (newClass) {
+            const div = document.createElement('div');
+            div.className = 'form-check';
+            div.style = 'display:inline-block; margin-left:15px; margin-bottom:5px;';
+            div.innerHTML = `
+                <input class="form-check-input dyn-class-cb" type="checkbox" value="${newClass}" checked>
+                <label class="form-check-label">${newClass}</label>
+            `;
+            container.appendChild(div);
+            input.value = '';
+        }
+    }
+
+    async function saveAnalyticsTeacherAssignment() {
+        const empId = document.getElementById('teacherSelect').value;
+        if (!empId) return;
+
+        const blocks = document.querySelectorAll('#analyticsAssignmentBlocksContainer .analytics-assignment-block');
+        const assignments = [];
+
+        blocks.forEach(block => {
+            const selectVal = block.querySelector('.dyn-subject-select').value;
+            const inputVal = block.querySelector('.dyn-subject-input').value.trim();
+            const subject = inputVal || selectVal;
+
+            const classes = [];
+            block.querySelectorAll('.dyn-class-cb:checked').forEach(cb => classes.push(cb.value));
+
+            if (subject || classes.length > 0) {
+                assignments.push({ subject, classes });
+            }
+        });
+
+        const formData = new FormData();
+        formData.append('employee_id', empId);
+        formData.append('assignments', JSON.stringify(assignments));
+
+        try {
+            const res = await fetch("{% url 'save_analytics_teacher_assignment' %}", {
+                method: 'POST',
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                alert("تم حفظ إسناد التحليل بنجاح.");
+                // Update the data attribute so it reflects changes without reload
+                const opt = document.getElementById('teacherSelect').options[document.getElementById('teacherSelect').selectedIndex];
+                opt.setAttribute('data-assignments', JSON.stringify(assignments));
+            } else {
+                alert("حدث خطأ: " + data.message);
+            }
+        } catch (e) {
+            alert("خطأ في الاتصال بالخادم: " + e);
+        }
+    }
+</script>
+
 <!-- Edit Subjects Modal -->
 <div id="editSubjectsModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
     <div class="modal-content" style="background:#fff; width:90%; max-width:600px; padding:25px; border-radius:12px; max-height: 80vh; overflow-y: auto;">
@@ -1255,59 +1464,110 @@ async function deleteSubject(subjectName) {
 
 <!-- Import Grades Modal -->
 <div id="importGradesModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:#fff; width:90%; max-width:550px; padding:25px; border-radius:12px;">
+    <div class="modal-content" style="background:#fff; width:90%; max-width:650px; padding:25px; border-radius:12px; max-height: 90vh; overflow-y: auto;">
         <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #e2e8f0; padding-bottom:10px;"><span id="modalTitleText">استيراد العلامات</span> <small style="font-size:0.5em; color:#64748b;">(ملف واحد أو عدة ملفات)</small></h3>
         <div id="aiImportNotice" class="alert alert-warning" style="display:none; font-size:0.9rem;">
             <i class="fas fa-exclamation-triangle"></i> سيتم إرسال الملفات إلى خادم الذكاء الاصطناعي لتحليلها واستخراج العلامات. قد تستغرق العملية وقتاً أطول وتستهلك من رصيد الكلمات.
         </div>
-        <form id="bulkImportForm" enctype="multipart/form-data">
-            {% csrf_token %}
-            <input type="hidden" id="importMode" name="import_mode" value="local">
-            <div class="form-group mb-3 mt-3">
-                <label style="font-weight:bold; color:#334155;">ملفات الإكسل (يمكنك تحديد عدة ملفات للأقسام)</label>
-                <input type="file" id="importFiles" name="files" class="form-control mt-1" accept=".xls,.xlsx" multiple required>
-                <small class="text-muted d-block mt-1">يجب أن يحتوي الملف على اسم التلميذ والمواد والعلامات.</small>
-            </div>
-            <div class="form-group mb-4">
-                <label style="font-weight:bold; color:#334155;">الفصل الدراسي</label>
-                <select id="importTerm" name="term" class="form-control mt-1" required>
-                    <option value="الفصل الأول">الفصل الأول</option>
-                    <option value="الفصل الثاني">الفصل الثاني</option>
-                    <option value="الفصل الثالث">الفصل الثالث</option>
-                </select>
-            </div>
 
-            <!-- Progress Area -->
-            <div id="importProgressArea" style="display:none; margin-bottom:15px;">
-                <h6 style="color:#334155;" id="progressText">جاري الاستيراد... (0/0)</h6>
-                <div class="progress" style="height: 20px;">
-                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+        <!-- Step 1: File Selection -->
+        <div id="importStep1">
+            <form id="bulkImportForm" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" id="importMode" name="import_mode" value="local">
+                <div class="form-group mb-3 mt-3">
+                    <label style="font-weight:bold; color:#334155;">ملفات الإكسل (يمكنك تحديد عدة ملفات للأقسام)</label>
+                    <input type="file" id="importFiles" name="files" class="form-control mt-1" accept=".xls,.xlsx" multiple required>
+                    <small class="text-muted d-block mt-1">يجب أن يحتوي الملف على اسم التلميذ والمواد والعلامات.</small>
                 </div>
-                <ul id="importResultsList" class="mt-2" style="font-size:0.85em; max-height:100px; overflow-y:auto; list-style:none; padding-left:0; border:1px solid #e2e8f0; border-radius:4px; padding:5px;">
-                </ul>
+                <div class="form-group mb-4">
+                    <label style="font-weight:bold; color:#334155;">الفصل الدراسي</label>
+                    <select id="importTerm" name="term" class="form-control mt-1" required>
+                        <option value="الفصل الأول">الفصل الأول</option>
+                        <option value="الفصل الثاني">الفصل الثاني</option>
+                        <option value="الفصل الثالث">الفصل الثالث</option>
+                    </select>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:15px;">
+                    <button type="button" class="btn btn-secondary" id="cancelImportBtn" onclick="closeImportModal()">إغلاق</button>
+                    <button type="button" class="btn btn-primary" id="previewImportBtn" onclick="startBulkImportPreview()">معاينة وربط المواد <i class="fas fa-arrow-left ms-1"></i></button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Step 2: Subject Mapping -->
+        <div id="importStep2" style="display:none;">
+            <div class="alert alert-info" style="font-size: 0.9rem;">
+                <i class="fas fa-info-circle"></i> يرجى التأكد من ربط المواد المستخرجة من الملفات بالمواد المعتمدة في النظام.
             </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:15px;">
-                <button type="button" class="btn btn-secondary" id="cancelImportBtn" onclick="closeImportModal()">إغلاق</button>
-                <button type="button" class="btn btn-primary" id="startImportBtn" onclick="startBulkImport()">بدء الاستيراد</button>
+            <div id="mappingContainer" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                <table class="table table-bordered table-sm" style="font-size: 0.9rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>المادة في الملف</th>
+                            <th>المادة في النظام</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subjectMappingBody">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
             </div>
-        </form>
+
+            <!-- Hidden template of standard subjects for dropdowns -->
+            <select id="standardSubjectsTemplate" style="display:none;">
+                <option value="--احتفاظ بنفس الاسم--">--احتفاظ بنفس الاسم--</option>
+                <option value="ignore" style="color:red;">--تجاهل هذه المادة--</option>
+                {% for s in subjects_list %}
+                    <option value="{{ s|escape }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:15px;">
+                <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('importStep2').style.display='none'; document.getElementById('importStep1').style.display='block';">عودة</button>
+                <button type="button" class="btn btn-success" id="startFinalImportBtn" onclick="startFinalImport()"><i class="fas fa-upload me-1"></i> تأكيد وبدء الاستيراد</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Progress Area -->
+        <div id="importProgressArea" style="display:none; margin-top:15px;">
+            <h6 style="color:#334155;" id="progressText">جاري الاستيراد... (0/0)</h6>
+            <div class="progress" style="height: 20px;">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+            <ul id="importResultsList" class="mt-2" style="font-size:0.85em; max-height:100px; overflow-y:auto; list-style:none; padding-left:0; border:1px solid #e2e8f0; border-radius:4px; padding:5px;">
+            </ul>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 15px;">
+                <button type="button" class="btn btn-success" id="finishImportBtn" style="display:none;" onclick="window.location.reload();">إنهاء وتحديث الصفحة</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
+    // Global tracking of files and their temp paths from preview
+    let pendingImportFiles = [];
+
     function closeImportModal() {
         document.getElementById('importGradesModal').style.display = 'none';
+        document.getElementById('importStep1').style.display = 'block';
+        document.getElementById('importStep2').style.display = 'none';
         document.getElementById('importProgressArea').style.display = 'none';
         document.getElementById('importResultsList').innerHTML = '';
         document.getElementById('progressBar').style.width = '0%';
         document.getElementById('progressBar').textContent = '0%';
+        document.getElementById('finishImportBtn').style.display = 'none';
         document.getElementById('bulkImportForm').reset();
+        pendingImportFiles = [];
     }
 
-    async function startBulkImport() {
+    async function startBulkImportPreview() {
         const filesInput = document.getElementById('importFiles');
         const term = document.getElementById('importTerm').value;
+        const importMode = document.getElementById('importMode').value;
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
         if (!filesInput.files || filesInput.files.length === 0) {
@@ -1315,31 +1575,187 @@ async function deleteSubject(subjectName) {
             return;
         }
 
+        // If AI mode is selected, we skip the subject mapping because AI handles it natively
+        if (importMode === 'ai') {
+             startFinalImportWithoutMapping();
+             return;
+        }
+
         const files = Array.from(filesInput.files);
-        const totalFiles = files.length;
+        const previewBtn = document.getElementById('previewImportBtn');
+        const origBtnText = previewBtn.innerHTML;
+
+        previewBtn.disabled = true;
+        previewBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحليل...';
+
+        let allSubjects = new Set();
+        pendingImportFiles = []; // Reset
+
+        // Process files one by one to extract subjects
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('term', term);
+
+            try {
+                const response = await fetch("{% url 'upload_grades_preview_ajax' %}", {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store temp file info for the actual import
+                    pendingImportFiles.push({
+                        name: file.name,
+                        temp_file_path: data.temp_file,
+                        original_file: file // Fallback
+                    });
+
+                    data.subjects.forEach(s => allSubjects.add(s));
+                } else {
+                    console.error("Error analyzing file " + file.name, data.message);
+                    // Add it anyway to try fallback during actual import
+                    pendingImportFiles.push({
+                        name: file.name,
+                        temp_file_path: null,
+                        original_file: file
+                    });
+                }
+            } catch(e) {
+                 console.error("Network error on preview", e);
+                 pendingImportFiles.push({ name: file.name, temp_file_path: null, original_file: file });
+            }
+        }
+
+        previewBtn.disabled = false;
+        previewBtn.innerHTML = origBtnText;
+
+        // If no subjects found (or all failed), just proceed directly to normal import to show exact errors
+        if (allSubjects.size === 0) {
+            startFinalImport();
+            return;
+        }
+
+        // Populate Mapping UI
+        const tbody = document.getElementById('subjectMappingBody');
+        tbody.innerHTML = '';
+
+        const templateSelect = document.getElementById('standardSubjectsTemplate');
+
+        // Basic fuzzy match for suggestions
+        function getSuggestion(subject) {
+            let bestMatch = "--احتفاظ بنفس الاسم--";
+            let bestScore = 0;
+
+            Array.from(templateSelect.options).forEach(opt => {
+                const val = opt.value;
+                if (val === '--احتفاظ بنفس الاسم--' || val === 'ignore') return;
+
+                if (val.includes(subject) || subject.includes(val)) {
+                     return val; // Direct substring
+                }
+            });
+            return bestMatch;
+        }
+
+        Array.from(allSubjects).sort().forEach(subj => {
+            const tr = document.createElement('tr');
+
+            // Try to find a suggestion
+            let suggestion = "--احتفاظ بنفس الاسم--";
+            const opts = Array.from(templateSelect.options);
+            for(let i=0; i<opts.length; i++){
+                if(opts[i].value !== '--احتفاظ بنفس الاسم--' && opts[i].value !== 'ignore'){
+                    if(subj.includes(opts[i].value) || opts[i].value.includes(subj)){
+                        suggestion = opts[i].value; break;
+                    }
+                }
+            }
+
+            // Clone select options
+            let selectHtml = `<select class="form-select form-select-sm mapping-select" data-original="${subj.replace(/"/g, '&quot;')}">`;
+            opts.forEach(opt => {
+                const selected = (opt.value === suggestion) ? 'selected' : '';
+                selectHtml += `<option value="${opt.value}" style="${opt.style.cssText}" ${selected}>${opt.text}</option>`;
+            });
+            selectHtml += `</select>`;
+
+            tr.innerHTML = `
+                <td style="font-weight:bold; vertical-align:middle;">${subj}</td>
+                <td>${selectHtml}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Switch views
+        document.getElementById('importStep1').style.display = 'none';
+        document.getElementById('importStep2').style.display = 'block';
+    }
+
+    // Direct import for AI mode or if mapping is skipped
+    function startFinalImportWithoutMapping() {
+         pendingImportFiles = [];
+         const filesInput = document.getElementById('importFiles');
+         const files = Array.from(filesInput.files);
+         for(let i=0; i<files.length; i++){
+              pendingImportFiles.push({
+                   name: files[i].name,
+                   temp_file_path: null,
+                   original_file: files[i]
+              });
+         }
+         startFinalImport(true);
+    }
+
+    async function startFinalImport(skipMappingData = false) {
+        const term = document.getElementById('importTerm').value;
+        const importMode = document.getElementById('importMode').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        // Collect mappings
+        let subjectMappings = {};
+        if (!skipMappingData) {
+            document.querySelectorAll('.mapping-select').forEach(select => {
+                const original = select.getAttribute('data-original');
+                const mappedTo = select.value;
+                if (mappedTo !== '--احتفاظ بنفس الاسم--') {
+                    subjectMappings[original] = mappedTo;
+                }
+            });
+        }
 
         // Setup UI
+        document.getElementById('importStep1').style.display = 'none';
+        document.getElementById('importStep2').style.display = 'none';
         document.getElementById('importProgressArea').style.display = 'block';
-        document.getElementById('startImportBtn').disabled = true;
-        document.getElementById('cancelImportBtn').disabled = true;
-        document.getElementById('importFiles').disabled = true;
-        document.getElementById('importTerm').disabled = true;
 
         const resultsList = document.getElementById('importResultsList');
         resultsList.innerHTML = '';
 
         let completed = 0;
         let totalGrades = 0;
+        const totalFiles = pendingImportFiles.length;
 
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
+        for (let i = 0; i < totalFiles; i++) {
+            const fileInfo = pendingImportFiles[i];
 
-            document.getElementById('progressText').textContent = `جاري معالجة: ${file.name} (${i+1}/${totalFiles})`;
+            document.getElementById('progressText').textContent = `جاري استيراد: ${fileInfo.name} (${i+1}/${totalFiles})`;
 
             const formData = new FormData();
-            formData.append('file', file);
             formData.append('term', term);
-            formData.append('import_mode', document.getElementById('importMode').value);
+            formData.append('import_mode', importMode);
+            formData.append('subject_mappings', JSON.stringify(subjectMappings));
+
+            if (fileInfo.temp_file_path) {
+                formData.append('temp_file_path', fileInfo.temp_file_path);
+            } else if (fileInfo.original_file) {
+                // Fallback to uploading the file again
+                formData.append('file', fileInfo.original_file);
+            }
 
             try {
                 const response = await fetch("{% url 'upload_grades_ajax' %}", {
@@ -1358,11 +1774,11 @@ async function deleteSubject(subjectName) {
 
                 if (data.success) {
                     li.style.color = '#15803d'; // green
-                    li.innerHTML = `<i class="fas fa-check-circle"></i> ${file.name}: ${data.message}`;
+                    li.innerHTML = `<i class="fas fa-check-circle"></i> ${fileInfo.name}: ${data.message}`;
                     totalGrades += data.count;
                 } else {
                     li.style.color = '#b91c1c'; // red
-                    li.innerHTML = `<i class="fas fa-times-circle"></i> ${file.name}: ${data.message}`;
+                    li.innerHTML = `<i class="fas fa-times-circle"></i> ${fileInfo.name}: ${data.message}`;
                 }
                 resultsList.prepend(li); // add to top
 
@@ -1370,7 +1786,7 @@ async function deleteSubject(subjectName) {
                 const li = document.createElement('li');
                 li.style.color = '#b91c1c';
                 li.style.padding = '3px';
-                li.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${file.name}: خطأ في الاتصال بالخادم.`;
+                li.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${fileInfo.name}: خطأ في الاتصال بالخادم.`;
                 resultsList.prepend(li);
             }
 
@@ -1383,17 +1799,7 @@ async function deleteSubject(subjectName) {
         }
 
         document.getElementById('progressText').textContent = `اكتمل الاستيراد! تم استيراد ${totalGrades} علامة إجمالاً.`;
-
-        // Re-enable close button and change its text
-        const closeBtn = document.getElementById('cancelImportBtn');
-        closeBtn.disabled = false;
-        closeBtn.textContent = 'إنهاء وتحديث الصفحة';
-        closeBtn.classList.remove('btn-secondary');
-        closeBtn.classList.add('btn-success');
-
-        closeBtn.onclick = function() {
-            window.location.reload();
-        };
+        document.getElementById('finishImportBtn').style.display = 'inline-block';
     }
 </script>
 
