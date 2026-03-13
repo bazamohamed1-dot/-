@@ -278,6 +278,23 @@
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%;">
             <form method="GET" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex-grow: 1;" id="analyticsFilterForm">
+
+                <!-- Subject Filter -->
+                <select name="subject" id="subjectFilter" class="form-select" style="min-width: 150px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="handleSubjectFilterChange(this)">
+                    <option value="" style="color: black;">جميع المواد</option>
+                    {% for subj in subjects_list %}
+                        <option value="{{ subj }}" {% if request.GET.subject == subj %}selected{% endif %} style="color: black;">{{ subj }}</option>
+                    {% endfor %}
+                </select>
+
+                <!-- Teacher Filter -->
+                <select name="teacher_id" id="teacherFilter" class="form-select" style="min-width: 200px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="handleTeacherFilterChange(this)">
+                    <option value="" style="color: black;">فلترة حسب الأستاذ (كل الأساتذة)</option>
+                    {% for t in teachers %}
+                        <option value="{{ t.id }}" data-subject="{{ t.subject|default:'' }}" {% if selected_teacher_id == t.id|stringformat:"s" %}selected{% endif %} style="color: black;">{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
+                    {% endfor %}
+                </select>
+
                 <select name="level" id="levelFilter" class="form-select" style="min-width: 150px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="updateClassDropdown(true)">
                     <option value="" style="color: black;">كل المستويات</option>
                     {% for lvl in levels %}
@@ -294,21 +311,6 @@
                     <option value="الفصل الثالث" {% if request.GET.term == 'الفصل الثالث' %}selected{% endif %} style="color: black;">الفصل الثالث</option>
                 </select>
 
-                <!-- Teacher Filter -->
-                <select name="teacher_id" class="form-select" style="min-width: 200px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="handleTeacherFilterChange(this)">
-                    <option value="" style="color: black;">فلترة حسب الأستاذ (كل الأساتذة)</option>
-                    {% for t in teachers %}
-                        <option value="{{ t.id }}" {% if selected_teacher_id == t.id|stringformat:"s" %}selected{% endif %} style="color: black;">{{ t.last_name }} {{ t.first_name }} ({{ t.subject|default:"/" }})</option>
-                    {% endfor %}
-                </select>
-
-                <!-- Subject Filter -->
-                <select name="subject" id="subjectFilter" class="form-select" style="min-width: 150px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="document.getElementById('analyticsFilterForm').submit();">
-                    <option value="" style="color: black;">جميع المواد</option>
-                    {% for subj in subjects_list %}
-                        <option value="{{ subj }}" {% if request.GET.subject == subj %}selected{% endif %} style="color: black;">{{ subj }}</option>
-                    {% endfor %}
-                </select>
 
                 <!-- Hidden input to track if form was explicitly submitted so we know to read unchecked state -->
                 <input type="hidden" name="filter_applied" value="1">
@@ -438,10 +440,58 @@
                 if (selectElement.value !== "") {
                     document.getElementById('levelFilter').value = "";
                     document.getElementById('classFilter').innerHTML = '<option value="" style="color: black;">جميع الأقسام</option>';
-                    document.getElementById('subjectFilter').value = "";
+                    // Don't clear subject filter immediately, wait for backend to process
                 }
                 document.getElementById('analyticsFilterForm').submit();
             }
+
+            function handleSubjectFilterChange(selectElement) {
+                // If a subject is selected, disable/hide teachers that don't teach this subject
+                const subj = selectElement.value;
+                const teacherFilter = document.getElementById('teacherFilter');
+
+                if (subj) {
+                    let firstValidTeacherFound = false;
+                    let currentSelectedIsValid = false;
+
+                    for (let i = 0; i < teacherFilter.options.length; i++) {
+                        let opt = teacherFilter.options[i];
+                        if (opt.value === "") continue; // Skip 'All' option
+
+                        const tSubj = opt.getAttribute('data-subject');
+                        if (tSubj && tSubj !== '/' && tSubj !== subj) {
+                            opt.style.display = 'none';
+                            opt.disabled = true;
+                        } else {
+                            opt.style.display = 'block';
+                            opt.disabled = false;
+                            if (!firstValidTeacherFound) firstValidTeacherFound = true;
+                            if (opt.selected) currentSelectedIsValid = true;
+                        }
+                    }
+
+                    // If the currently selected teacher does not teach the new subject, clear the teacher filter
+                    if (!currentSelectedIsValid && teacherFilter.value !== "") {
+                        teacherFilter.value = "";
+                    }
+                } else {
+                    // Reset all teachers
+                    for (let i = 0; i < teacherFilter.options.length; i++) {
+                        teacherFilter.options[i].style.display = 'block';
+                        teacherFilter.options[i].disabled = false;
+                    }
+                }
+
+                document.getElementById('analyticsFilterForm').submit();
+            }
+
+            // Run subject check on load
+            document.addEventListener('DOMContentLoaded', () => {
+                const subjectFilter = document.getElementById('subjectFilter');
+                if (subjectFilter.value) {
+                    handleSubjectFilterChange(subjectFilter);
+                }
+            });
 
             function toggleChartFullscreen(container) {
                 if (!document.fullscreenElement) {

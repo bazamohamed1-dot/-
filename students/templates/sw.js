@@ -55,7 +55,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     // 0. Bypass caching for Analytics and dynamic views (always need fresh data from server)
-    if (event.request.url.includes('/analytics/') || event.request.url.includes('/hr/') || event.request.url.includes('/mapping/')) {
+    if (event.request.url.includes('/analytics/') || event.request.url.includes('/hr/') || event.request.url.includes('/mapping/') || event.request.url.includes('/dashboard/')) {
         // To be extra safe, send no-cache headers in fetch
         event.respondWith(
             fetch(event.request, { cache: "no-store" })
@@ -65,7 +65,7 @@ self.addEventListener('fetch', (event) => {
 
     // 1. Handle Navigation Requests (HTML Pages)
     if (event.request.mode === 'navigate') {
-        if (event.request.url.includes('/hr/') || event.request.url.includes('/analytics/')) {
+        if (event.request.url.includes('/hr/') || event.request.url.includes('/analytics/') || event.request.url.includes('/dashboard/')) {
             event.respondWith(fetch(event.request, { cache: "no-store" }));
             return;
         }

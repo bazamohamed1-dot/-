@@ -150,6 +150,12 @@
                 {% empty %}
                 <tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">لا توجد بيانات متاحة حالياً</td></tr>
                 {% endfor %}
+                <tr style="border-top: 2px solid #e2e8f0; text-align:center; background:#f8fafc;">
+                    <td style="padding:15px; font-weight:800; color:#0f172a; border-left:1px solid #e2e8f0;">المجموع العام</td>
+                    <td style="padding:15px; font-weight:800; color:#1e40af; border-left:1px solid #white;" class="western-nums">{{ half_board_count }}</td>
+                    <td style="padding:15px; font-weight:800; color:#4b5563; border-left:1px solid #e2e8f0;" class="western-nums">{{ ext_board_count }}</td>
+                    <td style="padding:15px; font-weight:800; color:#0f172a;" class="western-nums">{{ total_students }}</td>
+                </tr>
             </tbody>
         </table>
     </div>
