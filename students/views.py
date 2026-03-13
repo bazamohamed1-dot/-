@@ -1132,13 +1132,19 @@ def student_filters(request):
     """
     Returns distinct Academic Years and Classes for dynamic dropdowns.
     Uses robust query to ensure all variations are captured.
+    Now grouped primarily by class_code to avoid duplications.
     """
     import re
+
     # Exclude empty or null values
     levels_raw = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
-    classes_raw = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct())
 
-    # Since level and class_name are now exact, no fallback extraction needed
+    # Use class_code as the primary class identifier if available, otherwise fallback to class_name
+    class_codes_raw = list(Student.objects.exclude(class_code__isnull=True).exclude(class_code__exact='').values_list('class_code', flat=True).distinct())
+    classes_fallback = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').filter(class_code__isnull=True).values_list('class_name', flat=True).distinct())
+
+    classes_raw = class_codes_raw + classes_fallback
+
     derived_levels = set(levels_raw)
 
     # Sort logically
@@ -1152,10 +1158,8 @@ def student_filters(request):
 
     levels = sorted(list(derived_levels), key=custom_sort)
 
-    # We clean up classes to ensure they are distinct numbers if stored that way
     clean_classes = set()
     for c in classes_raw:
-        # If class string still contains extra spaces or things, we strip it
         clean_classes.add(str(c).strip())
 
     classes = sorted(list(clean_classes), key=custom_sort)
@@ -1163,13 +1167,24 @@ def student_filters(request):
     # Build a mapping of level -> available classes
     level_class_map = {}
     for level in levels:
-        level_class_map[level] = sorted(list(set(
+        level_classes = list(set(
             str(c).strip() for c in
             Student.objects.filter(academic_year=level)
-            .exclude(class_name__isnull=True)
-            .exclude(class_name__exact='')
-            .values_list('class_name', flat=True)
-        )), key=custom_sort)
+            .exclude(class_code__isnull=True)
+            .exclude(class_code__exact='')
+            .values_list('class_code', flat=True)
+        ))
+
+        if not level_classes: # fallback to name if no codes
+            level_classes = list(set(
+                str(c).strip() for c in
+                Student.objects.filter(academic_year=level)
+                .exclude(class_name__isnull=True)
+                .exclude(class_name__exact='')
+                .values_list('class_name', flat=True)
+            ))
+
+        level_class_map[level] = sorted(level_classes, key=custom_sort)
 
     return Response({
         'levels': levels,

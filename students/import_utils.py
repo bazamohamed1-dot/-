@@ -354,3 +354,43 @@ def parse_hr_file(file_path, override_header_indices=None):
             employees.append(emp_data)
 
     return employees
+
+def standardize_subject_name(raw_name):
+    """
+    Standardizes subject names to fix common typos, variations, and trailing spaces.
+    e.g. 'علوط طبيعية' -> 'ع الطبيعة والحياة'
+    """
+    if not raw_name:
+        return ""
+
+    # 1. Clean spaces and normalize some arabic letters
+    name = str(raw_name).strip()
+    name = re.sub(r'\s+', ' ', name) # Remove multiple spaces
+
+    # Simple normalizations (Alef variants)
+    name = re.sub(r'[إأآا]', 'ا', name)
+    name = name.replace('ة', 'ه') # Normalize Ta Marbuta just for matching, we will return the official name
+
+    mapping = {
+        'الرياضيات': ['رياضيات', 'الرياضيات', 'ماده الرياضيات', 'الرياصيات'],
+        'اللغة العربية': ['لغة عربية', 'اللغه العربيه', 'عربية', 'العربية', 'لغه عربيه', 'اللغة العربية', 'الغه العربيه'],
+        'التربية الإسلامية': ['تربية اسلامية', 'التربيه الاسلاميه', 'إسلامية', 'اسلامية', 'التربية الاسلامية'],
+        'اللغة الفرنسية': ['لغة فرنسية', 'اللغه الفرنسيه', 'فرنسية', 'الفرنسية', 'الفرنسيه'],
+        'اللغة الإنجليزية': ['لغة انجليزية', 'اللغه الانجليزيه', 'انجليزية', 'الانجليزية', 'الانجليزيه', 'لغة إنجليزية'],
+        'التربية المدنية': ['تربية مدنية', 'التربيه المدنيه', 'مدنية', 'المدنية'],
+        'التاريخ والجغرافيا': ['تاريخ وجغرافيا', 'التاريخ والجغرافيا', 'تاريخ', 'جغرافيا', 'اجتماعيات', 'الاجتماعيات'],
+        'ع الطبيعة والحياة': ['علوم طبيعية', 'علوط طبيعية', 'العلوم الطبيعية', 'علوم طبيعة', 'ع طبيعة وحياة', 'العلوم الطبيعيه', 'علوم'],
+        'ع الفيزيائية والتكنولوجيا': ['فيزياء', 'الفيزياء', 'علوم فيزيائية', 'ع فيزيائية وتكنولوجيا', 'العلوم الفيزيائية', 'فيزيا'],
+        'المعلوماتية': ['اعلام آلي', 'الاعلام الآلي', 'معلوماتية', 'المعلوماتية', 'اعلام الي', 'إعلام آلي'],
+        'التربية التشكيلية': ['تربية فنية', 'التربيه الفنيه', 'رسم', 'الرسم', 'تربية تشكيلية', 'التربيه التشكيليه'],
+        'التربية البدنية': ['تربية بدنية', 'التربيه البدنيه', 'رياضة', 'الرياضة', 'تربية رياضية']
+    }
+
+    for official_name, variants in mapping.items():
+        for variant in variants:
+            # Normalize variant for matching
+            v_norm = re.sub(r'[إأآا]', 'ا', variant).replace('ة', 'ه').lower()
+            if v_norm in name.lower():
+                return official_name
+
+    return name # Return cleaned original if no match found

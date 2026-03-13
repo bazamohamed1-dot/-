@@ -39,7 +39,7 @@ def run_expert_engine(current_academic_year, current_term, prev_academic_year):
         prev_grades = Grade.objects.filter(academic_year=prev_academic_year).select_related('student')
 
         # Build DataFrames
-        curr_data = list(curr_grades.values('student__id', 'student__student_id_number', 'student__academic_year', 'student__class_name', 'subject', 'term', 'score'))
+        curr_data = list(curr_grades.values('student__id', 'student__student_id_number', 'student__academic_year', 'student__class_name', 'student__class_code', 'subject', 'term', 'score'))
         prev_data = list(prev_grades.values('student__id', 'student__student_id_number', 'student__academic_year', 'subject', 'term', 'score'))
 
         df_curr = pd.DataFrame(curr_data)
@@ -238,7 +238,9 @@ def run_expert_engine(current_academic_year, current_term, prev_academic_year):
                 student_z_score = float(student_curr['z_score'].mean()) if 'z_score' in student_curr.columns else 0.0
                 if pd.isna(student_z_score): student_z_score = 0.0
 
-                class_name = student_curr['student__class_name'].iloc[0] if not student_curr.empty else "غير معروف"
+                # Prefer class_code for display/grouping if available
+                class_code_val = student_curr['student__class_code'].iloc[0] if 'student__class_code' in student_curr.columns and not pd.isna(student_curr['student__class_code'].iloc[0]) else None
+                class_name = class_code_val or (student_curr['student__class_name'].iloc[0] if not student_curr.empty else "غير معروف")
 
                 # Save Student Data
                 StudentExpertData.objects.create(
