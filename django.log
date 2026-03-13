@@ -154,3 +154,26 @@ For more information on production servers see: https://docs.djangoproject.com/e
 [13/Mar/2026 20:38:28] "GET / HTTP/1.1" 200 25851
 [13/Mar/2026 20:39:58] "GET /canteen/login/ HTTP/1.1" 404 179
 [13/Mar/2026 20:41:12] "GET / HTTP/1.1" 200 25851
+[13/Mar/2026 21:39:11] "GET /canteen/hr/67/delete/ HTTP/1.1" 302 0
+[13/Mar/2026 21:39:44] "POST /auth/login/ HTTP/1.1" 400 31
+[13/Mar/2026 21:42:07] "POST /auth/login/ HTTP/1.1" 200 188
+[13/Mar/2026 21:42:45] "GET /canteen/hr/67/delete/ HTTP/1.1" 404 179
+[13/Mar/2026 21:44:50] "GET /canteen/hr/1/delete/ HTTP/1.1" 302 0
+Performing system checks...
+
+System check identified no issues (0 silenced).
+Running migrations on startup...
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, students
+Running migrations:
+  No migrations to apply.
+March 13, 2026 - 20:14:08
+Django version 6.0.2, using settings 'School_Management.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+/home/jules/.pyenv/versions/3.12.13/lib/python3.12/site-packages/django/core/handlers/base.py:62: UserWarning: No directory at: /app/staticfiles/
+  mw_instance = middleware(adapted_handler)
+[13/Mar/2026 21:53:57] "GET /canteen/hr/67/delete/ HTTP/1.1" 302 0

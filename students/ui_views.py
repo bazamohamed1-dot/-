@@ -1053,8 +1053,12 @@ def hr_delete(request, pk):
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
         return redirect('dashboard')
 
-    get_object_or_404(Employee, pk=pk).delete()
-    messages.success(request, "تم الحذف")
+    try:
+        emp = Employee.objects.get(pk=pk)
+        emp.delete()
+        messages.success(request, "تم الحذف")
+    except Employee.DoesNotExist:
+        messages.warning(request, "هذا الموظف غير موجود أو تم حذفه مسبقاً.")
     return redirect('hr_home')
 
 def parents_home(request):
