@@ -2327,6 +2327,15 @@ def upload_grades_ajax(request):
         if mappings_json:
             try:
                 subject_mappings = json.loads(mappings_json)
+                # Save these mappings permanently to the database
+                from .models_mapping import SubjectAlias
+                for old_name, new_name in subject_mappings.items():
+                    if new_name and new_name != "ignore":
+                        # Create or update alias
+                        SubjectAlias.objects.update_or_create(
+                            alias=old_name.strip(),
+                            defaults={'canonical_name': new_name.strip()}
+                        )
             except json.JSONDecodeError:
                 pass
 
