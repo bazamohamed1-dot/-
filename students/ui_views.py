@@ -1530,6 +1530,15 @@ def analytics_dashboard(request):
         class_map = filtered_class_map
         levels = list(class_map.keys())
 
+        # Re-sort levels to keep them in a logical order (1, 2, 3, 4)
+        def level_sort_key(lvl):
+            import re
+            m = re.search(r'\d+', str(lvl))
+            if m:
+                return int(m.group(0))
+            return 999
+        levels = sorted(levels, key=level_sort_key)
+
         # Ensure the selected_level and selected_class context matches the ones we auto-selected earlier
         # so the template sets the correct 'selected' option in the HTML dropdowns.
         if selected_level and selected_level not in levels:
@@ -1558,7 +1567,9 @@ def analytics_dashboard(request):
         'teachers': teachers,
         'teacher_info': teacher_info,
         'subjects_list': subjects_list,
-        'selected_teacher_id': selected_teacher_id
+        'selected_teacher_id': selected_teacher_id,
+        'selected_level': selected_level,
+        'selected_class': selected_class
     }
     return render(request, 'students/analytics.html', context)
 

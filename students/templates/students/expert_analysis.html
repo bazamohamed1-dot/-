@@ -342,7 +342,7 @@
         }
         return cookieValue;
     }
-    const csrftoken = getCookie('csrftoken');
+    const csrftoken = getCookie('csrftoken') || '{{ csrf_token }}';
 
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -423,9 +423,11 @@
             formData.append('files', fileInput.files[i]);
         }
 
+        const csrfTokenVal = getCookie('csrftoken') || '{{ csrf_token }}';
+
         fetch("{% url 'api_import_historical_expert_data' %}", {
             method: 'POST',
-            headers: {'X-CSRFToken': csrftoken},
+            headers: {'X-CSRFToken': csrfTokenVal},
             body: formData
         })
         .then(res => res.json())
@@ -464,9 +466,11 @@
             formData.append('files', fileInput.files[i]);
         }
 
+        const csrfTokenVal = getCookie('csrftoken') || '{{ csrf_token }}';
+
         fetch("{% url 'api_import_historical_expert_data' %}", {
             method: 'POST',
-            headers: {'X-CSRFToken': csrftoken},
+            headers: {'X-CSRFToken': csrfTokenVal},
             body: formData
         })
         .then(res => res.json())

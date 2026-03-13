@@ -281,7 +281,7 @@
                 <select name="level" id="levelFilter" class="form-select" style="min-width: 150px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="updateClassDropdown(true)">
                     <option value="" style="color: black;">كل المستويات</option>
                     {% for lvl in levels %}
-                        <option value="{{ lvl }}" {% if request.GET.level == lvl %}selected{% endif %} style="color: black;">{{ lvl }}</option>
+                        <option value="{{ lvl }}" {% if selected_level == lvl or request.GET.level == lvl %}selected{% endif %} style="color: black;">{{ lvl }}</option>
                     {% endfor %}
                 </select>
                 <select name="class_name" id="classFilter" class="form-select" style="min-width: 150px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onchange="document.getElementById('analyticsFilterForm').submit();">
@@ -359,7 +359,7 @@
                 classMap = JSON.parse('{{ class_map_json|escapejs }}' || '{}');
             } catch(e) { console.error("Could not parse classMap", e); }
 
-            const currentClass = "{{ request.GET.class_name|escapejs }}";
+            const currentClass = "{{ selected_class|escapejs }}" || "{{ request.GET.class_name|escapejs }}";
 
             function updateClassDropdown(submitAfter = false) {
                 const levelFilter = document.getElementById('levelFilter');
@@ -660,6 +660,7 @@
                         <th>عدد الاختبارات</th>
                         <th>متوسط العلامات</th>
                         <th>نسبة النجاح (%)</th>
+                        <th>إجراء</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -674,10 +675,15 @@
                         </td>
                         <td>
                             <div class="progress" style="height: 20px; border-radius: 10px; background-color: #e2e8f0;">
-                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ ts.success_pct }}%;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ ts.success_pct }}%; background-color: #22c55e !important;" aria-valuenow="{{ ts.success_pct }}" aria-valuemin="0" aria-valuemax="100">
                                     <span style="font-weight:bold; color:white; padding:0 5px;">{{ ts.success_pct }}%</span>
                                 </div>
                             </div>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeTeacherFromComparison('{{ ts.teacher_name }}', this)" title="حذف من المقارنة">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -702,6 +708,7 @@
                     <tr>
                         <th>الرتبة</th>
                         <th>اسم التلميذ</th>
+                        <th>المستوى</th>
                         <th>القسم</th>
                         <th>المعدل</th>
                     </tr>
@@ -711,7 +718,8 @@
                     <tr {% if student.is_absent %}class="table-secondary"{% elif student.score < 10 %}class="table-danger"{% elif student.score >= 16 %}class="table-success"{% endif %}>
                         <td>{{ forloop.counter }}</td>
                         <td>{{ student.student_name }}</td>
-                        <td>{{ student.student__class_name }}</td>
+                        <td>{{ student.student__academic_year|default:"-" }}</td>
+                        <td style="direction: ltr; text-align: right;">{{ student.student__class_name }}</td>
                         {% if student.is_absent %}
                         <td style="color: #64748b; font-style: italic;">تلميذ(ة) غائب(ة)</td>
                         {% else %}
@@ -1004,6 +1012,7 @@
             <thead class="table-dark">
                 <tr>
                     <th>التلميذ</th>
+                    <th>المستوى</th>
                     <th>القسم</th>
                     <th>المادة</th>
                     <th>الحالة / العلامة</th>
@@ -1051,6 +1060,7 @@
                 const badge = showAsZero ? '<span class="badge bg-danger">0.00</span>' : '<span class="badge bg-secondary">غائب</span>';
                 tr.innerHTML = `
                     <td>${student.student_name}</td>
+                    <td>${student.student__academic_year || '-'}</td>
                     <td style="direction: ltr; text-align: right;">${student.student__class_name}</td>
                     <td>${currentSubject}</td>
                     <td>${badge}</td>
@@ -1633,6 +1643,20 @@ async function deleteSubject(subjectName) {
             row.style.display = '';
         });
         document.getElementById('showAllTeachersBtn').style.display = 'none';
+    };
+
+    window.removeTeacherFromComparison = function(tName, btnElem) {
+        // Remove from charts data
+        comparisonTeachers = comparisonTeachers.filter(t => t.name !== tName);
+        updateTeacherCharts();
+
+        // Hide the row
+        if (btnElem) {
+            const row = btnElem.closest('tr');
+            if (row) {
+                row.style.display = 'none';
+            }
+        }
     };
 
     // On load, hide all rows if no teacher is pre-selected
