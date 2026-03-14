@@ -158,8 +158,8 @@ def api_expert_available_years(request):
     if not request.user.profile.has_perm('access_analytics'):
         return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
 
-    from .models import Grade
-    years = Grade.objects.values_list('academic_year', flat=True).distinct().order_by('-academic_year')
+    from .models import HistoricalGrade
+    years = HistoricalGrade.objects.values_list('historical_year', flat=True).distinct().order_by('-historical_year')
     years = [y for y in years if y and y != ""]
 
     count = len(years)
@@ -186,7 +186,7 @@ def api_import_historical_expert_data(request):
             return JsonResponse({'status': 'error', 'message': 'لم يتم العثور على ملفات للرفع.'}, status=400)
 
         from .import_utils import extract_rows_from_file
-        from .models import Student, Grade
+        from .models import Student, HistoricalStudent, HistoricalGrade
         import re
 
         total_students_processed = 0
@@ -358,11 +358,11 @@ def api_import_historical_expert_data(request):
                             try:
                                 score = float(str(val).replace(',', '.'))
                                 if 0 <= score <= 20:
-                                    Grade.objects.update_or_create(
+                                    HistoricalGrade.objects.update_or_create(
                                         student=student,
                                         subject=subj,
                                         term=term,
-                                        academic_year=detected_year,
+                                        historical_year=detected_year,
                                         defaults={'score': score}
                                     )
                                     total_grades_added += 1

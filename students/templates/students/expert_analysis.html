@@ -3,9 +3,16 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block content %}
-<div id="loadingOverlayExpert" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-    <div class="spinner-border text-light mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
-    <div>جاري معالجة البيانات، يرجى الانتظار...</div>
+<div id="loadingOverlayExpert" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: white; font-family: 'Cairo', sans-serif;">
+    <div style="text-align: center; max-width: 500px; width: 80%;">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+        <h3 id="loadingOverlayText" class="mb-4">جاري معالجة البيانات، يرجى الانتظار...</h3>
+
+        <div class="progress" style="height: 25px; border-radius: 15px; background-color: #333; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);">
+            <div id="expertProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%; font-size: 1.1rem; font-weight: bold; line-height: 25px; transition: width 0.4s ease;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+        </div>
+        <p id="expertProgressSubtext" class="mt-3 text-muted" style="font-size: 0.9rem;">تتم الآن قراءة وتحليل الملفات المرفقة...</p>
+    </div>
 </div>
 
 
@@ -410,6 +417,59 @@
         });
     }
 
+
+let progressInterval;
+function startExpertProgress(text) {
+    const overlay = document.getElementById('loadingOverlayExpert');
+    const title = document.getElementById('loadingOverlayText');
+    const bar = document.getElementById('expertProgressBar');
+    const subtext = document.getElementById('expertProgressSubtext');
+
+    if(overlay) overlay.style.display = 'flex';
+    if(title) title.innerText = text || 'جاري معالجة البيانات، يرجى الانتظار...';
+    if(bar) {
+        bar.style.width = '0%';
+        bar.innerText = '0%';
+        bar.setAttribute('aria-valuenow', 0);
+    }
+
+    let currentProgress = 0;
+    // Slow down progress as it reaches 90%
+    progressInterval = setInterval(() => {
+        if (currentProgress < 50) currentProgress += 5;
+        else if (currentProgress < 80) currentProgress += 2;
+        else if (currentProgress < 95) currentProgress += 0.5;
+
+        if(bar) {
+            bar.style.width = currentProgress + '%';
+            bar.innerText = Math.round(currentProgress) + '%';
+            bar.setAttribute('aria-valuenow', Math.round(currentProgress));
+        }
+
+        if(subtext) {
+            if(currentProgress > 80) subtext.innerText = "جاري حفظ التغييرات في قاعدة البيانات...";
+            else if(currentProgress > 50) subtext.innerText = "جاري استخراج وتحليل النتائج...";
+            else subtext.innerText = "تتم الآن قراءة الملفات المرفقة...";
+        }
+    }, 500);
+}
+
+function stopExpertProgress() {
+    clearInterval(progressInterval);
+    const overlay = document.getElementById('loadingOverlayExpert');
+    const bar = document.getElementById('expertProgressBar');
+
+    if(bar) {
+        bar.style.width = '100%';
+        bar.innerText = '100%';
+        bar.setAttribute('aria-valuenow', 100);
+    }
+
+    setTimeout(() => {
+        if(overlay) overlay.style.display = 'none';
+    }, 500); // Wait half a second before hiding to show 100%
+}
+
     function uploadHistoricalDataModal() {
         const fileInput = document.getElementById('historicalExcelFileModal');
         if (!fileInput.files.length) {
@@ -423,9 +483,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الرفع والتحليل...';
 
         const overlay = document.getElementById('loadingOverlayExpert');
-        if (overlay) {
-            overlay.style.display = 'flex';
-        }
+        startExpertProgress('جاري استيراد وتحليل ملفات السنوات السابقة...');
 
         const formData = new FormData();
         for(let i=0; i<fileInput.files.length; i++) {
@@ -444,7 +502,7 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
             const overlay = document.getElementById('loadingOverlayExpert');
-            if (overlay) overlay.style.display = 'none';
+            stopExpertProgress();
             if (data.status === 'success') {
                 alert(data.message);
                 fileInput.value = ''; // clear input
@@ -457,7 +515,7 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
             const overlay = document.getElementById('loadingOverlayExpert');
-            if (overlay) overlay.style.display = 'none';
+            stopExpertProgress();
             alert('حدث خطأ أثناء الاتصال بالخادم.');
         });
     }
@@ -475,9 +533,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الرفع...';
 
         const overlay = document.getElementById('loadingOverlayExpert');
-        if (overlay) {
-            overlay.style.display = 'flex';
-        }
+        startExpertProgress('جاري استيراد وتحليل ملفات السنوات السابقة...');
 
         const formData = new FormData();
         for(let i=0; i<fileInput.files.length; i++) {
@@ -496,7 +552,7 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
             const overlay = document.getElementById('loadingOverlayExpert');
-            if (overlay) overlay.style.display = 'none';
+            stopExpertProgress();
             if (data.status === 'success') {
                 alert(data.message);
                 fileInput.value = ''; // clear input
@@ -509,7 +565,7 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
             const overlay = document.getElementById('loadingOverlayExpert');
-            if (overlay) overlay.style.display = 'none';
+            stopExpertProgress();
             alert('حدث خطأ أثناء الاتصال بالخادم.');
         });
     }

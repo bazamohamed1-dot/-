@@ -516,3 +516,29 @@ class CohortExpertData(models.Model):
     class Meta:
         verbose_name = "بيانات الفوج (الخبراء)"
         verbose_name_plural = "بيانات الأفواج (الخبراء)"
+
+# ==========================================================
+# EXPERT ANALYSIS & HISTORICAL DATA
+# ==========================================================
+
+class HistoricalStudent(models.Model):
+    student_id_number = models.CharField(max_length=50, null=True, blank=True)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    academic_year = models.CharField(max_length=50) # The level they were in (e.g., أولى متوسط)
+    class_name = models.CharField(max_length=50)    # The class they were in (e.g., أولى 1)
+    class_code = models.CharField(max_length=20, blank=True, null=True)
+    historical_year = models.CharField(max_length=20) # e.g. "2023-2024"
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.historical_year})"
+
+class HistoricalGrade(models.Model):
+    student = models.ForeignKey(HistoricalStudent, on_delete=models.CASCADE)
+    subject = models.CharField(max_length=100)
+    term = models.CharField(max_length=50)
+    score = models.FloatField()
+    historical_year = models.CharField(max_length=20)
+
+    def __str__(self):
+        return f"{self.student} - {self.subject} - {self.score}"
