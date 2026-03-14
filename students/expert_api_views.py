@@ -1,3 +1,4 @@
+import django
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from .expert_utils import run_expert_engine
@@ -298,6 +299,8 @@ def api_import_historical_expert_data(request):
                     if not any(row): continue
 
                     s_id = str(row[id_col]).strip() if id_col != -1 and len(row) > id_col and row[id_col] else None
+                    if s_id and s_id.endswith('.0'):
+                        s_id = s_id[:-2]
                     last_name = str(row[ln_col]).strip() if ln_col != -1 and len(row) > ln_col and row[ln_col] else ""
                     first_name = str(row[fn_col]).strip() if fn_col != -1 and len(row) > fn_col and row[fn_col] else ""
 
@@ -306,18 +309,22 @@ def api_import_historical_expert_data(request):
                     student = None
                     if s_id and s_id.isdigit():
                         student = Student.objects.filter(student_id_number=s_id).first()
+                        if not student:
+                            # Try with/without .0 just in case
+                            student = Student.objects.filter(student_id_number=s_id.replace('.0', '') if '.0' in s_id else s_id + '.0').first()
                     if not student:
                         student = Student.objects.filter(last_name=last_name, first_name=first_name).first()
 
                     if not student:
                         import random
-                        fake_id = s_id if s_id else str(random.randint(10000000, 99999999))
+                        fake_id = s_id if s_id and not s_id.endswith('.0') else (s_id[:-2] if s_id and s_id.endswith('.0') else str(random.randint(10000000, 99999999)))
 
                         # Use generate_class_code to ensure uniform class_code creation
                         temp_student = Student(academic_year=detected_level or 'أولى متوسط', class_name=detected_class or 'أولى 1')
                         class_code = temp_student.generate_class_code()
 
-                        student = Student.objects.create(
+                        try:
+                            student = Student.objects.create(
                             student_id_number=fake_id,
                             last_name=last_name,
                             first_name=first_name,
@@ -327,6 +334,20 @@ def api_import_historical_expert_data(request):
                             class_name=detected_class or 'أولى 1',
                             class_code=class_code
                         )
+                        except django.db.utils.IntegrityError:
+                            # Fallback if UNIQUE constraint fails somehow due to concurrency or edge case
+                            student = Student.objects.filter(student_id_number=fake_id).first()
+                            if not student:
+                                student = Student.objects.create(
+                                    student_id_number=fake_id + str(random.randint(10, 99)),
+                                    last_name=last_name,
+                                    first_name=first_name,
+                                    date_of_birth='2000-01-01',
+                                    enrollment_date='2000-01-01',
+                                    academic_year=detected_level or 'أولى متوسط',
+                                    class_name=detected_class or 'أولى 1',
+                                    class_code=class_code
+                                )
 
                     file_students += 1
 
