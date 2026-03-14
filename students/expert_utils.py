@@ -4,7 +4,7 @@ from scipy import stats
 from sklearn.linear_model import LinearRegression
 import logging
 import json
-from .models import Grade, Student, ExpertAnalysisRun, StudentExpertData, CohortExpertData
+from .models import Grade, Student, ExpertAnalysisRun, StudentExpertData, CohortExpertData, HistoricalGrade
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def run_expert_engine(current_academic_year, current_term, prev_academic_year):
             return False
 
         # Fetch previous year grades (for baseline/prediction)
-        prev_grades = Grade.objects.filter(academic_year=prev_academic_year).select_related('student')
+        prev_grades = HistoricalGrade.objects.filter(historical_year=prev_academic_year).select_related('student')
 
         # Build DataFrames
         curr_data = list(curr_grades.values('student__id', 'student__student_id_number', 'student__academic_year', 'student__class_name', 'student__class_code', 'subject', 'term', 'score'))
