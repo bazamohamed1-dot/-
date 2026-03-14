@@ -134,7 +134,7 @@ def process_grades_file(file_path, term, subject_mappings=None):
         'اللغة العربية', 'الرياضيات', 'العلوم الفيزيائية', 'الفيزياء', 'علوم الطبيعة والحياة', 'العلوم الطبيعية',
         'التربية الإسلامية', 'التربية المدنية', 'التاريخ والجغرافيا', 'التاريخ', 'الجغرافيا',
         'اللغة الفرنسية', 'الفرنسية', 'اللغة الإنجليزية', 'الإنجليزية', 'اللغة الأمازيغية', 'الأمازيغية',
-        'التربية الفنية', 'الفنية', 'الرسم', 'التربية الموسيقية', 'الموسيقى', 'التربية البدنية', 'الرياضة',
+        'التربية الفنية', 'الفنية', 'الرسم', 'التربية الموسيقية', 'الموسيقى', 'التربية البدنية', 'التربية البدنية والرياضية', 'ت البدنية والرياضية', 'الرياضة',
         'الإعلام الآلي', 'المعلوماتية', 'ع الطبيعة والحياة', 'ع الفيزيائية والتكنولوجيا', 'التربية التشكيلية'
     ]
 
@@ -183,11 +183,11 @@ def process_grades_file(file_path, term, subject_mappings=None):
                 if subject_mappings and clean_header in subject_mappings:
                      final_subject = mapped_subject # We trust the user mapping
                 else:
-                    matches = difflib.get_close_matches(mapped_subject, known_subjects, n=1, cutoff=0.7)
+                    matches = difflib.get_close_matches(mapped_subject, known_subjects, n=1, cutoff=0.85)
                     final_subject = matches[0] if matches else mapped_subject
 
                 # Exclude unwanted columns that don't look like subjects
-                if final_subject and len(final_subject) > 3 and final_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب']:
+                if final_subject and len(final_subject) > 3 and final_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب', 'المجموع', 'المعدل', 'معدل', 'المجموع العام', 'القرار']:
                     subject_indices_multi[(final_subject, col_term)] = idx
 
     if len(subject_indices_multi) == 0:
@@ -212,7 +212,7 @@ def process_grades_file(file_path, term, subject_mappings=None):
 
             if 'المعدل العام' in mapped_subject or 'معدل الفصل' in mapped_subject:
                 subject_indices_multi[('المعدل العام', col_term)] = idx
-            elif mapped_subject and mapped_subject != '':
+            elif mapped_subject and mapped_subject != '' and len(mapped_subject) > 2 and mapped_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب', 'المجموع', 'المعدل', 'معدل', 'المجموع العام', 'القرار']:
                 subject_indices_multi[(mapped_subject, col_term)] = idx
 
     # Fallback to column index 1 (second column) as per user instruction if regex fails

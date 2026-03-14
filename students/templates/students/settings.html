@@ -97,7 +97,7 @@
         <a href="{% url 'sync_photos_view' %}" class="btn btn-primary"><i class="fas fa-sync"></i> مزامنة الصور الآن</a>
     </div>
 
-    <form action="{% url 'import_eleve_view' %}" method="post" enctype="multipart/form-data" style="padding: 10px 0;">
+    <form id="importForm" action="{% url 'import_eleve_view' %}" method="post" enctype="multipart/form-data" style="padding: 10px 0; position:relative;">
         {% csrf_token %}
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
             <label class="btn btn-info" style="background:#0891b2; color:white; cursor:pointer;">
@@ -120,6 +120,14 @@
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-upload"></i> بدء الاستيراد
         </button>
+
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:1000; justify-content:center; align-items:center; flex-direction:column; border-radius:12px;">
+        <i class="fas fa-spinner fa-spin fa-3x" style="color:#2563eb; margin-bottom:15px;"></i>
+        <h3 style="color:#1e293b; margin:0;">يرجى الانتظار...</h3>
+        <p style="color:#64748b;">يتم الآن استيراد ومعالجة البيانات، قد يستغرق هذا بضع دقائق.</p>
+    </div>
 
         <p style="margin-top:10px; color:#64748b; font-size:0.9rem;">
             * يدعم ملفات Excel (.xlsx, .xls) و HTML (.xls).
@@ -1230,3 +1238,15 @@ async function showUserQR(username) {
 }
 </script>
 {% endblock %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const importForm = document.getElementById('importForm');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if(importForm && loadingOverlay) {
+        importForm.addEventListener('submit', function(e) {
+            loadingOverlay.style.display = 'flex';
+        });
+    }
+});
+</script>
