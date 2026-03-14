@@ -1150,21 +1150,16 @@
         container.innerHTML = '';
 
         if (assignments.length === 0) {
-            // Default to HR assigned classes, but empty subject as requested
-            let defaultClasses = [];
-            hrAssignments.forEach(ha => {
-                defaultClasses = defaultClasses.concat(ha.classes);
-            });
-            defaultClasses = [...new Set(defaultClasses)];
 
-            // Map HR full names to "1م1" format
-            defaultClasses = defaultClasses.map(c => {
-                 let m = c.match(/(\d+)\s*متوسط\s*(\d+)/);
-                 if (m) return `${m[1]}م${m[2]}`;
-                 return c;
-            });
-
-            addAnalyticsAssignmentBlock('', defaultClasses);
+            if (hrAssignments && hrAssignments.length > 0) {
+                hrAssignments.forEach(ha => {
+                    let subj = ha.subject || '';
+                    if (subj === '/' || subj === 'بدون') subj = '';
+                    addAnalyticsAssignmentBlock(subj, ha.classes);
+                });
+            } else {
+                addAnalyticsAssignmentBlock('', []);
+            }
         } else {
             assignments.forEach(a => addAnalyticsAssignmentBlock(a.subject, a.classes));
         }
@@ -1178,31 +1173,57 @@
         block.className = 'analytics-assignment-block mb-3 p-3 border rounded bg-white position-relative';
 
         let classesHtml = '';
-        const allGlobalClasses = {{ class_map_json|safe }};
-        let flatClasses = [];
-        Object.values(allGlobalClasses).forEach(arr => flatClasses = flatClasses.concat(arr));
 
-        // Remove duplicates and map to format like "1م1"
-        let cleanGlobal = [...new Set(flatClasses)].map(c => {
-             let m = c.match(/(\d+)\s*متوسط\s*(\d+)/);
-             if (m) return `${m[1]}م${m[2]}`;
-             return c;
+        const teacherSelect = document.getElementById('teacherSelect');
+        const opt = teacherSelect.options[teacherSelect.selectedIndex];
+
+        let hrAssignedClasses = [];
+        try {
+            const hrAssignmentsRaw = JSON.parse(opt.getAttribute('data-hr-assignments') || '[]');
+            hrAssignmentsRaw.forEach(assignment => {
+                hrAssignedClasses = hrAssignedClasses.concat(assignment.classes);
+            });
+        } catch(e) {}
+
+        const formatClassCode = (c) => {
+             let cStr = String(c).trim();
+             if (cStr.match(/^\d+م\d+$/)) return cStr;
+             let level = '';
+             if (cStr.includes('أولى') || cStr.includes('1')) level = '1';
+             else if (cStr.includes('ثانية') || cStr.includes('2')) level = '2';
+             else if (cStr.includes('ثالثة') || cStr.includes('3')) level = '3';
+             else if (cStr.includes('رابعة') || cStr.includes('4')) level = '4';
+
+             let numMatch = cStr.match(/(\d+)$/);
+             let num = numMatch ? numMatch[1] : '1';
+             if (level && num) return `${level}م${num}`;
+             return cStr;
+        };
+
+        const shortHrClasses = hrAssignedClasses.map(formatClassCode);
+        const shortAssignedClasses = classesArray.map(formatClassCode);
+
+        let combinedClasses = [...new Set([...shortHrClasses, ...shortAssignedClasses])];
+
+        combinedClasses.sort((a, b) => {
+            let m1 = a.match(/(\d+)م(\d+)/);
+            let m2 = b.match(/(\d+)م(\d+)/);
+            if (m1 && m2) {
+                if (parseInt(m1[1]) !== parseInt(m2[1])) return parseInt(m1[1]) - parseInt(m2[1]);
+                return parseInt(m1[2]) - parseInt(m2[2]);
+            }
+            return a.localeCompare(b, 'ar');
         });
 
-        const cleanClasses = classesArray.map(c => c.trim().replace(/\s+/g, ''));
-        const combinedClasses = [...new Set([...cleanGlobal, ...cleanClasses])].sort();
-
         combinedClasses.forEach(c => {
-            const isChecked = cleanClasses.includes(c) ? 'checked' : '';
+            const isChecked = shortAssignedClasses.includes(c) ? 'checked' : '';
             classesHtml += `
-                <div class="form-check" style="display:inline-block; margin-left:15px; margin-bottom:5px;">
-                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${c}" ${isChecked}>
-                    <label class="form-check-label">${c}</label>
+                <div class="form-check form-check-inline" style="margin-left:15px; margin-bottom:10px;">
+                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${c}" ${isChecked} id="chk_${c}">
+                    <label class="form-check-label font-weight-bold" for="chk_${c}" style="font-size: 1.1rem; color: #2c3e50;">${c}</label>
                 </div>
             `;
         });
-
-        // Subject options based on subjects_list
         let subjectOptions = '<option value="">-- اكتب المادة أو اختر --</option>';
         const subjectsList = {{ subjects_list|safe_json|safe }};
         subjectsList.forEach(s => {
