@@ -1053,12 +1053,19 @@ def hr_delete(request, pk):
     if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
         return redirect('dashboard')
 
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('accept', '').startswith('application/json')
+
     try:
         emp = Employee.objects.get(pk=pk)
         emp.delete()
+        if is_ajax:
+            return JsonResponse({'status': 'success', 'message': 'تم الحذف'})
         messages.success(request, "تم الحذف")
     except Employee.DoesNotExist:
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': 'هذا الموظف غير موجود أو تم حذفه مسبقاً.'})
         messages.warning(request, "هذا الموظف غير موجود أو تم حذفه مسبقاً.")
+
     return redirect('hr_home')
 
 def parents_home(request):

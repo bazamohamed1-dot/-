@@ -72,7 +72,7 @@
                         </span>
                         {% endif %}
                         <button class="btn btn-sm btn-info" onclick='openAddModal("{{ emp.id }}", JSON.parse("{{ emp|safe_json|escapejs }}"))' title="تعديل الموظف"><i class="fas fa-edit"></i></button>
-                        <a href="{% url 'hr_delete' emp.id %}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد؟')"><i class="fas fa-trash"></i></a>
+                        <button class="btn btn-sm btn-danger" onclick="deleteEmployee('{{ emp.id }}', this)" title="حذف الموظف"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
                 {% empty %}
@@ -171,6 +171,34 @@
             });
         });
     });
+
+    async function deleteEmployee(id, btnElement) {
+        if(!confirm('هل أنت متأكد من حذف هذا الموظف؟')) return;
+
+        const row = btnElement.closest('tr');
+        if(row) row.style.opacity = '0.5'; // Visual feedback
+
+        try {
+            const res = await fetch(`/canteen/hr/delete/${id}/`, {
+                method: 'GET',, fallback if Django requires GET without CSRF in the template, wait actually hr_delete is usually GET because it was a link. Let's send POST with CSRF and make view accept it or just GET. The view doesn't specify method, so GET is fine but better to be safe. Since it was an <a> tag, it was a GET request.
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                if(row) row.remove(); // Instantly remove from UI
+            } else {
+                alert(data.message || 'خطأ أثناء الحذف');
+                if(row) row.style.opacity = '1';
+            }
+        } catch(e) {
+            alert('تعذر الاتصال بالخادم.');
+            if(row) row.style.opacity = '1';
+        }
+    }
+
 </script>
 
 <!-- Add/Edit Modal -->
