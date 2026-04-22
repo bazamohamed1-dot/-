@@ -48,7 +48,7 @@
         border-radius: 16px;
         border: 1px solid rgba(15, 118, 110, 0.4);
         box-shadow: 0 12px 36px rgba(15, 118, 110, 0.18), inset 0 1px 0 rgba(255,255,255,0.12);
-        min-height: 132px;
+        min-height: 66px;
         max-width: 560px;
         margin: 0 auto 14px;
         background-color: #0f766e;
@@ -61,8 +61,8 @@
     .meal-display-showcase .meal-display-inner {
         position: relative;
         z-index: 1;
-        padding: 1.25rem 1.4rem 1.35rem;
-        min-height: 120px;
+        padding: 0.5rem 1rem;
+        min-height: 60px;
         display: flex;
         flex-direction: column;
         align-items: flex-start;
@@ -177,6 +177,7 @@
                     <thead>
                         <tr>
                             <th>الاسم واللقب</th>
+                            <th>المستوى</th>
                             <th>القسم</th>
                             <th>تاريخ الازدياد</th>
                             <th>وقت الدخول</th>
@@ -280,7 +281,7 @@
         <label class="info-label">مكونات الوجبة</label>
         <textarea id="statsMealDesc" class="form-input" rows="2" style="width:100%; margin-bottom:10px;"></textarea>
         <div class="info-grid" style="grid-template-columns: 1fr 1fr; gap:10px;">
-            <div><label class="info-label">التلاميذ</label><input type="number" min="0" id="statsStudents" class="form-input western-nums" style="direction:ltr;"></div>
+            <div><label class="info-label">التلاميذ</label><input type="number" min="0" id="statsStudents" class="form-input western-nums" style="direction:ltr; background-color: #f1f5f9;" readonly></div>
             <div><label class="info-label">المشرفون المرافقون</label><input type="number" min="0" id="statsSupervisors" class="form-input western-nums" style="direction:ltr;"></div>
             <div><label class="info-label">الموظفون</label><input type="number" min="0" id="statsStaff" class="form-input western-nums" style="direction:ltr;"></div>
             <div><label class="info-label">الأساتذة</label><input type="number" min="0" id="statsTeachers" class="form-input western-nums" style="direction:ltr;"></div>
@@ -459,6 +460,7 @@
 
                     row.innerHTML = `
                         <td><b>${s.last_name} ${s.first_name}</b></td>
+                        <td>${s.academic_year || '—'}</td>
                         <td>${s.class_name}</td>
                         <td class="western-nums" style="direction:ltr;">${s.date_of_birth}</td>
                         <td class="western-nums" style="direction:ltr;">${s.attendance_time || '--'}</td>
@@ -885,7 +887,7 @@
             const res = await fetch(`/canteen/daily_summary/?date=${iso}&t=${Date.now()}`, { credentials: 'same-origin' });
             const d = await res.json();
             document.getElementById('statsMealDesc').value = d.meal_description || d.meal_plan_text || '';
-            document.getElementById('statsStudents').value = d.student_count != null ? d.student_count : (d.student_count_live || 0);
+            document.getElementById('statsStudents').value = d.student_count_live || 0;
             document.getElementById('statsSupervisors').value = d.supervisors_count ?? 0;
             document.getElementById('statsStaff').value = d.staff_count ?? 0;
             document.getElementById('statsTeachers').value = d.teachers_count ?? 0;
