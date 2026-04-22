@@ -106,10 +106,11 @@
         </div>
     </div>
 
-    <!-- Info Banner explaining beta/future plans -->
+    <!-- Info Banner -->
     <div class="alert alert-info shadow-sm" style="border-right: 5px solid #38bdf8; background-color: #f0f9ff; color: #0c4a6e;">
         <i class="fas fa-info-circle me-2"></i>
-        <strong>ملاحظة:</strong> التحليلات التنبؤية (مثل توقع النقاط) ومقارنات الأساتذة قيد التطوير وسيتم تفعيلها بمجرد استكمال بنية بيانات إسناد المواد للأساتذة. يمكنك حالياً استخدام المقارنات الوصفية الأساسية.
+        <strong>معلومة:</strong> تم تفعيل مقارنات الأساتذة بناءً على <strong>إسناد التحليل</strong> (المادة + الأفواج). عند اختيار أستاذ/مادة سيتم حصر التحليلات في الأفواج المسندة لضمان مقارنة عادلة. 
+        <span class="d-block mt-1 small text-muted">التنبؤات تبقى مبنية على البيانات المتاحة (فصول/علامات) وتتحسن تلقائياً كلما استوردت ف2 ثم ف3.</span>
     </div>
 
 <!-- Stats Explanation Modal -->
@@ -408,9 +409,11 @@
     const classMap = JSON.parse('{{ class_map_json|escapejs }}' || '{}');
 
     let gaussChartInstance = null;
+    var _chartFullscreenContainer = null;
 
     function toggleChartFullscreen(container) {
         if (!document.fullscreenElement) {
+            _chartFullscreenContainer = container;
             if (container.requestFullscreen) {
                 container.requestFullscreen();
             } else if (container.webkitRequestFullscreen) { /* Safari */
@@ -418,13 +421,12 @@
             } else if (container.msRequestFullscreen) { /* IE11 */
                 container.msRequestFullscreen();
             }
-            container.style.backgroundColor = "white"; // Ensure background is solid white
+            container.style.backgroundColor = "white";
             container.style.overflow = "auto";
 
-            // Find canvas and maximize height
             const canvas = container.querySelector('canvas');
             if (canvas) {
-                canvas.dataset.originalMaxHeight = canvas.style.maxHeight;
+                canvas.dataset.originalMaxHeight = (canvas.style.maxHeight && canvas.style.maxHeight.trim()) || '300px';
                 canvas.style.maxHeight = '90vh';
             }
         } else {
@@ -438,19 +440,45 @@
         }
     }
 
-    // Restore canvas heights when exiting fullscreen via Escape key
-    document.addEventListener('fullscreenchange', () => {
+    function restoreAfterChartFullscreenExit() {
+        var container = _chartFullscreenContainer;
+        if (container && container.style) {
+            container.style.width = '';
+            container.style.height = '';
+            container.style.maxWidth = '';
+            container.style.maxHeight = '';
+            container.style.minHeight = '';
+            container.style.backgroundColor = '';
+            container.style.overflow = '';
+        }
+        _chartFullscreenContainer = null;
+        document.querySelectorAll('canvas[data-original-max-height]').forEach(function(canvas) {
+            canvas.style.maxHeight = canvas.dataset.originalMaxHeight || '300px';
+            delete canvas.dataset.originalMaxHeight;
+            var chart = typeof Chart !== 'undefined' && Chart.getChart ? Chart.getChart(canvas) : null;
+            if (chart) { chart.resize(); }
+        });
+        if (typeof window.dispatchEvent === 'function') { window.dispatchEvent(new Event('resize')); }
+        var wrapper = document.getElementById('fullscreenWrapper');
+        if (wrapper && wrapper.style) { wrapper.style.width = ''; wrapper.style.maxWidth = ''; }
+    }
+
+    document.addEventListener('fullscreenchange', function() {
         if (!document.fullscreenElement) {
-            document.querySelectorAll('canvas[data-original-max-height]').forEach(canvas => {
-                canvas.style.maxHeight = canvas.dataset.originalMaxHeight;
-                delete canvas.dataset.originalMaxHeight;
+            requestAnimationFrame(function() {
+                restoreAfterChartFullscreenExit();
+                requestAnimationFrame(function() {
+                    if (typeof window.dispatchEvent === 'function') { window.dispatchEvent(new Event('resize')); }
+                });
             });
         }
     });
 
     document.addEventListener('DOMContentLoaded', function() {
+        const chartFont = { family: "'Cairo','Tajawal',sans-serif", size: 14 };
+        const tickSize = 13;
+        const titleSize = 15;
 
-        // Plugin to draw data labels on top of bars
         const dataLabelsPlugin = {
             id: 'dataLabelsPlugin',
             afterDatasetsDraw(chart, args, pluginOptions) {
@@ -460,7 +488,7 @@
                     if (meta.hidden || meta.type !== 'bar') return;
                     meta.data.forEach((element, index) => {
                         ctx.fillStyle = '#334155';
-                        ctx.font = 'bold 12px Arial';
+                        ctx.font = 'bold 14px ' + chartFont.family;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'bottom';
                         const dataString = dataset.data[index];
@@ -472,6 +500,12 @@
             }
         };
 
+        const scaleOpts = (yTitle, y1Title) => ({
+            x: { ticks: { font: { size: tickSize, family: chartFont.family }, maxRotation: 45 } },
+            y: { type: 'linear', position: 'right', max: 20, ticks: { font: { size: tickSize } }, title: { display: true, text: yTitle, font: { size: titleSize, family: chartFont.family } } },
+            y1: { type: 'linear', position: 'left', max: 100, grid: { drawOnChartArea: false }, ticks: { font: { size: tickSize } }, title: { display: true, text: y1Title, font: { size: titleSize, family: chartFont.family } } }
+        });
+
         // --- 1. Gender Chart (Mixed) ---
         const gCtx = document.getElementById('genderChart').getContext('2d');
         const gLabels = Object.keys(genderData).length ? Object.keys(genderData) : ['لا توجد بيانات'];
@@ -481,31 +515,11 @@
             data: {
                 labels: gLabels,
                 datasets: [
-                    {
-                        type: 'bar',
-                        label: 'المتوسط العام',
-                        data: gLabels.map(l => genderData[l]?.avg || 0),
-                        backgroundColor: '#3b82f6',
-                        yAxisID: 'y'
-                    },
-                    {
-                        type: 'line',
-                        label: 'نسبة النجاح %',
-                        data: gLabels.map(l => genderData[l]?.success_pct || 0),
-                        borderColor: '#10b981',
-                        backgroundColor: '#10b981',
-                        yAxisID: 'y1'
-                    }
+                    { type: 'bar', label: 'المتوسط العام', data: gLabels.map(l => genderData[l]?.avg || 0), backgroundColor: '#3b82f6', yAxisID: 'y' },
+                    { type: 'line', label: 'نسبة النجاح %', data: gLabels.map(l => genderData[l]?.success_pct || 0), borderColor: '#10b981', backgroundColor: '#10b981', yAxisID: 'y1' }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { type: 'linear', position: 'right', max: 20, title: { display: true, text: 'المتوسط' } },
-                    y1: { type: 'linear', position: 'left', max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: 'نسبة النجاح %' } }
-                }
-            },
+            options: { responsive: true, maintainAspectRatio: false, scales: scaleOpts('المتوسط', 'نسبة النجاح %'), plugins: { legend: { labels: { font: chartFont } } } },
             plugins: [dataLabelsPlugin]
         });
 
@@ -518,33 +532,11 @@
             data: {
                 labels: tLabels,
                 datasets: [
-                    {
-                        type: 'line',
-                        label: 'المتوسط العام للمؤسسة',
-                        data: tLabels.map(l => termData[l]?.avg || 0),
-                        borderColor: '#8b5cf6',
-                        backgroundColor: 'rgba(139, 92, 246, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        yAxisID: 'y'
-                    },
-                    {
-                        type: 'bar',
-                        label: 'نسبة النجاح %',
-                        data: tLabels.map(l => termData[l]?.success_pct || 0),
-                        backgroundColor: '#f59e0b',
-                        yAxisID: 'y1'
-                    }
+                    { type: 'line', label: 'المتوسط العام للمؤسسة', data: tLabels.map(l => termData[l]?.avg || 0), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.2)', fill: true, tension: 0.3, yAxisID: 'y' },
+                    { type: 'bar', label: 'نسبة النجاح %', data: tLabels.map(l => termData[l]?.success_pct || 0), backgroundColor: '#f59e0b', yAxisID: 'y1' }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { type: 'linear', position: 'right', max: 20, title: { display: true, text: 'المتوسط' } },
-                    y1: { type: 'linear', position: 'left', max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: 'نسبة النجاح %' } }
-                }
-            },
+            options: { responsive: true, maintainAspectRatio: false, scales: scaleOpts('المتوسط', 'نسبة النجاح %'), plugins: { legend: { labels: { font: chartFont } } } },
             plugins: [dataLabelsPlugin]
         });
 
@@ -553,6 +545,45 @@
 
         // --- 4. Gauss Normal Distribution Chart ---
         renderGaussChart(gaussData);
+
+        // --- Teacher Compare Charts ---
+        try {
+            const tc = JSON.parse('{{ teacher_compare_stats_json|escapejs }}' || '{}');
+            const ids = Object.keys(tc || {});
+            const tbody = document.getElementById('teacherCompareTableBody');
+            if (tbody) tbody.innerHTML = '';
+            if (!ids.length) {
+                const selectedCount = document.querySelector('select[name="teacher_compare"]')?.selectedOptions?.length || 0;
+                if (tbody) {
+                    tbody.innerHTML = selectedCount
+                        ? '<tr><td colspan="4" class="text-danger">تم اختيار أساتذة للمقارنة لكن لم يتم العثور على أي بيانات مطابقة (N=0). تحقق من الإسناد/الأقسام/المادة.</td></tr>'
+                        : '<tr><td colspan="4" class="text-muted">اختر أساتذة ثم اضغط «قارن».</td></tr>';
+                }
+                return;
+            }
+            const labels = ids.map(id => tc[id].name);
+            const avgData = ids.map(id => tc[id].avg || 0);
+            const succData = ids.map(id => tc[id].success_pct || 0);
+            ids.forEach(id => {
+                const r = tc[id];
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${r.name}</strong></td><td>${r.count || 0}</td><td>${Number(r.avg || 0).toFixed(2)}</td><td>${Number(r.success_pct || 0).toFixed(2)}%</td>`;
+                tbody.appendChild(tr);
+            });
+            const colors = labels.map((_, i) => ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#14b8a6'][i % 6]);
+            new Chart(document.getElementById('teacherAvgCompareChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'المعدل', data: avgData, backgroundColor: colors }] },
+                options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ max:20 } } },
+                plugins: [dataLabelsPlugin]
+            });
+            new Chart(document.getElementById('teacherSuccessCompareChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'نسبة النجاح %', data: succData, backgroundColor: colors }] },
+                options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ max:100 } } },
+                plugins: [dataLabelsPlugin]
+            });
+        } catch(e) {}
     });
 
 function updateGaussStatsDisplay(data) {
@@ -673,20 +704,17 @@ function updateGaussStatsDisplay(data) {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top', labels: { font: { family: 'Tajawal' } } },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                        titleFont: { family: 'Tajawal' },
-                        bodyFont: { family: 'Tajawal' }
-                    }
+                    legend: { position: 'top', labels: { font: { size: 14, family: "'Cairo','Tajawal',sans-serif" } } },
+                    tooltip: { mode: 'index', intersect: false, titleFont: { size: 14 }, bodyFont: { size: 13 } }
                 },
                 scales: {
                     x: {
-                        title: { display: true, text: 'العلامة', font: { family: 'Tajawal' } }
+                        ticks: { font: { size: 13, family: "'Cairo','Tajawal',sans-serif" } },
+                        title: { display: true, text: 'العلامة', font: { size: 15, family: "'Cairo','Tajawal',sans-serif" } }
                     },
                     y: {
-                        title: { display: true, text: 'الكثافة الاحتمالية / التكرار', font: { family: 'Tajawal' } },
+                        ticks: { font: { size: 13 } },
+                        title: { display: true, text: 'الكثافة الاحتمالية / التكرار', font: { size: 15, family: "'Cairo','Tajawal',sans-serif" } },
                         beginAtZero: true
                     }
                 }
@@ -850,9 +878,11 @@ function updateGaussStatsDisplay(data) {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { type: 'linear', position: 'right', max: 20, beginAtZero: true, title: { display: true, text: 'المتوسط' } },
-                    y1: { type: 'linear', position: 'left', max: 100, beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'نسبة النجاح %' } }
-                }
+                    x: { ticks: { font: { size: 13, family: "'Cairo','Tajawal',sans-serif" }, maxRotation: 45 } },
+                    y: { type: 'linear', position: 'right', max: 20, beginAtZero: true, ticks: { font: { size: 13 } }, title: { display: true, text: 'المتوسط', font: { size: 15 } } },
+                    y1: { type: 'linear', position: 'left', max: 100, beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { font: { size: 13 } }, title: { display: true, text: 'نسبة النجاح %', font: { size: 15 } } }
+                },
+                plugins: { legend: { labels: { font: { size: 14 } } } }
             },
             plugins: [{
                 id: 'dataLabelsPlugin',
@@ -863,7 +893,7 @@ function updateGaussStatsDisplay(data) {
                         if (meta.hidden || meta.type !== 'bar') return;
                         meta.data.forEach((element, index) => {
                             ctx.fillStyle = '#334155';
-                            ctx.font = 'bold 12px Arial';
+                            ctx.font = "bold 14px 'Cairo','Tajawal',sans-serif";
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'bottom';
                             const dataString = dataset.data[index];
@@ -930,9 +960,11 @@ function updateGaussStatsDisplay(data) {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { type: 'linear', position: 'right', max: 20, beginAtZero: true, title: { display: true, text: 'المتوسط' } },
-                    y1: { type: 'linear', position: 'left', max: 100, beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'نسبة النجاح %' } }
-                }
+                    x: { ticks: { font: { size: 13, family: "'Cairo','Tajawal',sans-serif" }, maxRotation: 45 } },
+                    y: { type: 'linear', position: 'right', max: 20, beginAtZero: true, ticks: { font: { size: 13 } }, title: { display: true, text: 'المتوسط', font: { size: 15 } } },
+                    y1: { type: 'linear', position: 'left', max: 100, beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { font: { size: 13 } }, title: { display: true, text: 'نسبة النجاح %', font: { size: 15 } } }
+                },
+                plugins: { legend: { labels: { font: { size: 14 } } } }
             },
             plugins: [{
                 id: 'dataLabelsPlugin',
@@ -943,7 +975,7 @@ function updateGaussStatsDisplay(data) {
                         if (meta.hidden || meta.type !== 'bar') return;
                         meta.data.forEach((element, index) => {
                             ctx.fillStyle = '#334155';
-                            ctx.font = 'bold 12px Arial';
+                            ctx.font = "bold 14px 'Cairo','Tajawal',sans-serif";
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'bottom';
                             const dataString = dataset.data[index];
@@ -958,7 +990,72 @@ function updateGaussStatsDisplay(data) {
     }
 </script>
 
+    <!-- Teacher Comparison (Multi) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; position: relative; background: #ffffff;">
+                <button class="btn btn-sm btn-outline-secondary position-absolute" style="top: 15px; left: 15px;" onclick="toggleChartFullscreen(this.parentElement)">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <div class="card-header bg-white" style="border-bottom: 1px solid #f1f5f9; padding: 15px 20px;">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h5 class="m-0" style="color: #334155;"><i class="fas fa-people-group text-primary me-2"></i> مقارنة بين الأساتذة (حسب الإسناد)</h5>
+                        <small class="text-muted">اختر أساتذة للمقارنة. تُحسب الأرقام من أفواجهم وموادهم المسندة (أو المادة المختارة في الفلترة إن وجدت).</small>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                        <input type="hidden" name="subject" value="{{ selected_subject }}">
+                        <input type="hidden" name="level" value="{{ selected_level }}">
+                        <input type="hidden" name="class_name" value="{{ selected_class }}">
+                        <label class="fw-bold mb-0">أساتذة للمقارنة:</label>
+                        <select name="teacher_compare" multiple class="form-select form-select-sm shadow-sm" style="min-width: 320px; max-width: 520px;">
+                            {% for t in teachers %}
+                                <option value="{{ t.id }}" {% if t.id|stringformat:"s" in teacher_compare_ids %}selected{% endif %}>{{ t.last_name }} {{ t.first_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-chart-column me-1"></i> قارن</button>
+                        <a class="btn btn-sm btn-outline-secondary" href="?subject={{ selected_subject }}&teacher_id={{ selected_teacher_id }}&level={{ selected_level }}&class_name={{ selected_class }}"><i class="fas fa-eraser me-1"></i> مسح المقارنة</a>
+                    </form>
 
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="p-3 rounded" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                                <h6 class="m-0 mb-2" style="color:#0f172a;"><i class="fas fa-chart-line text-success me-1"></i> المعدل</h6>
+                                <div style="height:320px;">
+                                    <canvas id="teacherAvgCompareChart" style="max-height: 320px; height:320px; width:100%; display:block;"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="p-3 rounded" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                                <h6 class="m-0 mb-2" style="color:#0f172a;"><i class="fas fa-percent text-warning me-1"></i> نسبة النجاح %</h6>
+                                <div style="height:320px;">
+                                    <canvas id="teacherSuccessCompareChart" style="max-height: 320px; height:320px; width:100%; display:block;"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm table-bordered" style="text-align:center;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>الأستاذ</th>
+                                    <th>N</th>
+                                    <th>المعدل</th>
+                                    <th>نسبة النجاح %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teacherCompareTableBody">
+                                <tr><td colspan="4" class="text-muted">اختر أساتذة ثم اضغط «قارن».</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div>
 

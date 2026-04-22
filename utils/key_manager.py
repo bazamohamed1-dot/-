@@ -2,8 +2,8 @@ import os
 
 def main():
     env_path = '.env'
-    print("=== أداة إدارة مفاتيح الذكاء الاصطناعي ===")
-    print("سيتم حفظ المفاتيح في ملف .env")
+    print("=== أداة إدارة مفتاح الذكاء الاصطناعي (OpenRouter) ===")
+    print("الاشتراك مع OpenRouter — نموذج DeepSeek. سيتم حفظ المفتاح في ملف .env")
 
     current_keys = {}
     if os.path.exists(env_path):
@@ -13,32 +13,24 @@ def main():
                     k, v = line.strip().split('=', 1)
                     current_keys[k] = v
 
-    # 1. OpenRouter (Recommended / Free Tier)
-    print("\n--- OpenRouter ---")
+    print("\n--- OpenRouter API ---")
+    print("احصل على المفتاح من: https://openrouter.ai/")
     or_key = input(f"أدخل مفتاح OpenRouter API (الحالي: {current_keys.get('OPENROUTER_API_KEY', 'غير موجود')}): ").strip()
-    if or_key: current_keys['OPENROUTER_API_KEY'] = or_key
+    if or_key:
+        current_keys['OPENROUTER_API_KEY'] = or_key
 
-    # 2. Google Gemini
-    print("\n--- Google Gemini ---")
-    g_key = input(f"أدخل مفتاح Google API (الحالي: {current_keys.get('GOOGLE_API_KEY', 'غير موجود')}): ").strip()
-    if g_key: current_keys['GOOGLE_API_KEY'] = g_key
+    # إزالة مفاتيح خدمات أخرى إن وُجدت (لتنظيف .env)
+    for old in ('DEEPSEEK_API_KEY', 'GOOGLE_API_KEY', 'GROQ_API_KEY', 'ANTHROPIC_API_KEY'):
+        current_keys.pop(old, None)
+        i = 2
+        while current_keys.pop(f'{old}_{i}', None) is not None:
+            i += 1
 
-    # 3. Groq
-    print("\n--- Groq ---")
-    groq_key = input(f"أدخل مفتاح Groq API (الحالي: {current_keys.get('GROQ_API_KEY', 'غير موجود')}): ").strip()
-    if groq_key: current_keys['GROQ_API_KEY'] = groq_key
-
-    # 4. Anthropic Claude
-    print("\n--- Anthropic Claude ---")
-    c_key = input(f"أدخل مفتاح Claude API (الحالي: {current_keys.get('ANTHROPIC_API_KEY', 'غير موجود')}): ").strip()
-    if c_key: current_keys['ANTHROPIC_API_KEY'] = c_key
-
-    # Save
     with open(env_path, 'w', encoding='utf-8') as f:
         for k, v in current_keys.items():
             f.write(f"{k}={v}\n")
 
-    print("\n✅ تم حفظ المفاتيح بنجاح! يرجى إعادة تشغيل التطبيق لتفعيلها.")
+    print("\n✅ تم حفظ المفتاح بنجاح! يرجى إعادة تشغيل التطبيق لتفعيله.")
     input("اضغط Enter للخروج...")
 
 if __name__ == "__main__":

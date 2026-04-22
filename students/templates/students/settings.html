@@ -328,6 +328,16 @@
                         </div>
                     </div>
 
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-wifi"></i> العمل بالنسخة المحلية</strong>
+                        <div style="margin-right: 15px; font-size: 0.9rem; color: #64748b;">
+                            يفعّل تحميلاً كاملاً للتلاميذ على الجهاز، والعمل دون إنترنت، وإرسال/استقبال التحديثات تلقائياً عند عودة الشبكة. يتطلب معه صلاحية «تسيير التلاميذ» أو «المطعم».
+                        </div>
+                        <div style="margin-right: 15px;">
+                             <div><input type="checkbox" class="perm-check" value="offline_cache_students" id="perm_offline_students"> <label for="perm_offline_students">العمل بالنسخة المحلية (دون اتصال + مزامنة)</label></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -380,81 +390,91 @@
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-utensils"></i> المطعم</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_canteen" id="role_perm_canteen_access"> <label for="role_perm_canteen_access">الدخول للواجهة</label></div>
-                             <div><input type="checkbox" class="perm-check" value="canteen_scan" id="role_perm_canteen_scan"> <label for="role_perm_canteen_scan">مسح البطاقات</label></div>
-                             <div><input type="checkbox" class="perm-check" value="canteen_manual" id="role_perm_canteen_manual"> <label for="role_perm_canteen_manual">إدخال يدوي</label></div>
-                             <div><input type="checkbox" class="perm-check" value="canteen_export" id="role_perm_canteen_export"> <label for="role_perm_canteen_export">تصدير القوائم</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_canteen" id="role_perm_canteen_access"> <label for="role_perm_canteen_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="canteen_scan" id="role_perm_canteen_scan"> <label for="role_perm_canteen_scan">مسح البطاقات</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="canteen_manual" id="role_perm_canteen_manual"> <label for="role_perm_canteen_manual">إدخال يدوي</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="canteen_export" id="role_perm_canteen_export"> <label for="role_perm_canteen_export">تصدير القوائم</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-book"></i> المكتبة</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_library" id="role_perm_lib_access"> <label for="role_perm_lib_access">الدخول للواجهة</label></div>
-                             <div><input type="checkbox" class="perm-check" value="library_scan" id="role_perm_lib_scan"> <label for="role_perm_lib_scan">مسح البطاقات</label></div>
-                             <div><input type="checkbox" class="perm-check" value="library_loan" id="role_perm_lib_loan"> <label for="role_perm_lib_loan">إعارة الكتب</label></div>
-                             <div><input type="checkbox" class="perm-check" value="library_return" id="role_perm_lib_return"> <label for="role_perm_lib_return">إرجاع الكتب</label></div>
-                             <div><input type="checkbox" class="perm-check" value="library_readers_list" id="role_perm_lib_readers"> <label for="role_perm_lib_readers">قائمة القراء (حذف)</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_library" id="role_perm_lib_access"> <label for="role_perm_lib_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="library_scan" id="role_perm_lib_scan"> <label for="role_perm_lib_scan">مسح البطاقات</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="library_loan" id="role_perm_lib_loan"> <label for="role_perm_lib_loan">إعارة الكتب</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="library_return" id="role_perm_lib_return"> <label for="role_perm_lib_return">إرجاع الكتب</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="library_readers_list" id="role_perm_lib_readers"> <label for="role_perm_lib_readers">قائمة القراء (حذف)</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-user-graduate"></i> التلاميذ</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_management" id="role_perm_std_access"> <label for="role_perm_std_access">الدخول للواجهة</label></div>
-                             <div><input type="checkbox" class="perm-check" value="student_add" id="role_perm_std_add"> <label for="role_perm_std_add">إضافة تلميذ</label></div>
-                             <div><input type="checkbox" class="perm-check" value="student_edit" id="role_perm_std_edit"> <label for="role_perm_std_edit">تعديل بيانات</label></div>
-                             <div><input type="checkbox" class="perm-check" value="student_delete" id="role_perm_std_del"> <label for="role_perm_std_del">حذف تلاميذ</label></div>
-                             <div><input type="checkbox" class="perm-check" value="student_print" id="role_perm_std_print"> <label for="role_perm_std_print">طباعة البطاقات</label></div>
-                             <div><input type="checkbox" class="perm-check" value="import_data" id="role_perm_std_import"> <label for="role_perm_std_import">استيراد البيانات</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_management" id="role_perm_std_access"> <label for="role_perm_std_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="student_add" id="role_perm_std_add"> <label for="role_perm_std_add">إضافة تلميذ</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="student_edit" id="role_perm_std_edit"> <label for="role_perm_std_edit">تعديل بيانات</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="student_delete" id="role_perm_std_del"> <label for="role_perm_std_del">حذف تلاميذ</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="student_print" id="role_perm_std_print"> <label for="role_perm_std_print">طباعة البطاقات</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="import_data" id="role_perm_std_import"> <label for="role_perm_std_import">استيراد البيانات</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-cog"></i> الإدارة</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="manage_users" id="role_perm_adm_users"> <label for="role_perm_adm_users">إدارة المستخدمين</label></div>
-                             <div><input type="checkbox" class="perm-check" value="manage_settings" id="role_perm_adm_settings"> <label for="role_perm_adm_settings">الإعدادات العامة</label></div>
-                             <div><input type="checkbox" class="perm-check" value="access_archive" id="role_perm_archive"> <label for="role_perm_archive">الأرشيف</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="manage_users" id="role_perm_adm_users"> <label for="role_perm_adm_users">إدارة المستخدمين</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="manage_settings" id="role_perm_adm_settings"> <label for="role_perm_adm_settings">الإعدادات العامة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_archive" id="role_perm_archive"> <label for="role_perm_archive">الأرشيف</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-users-cog"></i> الموارد البشرية</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_hr" id="role_perm_hr_access"> <label for="role_perm_hr_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_hr" id="role_perm_hr_access"> <label for="role_perm_hr_access">الدخول للواجهة</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-user-friends"></i> الأولياء</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_parents" id="role_perm_parents_access"> <label for="role_perm_parents_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_parents" id="role_perm_parents_access"> <label for="role_perm_parents_access">الدخول للواجهة</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-compass"></i> الإرشاد</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_guidance" id="role_perm_guidance_access"> <label for="role_perm_guidance_access">الدخول للواجهة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_guidance" id="role_perm_guidance_access"> <label for="role_perm_guidance_access">الدخول للواجهة</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-chart-line"></i> تحليل النتائج</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_analytics" id="role_perm_analytics_access"> <label for="role_perm_analytics_access">لوحة القيادة</label></div>
-                             <div><input type="checkbox" class="perm-check" value="access_advanced_analytics" id="role_perm_adv_analytics_access"> <label for="role_perm_adv_analytics_access">المختبر المتقدم</label></div>
-                             <div><input type="checkbox" class="perm-check" value="import_grades" id="role_perm_import_grades"> <label for="role_perm_import_grades">استيراد العلامات</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_analytics" id="role_perm_analytics_access"> <label for="role_perm_analytics_access">لوحة القيادة</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_advanced_analytics" id="role_perm_adv_analytics_access"> <label for="role_perm_adv_analytics_access">المختبر المتقدم</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="import_grades" id="role_perm_import_grades"> <label for="role_perm_import_grades">استيراد العلامات</label></div>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 10px;">
                         <strong><i class="fas fa-robot"></i> الذكاء الاصطناعي والمهام</strong>
                         <div style="margin-right: 15px;">
-                             <div><input type="checkbox" class="perm-check" value="access_tasks" id="role_perm_tasks_access"> <label for="role_perm_tasks_access">المهام</label></div>
-                             <div><input type="checkbox" class="perm-check" value="access_ai_chat" id="role_perm_ai_chat"> <label for="role_perm_ai_chat">محادثة الذكاء</label></div>
-                             <div><input type="checkbox" class="perm-check" value="access_ai_control" id="role_perm_ai_control"> <label for="role_perm_ai_control">لوحة التحكم</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_tasks" id="role_perm_tasks_access"> <label for="role_perm_tasks_access">المهام</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_ai_chat" id="role_perm_ai_chat"> <label for="role_perm_ai_chat">محادثة الذكاء</label></div>
+                             <div><input type="checkbox" class="role-perm-check" value="access_ai_control" id="role_perm_ai_control"> <label for="role_perm_ai_control">لوحة التحكم</label></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-wifi"></i> العمل بالنسخة المحلية</strong>
+                        <div style="margin-right: 15px; font-size: 0.9rem; color: #64748b;">
+                            نسخة كاملة على الجهاز، مزامنة تلقائية، مع تسيير تلاميذ أو مطعم.
+                        </div>
+                        <div style="margin-right: 15px;">
+                             <div><input type="checkbox" class="role-perm-check" value="offline_cache_students" id="role_perm_offline_students"> <label for="role_perm_offline_students">العمل بالنسخة المحلية (دون اتصال + مزامنة)</label></div>
                         </div>
                     </div>
                 </div>
@@ -734,7 +754,7 @@ async function saveRole(e) {
     e.preventDefault();
     const name = document.getElementById('roleName').value;
     const perms = [];
-    document.querySelectorAll('#roleModal .perm-check:checked').forEach(c => perms.push(c.value));
+    document.querySelectorAll('#rolePermsContainer input[type="checkbox"]:checked').forEach(c => perms.push(c.value));
 
     try {
         const res = await fetch('/canteen/api/roles/', {
@@ -967,7 +987,7 @@ function openAddUserModal() {
     document.getElementById('editUserId').value = '';
     document.getElementById('pwdHint').style.display = 'none';
     document.getElementById('uPassword').required = true;
-    document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
+    document.querySelectorAll('#userModal .perm-check').forEach(c => c.checked = false);
 }
 
 function closeUserModal() {
@@ -996,10 +1016,10 @@ function editUser(user) {
     toggleRoleType(); // Adjust UI
 
     // Populate permissions AFTER toggle (because toggle might reset them)
-    document.querySelectorAll('.perm-check').forEach(c => c.checked = false);
+    document.querySelectorAll('#userModal .perm-check').forEach(c => c.checked = false);
     if (user.permissions && Array.isArray(user.permissions)) {
         user.permissions.forEach(p => {
-             const chk = document.querySelector(`.perm-check[value="${p}"]`);
+             const chk = document.querySelector(`#userModal .perm-check[value="${p}"]`);
              if(chk) chk.checked = true;
         });
     }
@@ -1020,9 +1040,9 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
         role = document.getElementById('uRoleCustom').value;
     }
 
-    // Collect permissions
+    // Collect permissions (نافذة المستخدم فقط — لا تخلط مع نافذة الأدوار)
     const permissions = [];
-    document.querySelectorAll('.perm-check:checked').forEach(c => permissions.push(c.value));
+    document.querySelectorAll('#userModal .perm-check:checked').forEach(c => permissions.push(c.value));
 
     const url = id ? `/canteen/api/users/${id}/update_creds/` : '/canteen/api/users/';
 

@@ -7,13 +7,29 @@ logger = logging.getLogger(__name__)
 import re
 
 def format_class_name(level, class_name):
+    """تنسيق اسم القسم كفوج تربوي (مثل 4م1، 4م2) دائماً."""
     if pd.isna(level) or pd.isna(class_name):
         return f"{level} {class_name}"
     level = str(level).strip()
     class_name = str(class_name).strip()
     level_match = re.search(r"\d+", level)
     if not level_match:
-        return class_name
+        # مستوى بصيغة عربية (رابعة متوسط، أولى متوسط، ...)
+        arabic_level_map = {'أولى': '1', 'ثانية': '2', 'ثالثة': '3', 'رابعة': '4'}
+        for arb, digit in arabic_level_map.items():
+            if arb in level:
+                level_digit = digit
+                break
+        else:
+            level_digit = None
+        if not level_digit:
+            return class_name
+        digits = re.findall(r"\d+", class_name)
+        if len(digits) >= 2:
+            return f"{digits[0]}م{digits[-1]}"
+        elif len(digits) == 1:
+            return f"{level_digit}م{digits[0]}"
+        return f"{level_digit}م{class_name}"
     digits = re.findall(r"\d+", class_name)
     if len(digits) >= 2:
         return f"{digits[0]}م{digits[-1]}"
@@ -33,39 +49,162 @@ def unformat_class_name(formatted_class):
         return digits[-1]
     return formatted_class
 
-def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zeros=True):
+
+def _level_key(s):
+    """استخراج مفتاح المستوى (1،2،3،4) من نص المستوى لاستخدامه في مطابقة إعفاء المستوى."""
+    if not s or not str(s).strip():
+        return None
+    s = str(s).strip()
+    # التحقق من الأسماء العربية أولاً حتى لا يُفسَّر رقم القسم (مثل ثانية 1) كمستوى
+    if 'أولى' in s or 'الاولى' in s or 'الأولى' in s:
+        return '1'
+    if 'ثانية' in s or 'الثانية' in s:
+        return '2'
+    if 'ثالثة' in s or 'الثالثة' in s:
+        return '3'
+    if 'رابعة' in s or 'الرابعة' in s:
+        return '4'
+    # ثم الرقم وحده أو في بداية النص (مثل 1، 1 متوسط)
+    if re.match(r'^1\s|^1$|متوسط\s*1', s) or s == '1':
+        return '1'
+    if re.match(r'^2\s|^2$|متوسط\s*2', s) or s == '2':
+        return '2'
+    if re.match(r'^3\s|^3$|متوسط\s*3', s) or s == '3':
+        return '3'
+    if re.match(r'^4\s|^4$|متوسط\s*4', s) or s == '4':
+        return '4'
+    return None
+
+
+def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zeros=True, grades_qs_for_ranking=None, exempt_subjects=None, exemption_rules=None):
     """
     Takes a Django QuerySet of Grade objects and uses Pandas to perform local statistical analysis.
-    Returns a dictionary with stats and a Markdown representation of the data for the Executive Dashboard.
+    If grades_qs_for_ranking is provided (e.g. نفس الطلاب/الأفواج لكن كل المواد)، يُستخدم لحساب
+    ترتيب التلاميذ والمعدل الفصلي الحقيقي (كل المواد) بدل معدل المواد المفلترة فقط.
+    exempt_subjects: list of subject names to exclude from all calculations (المادة المعفاة من التحليل).
     """
     if not grades_qs.exists():
         return None
 
+    exempt_set = set(str(s).strip() for s in (exempt_subjects or []) if s)
+
     try:
         # 1. Convert QuerySet to Pandas DataFrame
-        data = list(grades_qs.values('student__last_name', 'student__first_name', 'student__class_name', 'student__academic_year', 'student__gender', 'student__is_repeater', 'student__date_of_birth', 'subject', 'term', 'score'))
+        data = list(grades_qs.values('student__id', 'student__last_name', 'student__first_name', 'student__class_name', 'student__class_code', 'student__academic_year', 'student__gender', 'student__is_repeater', 'student__date_of_birth', 'subject', 'term', 'score'))
         if not data:
             return None
         df = pd.DataFrame(data)
 
-        # Remove zeros from dataframe entirely if include_zeros is False
+        # استبعاد المواد المعفاة من التحليل تماماً
+        if exempt_set:
+            df = df[~df['subject'].astype(str).str.strip().isin(exempt_set)]
+
+        df_ranking = None
+        if grades_qs_for_ranking and grades_qs_for_ranking.exists():
+            data_rank = list(grades_qs_for_ranking.values('student__id', 'student__last_name', 'student__first_name', 'student__class_name', 'student__class_code', 'student__academic_year', 'subject', 'term', 'score'))
+            if data_rank:
+                df_ranking = pd.DataFrame(data_rank)
+                if exempt_set:
+                    df_ranking = df_ranking[~df_ranking['subject'].astype(str).str.strip().isin(exempt_set)]
+                df_ranking['student_name'] = df_ranking['student__last_name'].fillna('') + ' ' + df_ranking['student__first_name'].fillna('')
+                df_ranking['student__class_name'] = df_ranking.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
+
+        # Reconstruct full_name and format class — قبل فلتر الأصفار لاستخدام نفس البيانات للقائمة والترتيب
+        df['student_name'] = df['student__last_name'].fillna('') + ' ' + df['student__first_name'].fillna('')
+        df['student__class_name'] = df.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
+
+        def apply_exemption_rules_to_frame(d):
+            """تطبيق قواعد الإعفاء (تلميذ/فوج/مستوى/مؤسسة) على إطار البيانات."""
+            if not exemption_rules or not isinstance(exemption_rules, list) or d.empty:
+                return d
+            try:
+                d = d.copy()
+                d['__class_code_effective'] = d['student__class_code'].fillna('')
+                needs = d['__class_code_effective'].astype(str).str.strip() == ''
+                if needs.any():
+                    d.loc[needs, '__class_code_effective'] = d.loc[needs].apply(
+                        lambda row: format_class_name(row['student__academic_year'], row['student__class_name']),
+                        axis=1
+                    )
+                d['__class_code_effective'] = d['__class_code_effective'].astype(str).str.strip()
+
+                subj_norm = d['subject'].astype(str).str.strip()
+                term_norm = d['term'].astype(str).str.strip()
+                mask_exempt = pd.Series(False, index=d.index)
+
+                for r in exemption_rules:
+                    if not isinstance(r, dict):
+                        continue
+                    r_subj = str(r.get('subject') or '').strip()
+                    if not r_subj:
+                        continue
+                    r_scope = str(r.get('scope_type') or '').strip()
+                    r_term = str(r.get('term') or '').strip()
+
+                    # مطابقة المادة: تطابق تام أو بعد إزالة "ال" من الطرفين
+                    r_subj_norm = r_subj.replace('ال', '', 1) if r_subj.startswith('ال') else r_subj
+                    subj_norm_alt = subj_norm.str.replace('^ال', '', regex=True).str.strip()
+                    m = (subj_norm == r_subj) | (subj_norm == r_subj_norm) | (subj_norm_alt == r_subj) | (subj_norm_alt == r_subj_norm)
+                    if r_term:
+                        m = m & (term_norm == r_term)
+
+                    if r_scope == 'student':
+                        sid = r.get('student_id')
+                        if sid:
+                            m = m & (d['student__id'] == int(sid))
+                        else:
+                            continue
+                    elif r_scope == 'class':
+                        cc = str(r.get('class_code') or '').strip()
+                        if not cc:
+                            continue
+                        m = m & (d['__class_code_effective'] == cc)
+                    elif r_scope == 'level':
+                        lvl = str(r.get('academic_year') or '').strip()
+                        if not lvl:
+                            continue
+                        rule_level_key = _level_key(lvl)
+                        if not rule_level_key:
+                            continue
+                        # مطابقة المستوى بمفتاح موحد (1،2،3،4) لأن القاعدة قد تكون "أولى متوسط" والبيانات "أولى" فقط
+                        d['__level_key'] = d['student__academic_year'].apply(lambda x: _level_key(x))
+                        m = m & (d['__level_key'] == rule_level_key)
+                        d.drop(columns=['__level_key'], inplace=True, errors='ignore')
+                    elif r_scope == 'school':
+                        pass
+                    else:
+                        continue
+
+                    mask_exempt = mask_exempt | m
+
+                if mask_exempt.any():
+                    d = d[~mask_exempt]
+                return d
+            except Exception:
+                return d
+
+        # تطبيق قواعد الإعفاء على البيانات الرئيسية وعلى بيانات الترتيب
+        if exemption_rules and isinstance(exemption_rules, list):
+            df = apply_exemption_rules_to_frame(df)
+            if df_ranking is not None and not df_ranking.empty:
+                df_ranking = apply_exemption_rules_to_frame(df_ranking)
+
+        # نسخة كاملة (مع الأصفار) لبناء قائمة الترتيب وعرض الأصفار — مستقلة عن خيار احتساب الأصفار
+        df_full = df.copy()
+
+        # Remove zeros from dataframe for stats only if include_zeros is False
         if not include_zeros:
             df = df[df['score'] != 0.0]
-
-        # Reconstruct full_name
-        df['student_name'] = df['student__last_name'].fillna('') + ' ' + df['student__first_name'].fillna('')
-
-        # Format class names properly (e.g. 1م1 instead of just 1)
-        df['student__class_name'] = df.apply(lambda row: format_class_name(row['student__academic_year'], row['student__class_name']), axis=1)
 
         import json
         from datetime import date
 
         general_avg_subj = None
 
-        # If a specific subject filter is passed (e.g., specific teacher subject), calculate metrics based on THAT subject
+        # نفس المنطق لـ df_full لبناء قائمة الترتيب وعرض الأصفار (مستقلة عن include_zeros)
         if subject_filter:
             general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+            general_avg_df_full = df_full.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
         else:
             # Determine the "General Average" (المعدل العام) subject if it exists, otherwise use mean of all scores
             for subj in df['subject'].unique():
@@ -75,9 +214,10 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
 
             if general_avg_subj:
                 general_avg_df = df[df['subject'] == general_avg_subj].copy()
+                general_avg_df_full = df_full[df_full['subject'] == general_avg_subj].copy() if general_avg_subj in df_full['subject'].values else df_full.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
             else:
-                # If no explicit general average subject, we calculate it per student per term
                 general_avg_df = df.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+                general_avg_df_full = df_full.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
 
         # Separate absent vs active students based on general average
         # We consider a student active if their score is >= 0, UNLESS include_zeros is True,
@@ -166,9 +306,21 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
                 'count_below_10': count_below_10
             }
 
-        # Sorted students list (Ranking Table)
-        # Average per student across all terms in the queryset
-        student_ranking_df = general_avg_df.groupby(['student_name', 'student__class_name', 'student__academic_year'])['score'].mean().reset_index()
+        # Sorted students list (Ranking Table) — دائماً من البيانات الكاملة (مع الأصفار) ليكون عرض الأصفار مستقلاً عن خيار احتساب الأصفار
+        if df_ranking is not None and not df_ranking.empty:
+            gen_avg_subj_r = None
+            for subj in df_ranking['subject'].unique():
+                if subj and isinstance(subj, str) and (subj.strip() == 'المعدل العام' or subj.strip().startswith('معدل الفصل')):
+                    gen_avg_subj_r = subj
+                    break
+            if gen_avg_subj_r:
+                rank_avg_df = df_ranking[df_ranking['subject'] == gen_avg_subj_r].groupby(['student_name', 'student__class_name', 'student__academic_year'])['score'].mean().reset_index()
+            else:
+                rank_avg_df = df_ranking.groupby(['student_name', 'student__class_name', 'student__academic_year', 'term'])['score'].mean().reset_index()
+                rank_avg_df = rank_avg_df.groupby(['student_name', 'student__class_name', 'student__academic_year'])['score'].mean().reset_index()
+            student_ranking_df = rank_avg_df
+        else:
+            student_ranking_df = general_avg_df_full.groupby(['student_name', 'student__class_name', 'student__academic_year'])['score'].mean().reset_index()
         student_ranking_df = student_ranking_df.sort_values(by='score', ascending=False)
         student_ranking_df['score'] = student_ranking_df['score'].round(2)
 
@@ -208,7 +360,16 @@ def analyze_grades_locally(grades_qs: QuerySet, subject_filter=None, include_zer
 
         # Markdown representation for AI (only a sample or aggregated view to save tokens)
         pivot_df = df.pivot_table(index=['student_name', 'student__class_name'], columns='subject', values='score', aggfunc='mean').reset_index()
-        markdown_table = pivot_df.head(20).to_markdown(index=False) + "\n... (Truncated for AI processing)" if len(pivot_df) > 20 else pivot_df.to_markdown(index=False)
+        try:
+            sample = pivot_df.head(20)
+            markdown_table = sample.to_markdown(index=False) + "\n... (Truncated for AI processing)" if len(pivot_df) > 20 else pivot_df.to_markdown(index=False)
+        except Exception:
+            # Fallback if to_markdown fails (e.g. tabulate issues with NaN/numpy types)
+            pivot_df = pivot_df.fillna('')
+            try:
+                markdown_table = pivot_df.head(20).to_string(index=False) if len(pivot_df) > 20 else pivot_df.to_string(index=False)
+            except Exception:
+                markdown_table = str(pivot_df.head(20).to_dict()) if len(pivot_df) > 20 else str(pivot_df.to_dict())
 
         # Teacher Performance Comparison
         teacher_stats = []

@@ -5,7 +5,9 @@ from .models import Grade, Student, ClassAlias
 def process_grades_file(file_path, term, subject_mappings=None):
     from .import_utils import extract_rows_from_file
     from .mapping_views import resolve_class_alias
+    from .school_year_utils import get_current_school_year
 
+    academic_year = get_current_school_year()
     with open(file_path, 'rb') as f:
         rows = list(extract_rows_from_file(f, override_filename=file_path))
 
@@ -147,19 +149,36 @@ def process_grades_file(file_path, term, subject_mappings=None):
 
     # Fetch dynamic aliases from DB
     db_aliases = {alias.alias: alias.canonical_name for alias in SubjectAlias.objects.all()}
+    # أعمدة ليست مواداً (معلومات التلميذ لا تُعتبر مواداً)
+    non_subjects = [
+        'الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة',
+        'اللقبوالاسم', 'الاسمواللقب', 'المجموع', 'المعدل', 'معدل', 'المجموع العام', 'القرار',
+        'الجنس', 'النوع', 'تاريخ الميلاد', 'تاريخ الازدياد', 'الميلاد', 'تاريخ'
+    ]
 
     for idx, header in enumerate(headers):
         original_header = header.replace('\n', ' ').replace('\r', '').strip()
         clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', original_header).strip()
+
+        # عمود "معدل الفصل 1/2/3" يجب أن يُستورد كمادة مرجعية للمعدل (مطابقة لملف Excel)
+        # ملاحظة: لا نعتمد على clean_header هنا لأنه قد يصبح "معدل" فقط بعد التنظيف.
+        m_avg = re.search(r'معدل\s*الفصل\s*([123])', original_header)
+        if m_avg:
+            tnum = m_avg.group(1)
+            col_term = term_map.get(tnum, term)
+            subject_indices_multi[('المعدل العام', col_term)] = idx
+            continue
 
         # If user provided mappings via UI, use those explicitly.
         # Otherwise, fall back to database aliases and fuzzy matching.
         mapped_subject = None
         if subject_mappings and clean_header in subject_mappings:
             mapped_subject = subject_mappings[clean_header]
-            # Even if mapped_subject is empty string or "ignore", we want to skip if it's explicitly ignored
             if mapped_subject == "ignore":
                 continue
+            # احتفاظ بنفس الاسم: نستخدم اسم المادة من الملف كما هو (المفتاح في الخريطة)
+            if mapped_subject in ("--احتفاظ بنفس الاسم--", ""):
+                mapped_subject = clean_header
 
         if not mapped_subject:
             # Apply Subject Aliases
@@ -181,13 +200,13 @@ def process_grades_file(file_path, term, subject_mappings=None):
                 subject_indices_multi[('المعدل العام', col_term)] = idx
             else:
                 if subject_mappings and clean_header in subject_mappings:
-                     final_subject = mapped_subject # We trust the user mapping
+                    # نستخدم الاسم كما حدده المستخدم أو اسم الملف كما هو عند "احتفاظ بنفس الاسم"
+                    final_subject = (mapped_subject or clean_header).strip()
                 else:
                     matches = difflib.get_close_matches(mapped_subject, known_subjects, n=1, cutoff=0.85)
                     final_subject = matches[0] if matches else mapped_subject
 
-                # Exclude unwanted columns that don't look like subjects
-                if final_subject and len(final_subject) > 3 and final_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب', 'المجموع', 'المعدل', 'معدل', 'المجموع العام', 'القرار']:
+                if final_subject and len(final_subject) > 3 and final_subject not in non_subjects:
                     subject_indices_multi[(final_subject, col_term)] = idx
 
     if len(subject_indices_multi) == 0:
@@ -201,6 +220,8 @@ def process_grades_file(file_path, term, subject_mappings=None):
                 mapped_subject = subject_mappings[clean_header]
                 if mapped_subject == "ignore":
                     continue
+                if mapped_subject in ("--احتفاظ بنفس الاسم--", ""):
+                    mapped_subject = clean_header
 
             if not mapped_subject:
                 if clean_header in db_aliases:
@@ -212,8 +233,8 @@ def process_grades_file(file_path, term, subject_mappings=None):
 
             if 'المعدل العام' in mapped_subject or 'معدل الفصل' in mapped_subject:
                 subject_indices_multi[('المعدل العام', col_term)] = idx
-            elif mapped_subject and mapped_subject != '' and len(mapped_subject) > 2 and mapped_subject not in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب', 'المجموع', 'المعدل', 'معدل', 'المجموع العام', 'القرار']:
-                subject_indices_multi[(mapped_subject, col_term)] = idx
+            elif mapped_subject and mapped_subject != '' and len(mapped_subject) > 2 and mapped_subject not in non_subjects:
+                subject_indices_multi[(mapped_subject.strip(), col_term)] = idx
 
     # Fallback to column index 1 (second column) as per user instruction if regex fails
     if name_idx == -1:
@@ -227,11 +248,15 @@ def process_grades_file(file_path, term, subject_mappings=None):
         repeater_idx = 4
 
     grades_created = 0
-    # Process students starting from row index 6
-    for row in rows[6:]:
+    # Process students starting from row index 6 — تجاهل السطر الأخير إذا كان "معدل المواد" (خلايا مدمجة)
+    data_rows = rows[6:]
+    for row in data_rows:
         if len(row) <= name_idx: continue
         student_name = str(row[name_idx]).strip()
         if not student_name: continue
+        # استغناء تام عن سطر "معدل المواد" في نهاية الجدول (لا يُستورد ولا يُستخدم في أي حساب)
+        if 'معدل المواد' in student_name or student_name.strip() in ('معدل المواد', 'معدل المادة', 'المعدل العام للمواد'):
+            continue
 
         # Find student
         student = None
@@ -276,6 +301,7 @@ def process_grades_file(file_path, term, subject_mappings=None):
                                 student=student,
                                 subject=subject,
                                 term=sub_term,
+                                academic_year=academic_year,
                                 defaults={'score': score}
                             )
                             grades_created += 1
@@ -357,6 +383,8 @@ def process_grades_file_ai(file_path, term):
     if not lvl or not cls or not students_data:
         return 0, "تعذر على الذكاء الاصطناعي تحديد القسم أو التلاميذ من الملف."
 
+    from .school_year_utils import get_current_school_year
+    academic_year = get_current_school_year()
     students_in_class = Student.objects.filter(academic_year=lvl, class_name=cls)
     if not students_in_class.exists():
         return 0, f"القسم {lvl} {cls} غير موجود في قاعدة البيانات أو ليس به تلاميذ."
@@ -403,6 +431,7 @@ def process_grades_file_ai(file_path, term):
                         student=student,
                         subject=subject,
                         term=term,
+                        academic_year=academic_year,
                         defaults={'score': score_val}
                     )
                     grades_created += 1

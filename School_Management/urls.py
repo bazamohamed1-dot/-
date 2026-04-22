@@ -23,6 +23,7 @@ urlpatterns = [
     path('sw.js', TemplateView.as_view(template_name="sw.js", content_type='application/javascript'), name='sw_old'),
 
     path('admin/', admin.site.urls),
+    path('api/unregister-sw/', ui_views.unregister_sw_view, name='unregister_sw'),
     path('api/', include(router.urls)),
     path('canteen/', include('students.urls')),
 

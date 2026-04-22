@@ -42,7 +42,7 @@ function getCookie(name) {
 
 async function loadUpdates() {
     try {
-        const res = await fetch('/canteen/api/pending_updates/');
+        const res = await fetch('/canteen/api/pending_updates/?_t=' + Date.now(), { cache: 'no-store' });
         const data = await res.json();
 
         // Handle pagination or list
@@ -220,7 +220,7 @@ async function rejectAll() {
 
 function updateBadge() {
     try {
-        fetch('/canteen/api/pending_updates/count/')
+        fetch('/canteen/api/pending_updates/count/?_t=' + Date.now(), { cache: 'no-store' })
         .then(r=>r.json())
         .then(d => {
             // Update local badge if exists (in settings page)

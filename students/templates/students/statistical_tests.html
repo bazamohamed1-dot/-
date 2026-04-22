@@ -243,6 +243,55 @@
                 </div>
             `;
 
+            // Effect size + assumptions + post-hoc (إن وجدت)
+            const eff = data.effect_size || {};
+            const asm = data.assumptions || {};
+            const effHtml = (() => {
+                const lines = [];
+                if (eff.cohens_d != null) lines.push(`<div><strong>Cohen's d</strong>: ${Number(eff.cohens_d).toFixed(3)}</div>`);
+                if (eff.eta_squared != null) lines.push(`<div><strong>Eta²</strong>: ${Number(eff.eta_squared).toFixed(3)}</div>`);
+                return lines.length ? `<div class="mt-3 p-3 rounded" style="background:#f8fafc;border:1px solid #e2e8f0;"><div class="fw-bold mb-1"><i class="fas fa-bullseye me-1"></i> حجم الأثر (Effect size)</div>${lines.join('')}</div>` : '';
+            })();
+            const asmHtml = (() => {
+                const parts = [];
+                if (asm.levene) {
+                    parts.push(`<div><strong>Levene</strong>: p=${Number(asm.levene.p_value).toFixed(4)} (${asm.levene.ok ? 'تجانس تباين مقبول' : 'تباين غير متجانس'})</div>`);
+                }
+                const sh = asm.shapiro || {};
+                const shKeys = Object.keys(sh);
+                if (shKeys.length) {
+                    const top = shKeys.slice(0, 6).map(k => `${k}: p=${Number(sh[k].p_value).toFixed(4)}`).join(' | ');
+                    parts.push(`<div><strong>Shapiro</strong> (عينة): ${top}${shKeys.length > 6 ? ' ...' : ''}</div>`);
+                }
+                return parts.length ? `<div class="mt-3 p-3 rounded" style="background:#f0f9ff;border:1px solid #bae6fd;"><div class="fw-bold mb-1"><i class="fas fa-check-double me-1"></i> فحوص الافتراضات</div>${parts.join('')}</div>` : '';
+            })();
+            const postHtml = (() => {
+                const ph = data.post_hoc;
+                if (!ph || !ph.comparisons || !ph.comparisons.length) return '';
+                const rows = ph.comparisons.slice(0, 10).map(c => `
+                    <tr>
+                        <td>${c.group_a}</td>
+                        <td>${c.group_b}</td>
+                        <td>${Number(c.p_value_bonferroni).toFixed(4)}</td>
+                        <td>${c.significant_bonferroni ? '<span class="badge bg-success">دال</span>' : '<span class="badge bg-secondary">غير دال</span>'}</td>
+                    </tr>
+                `).join('');
+                return `
+                    <div class="mt-3 p-3 rounded" style="background:#fff7ed;border:1px solid #fed7aa;">
+                        <div class="fw-bold mb-2"><i class="fas fa-list-check me-1"></i> مقارنات لاحقة (Post-hoc) — Bonferroni</div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0" style="text-align:center;">
+                                <thead class="table-light"><tr><th>مجموعة A</th><th>مجموعة B</th><th>p المعدلة</th><th>الدلالة</th></tr></thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                        <small class="text-muted d-block mt-2">تم عرض أول 10 مقارنات فقط.</small>
+                    </div>
+                `;
+            })();
+
+            html += effHtml + asmHtml + postHtml;
+
             resultsArea.innerHTML = html;
             aiBtn.disabled = false;
 

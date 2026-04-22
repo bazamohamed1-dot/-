@@ -3,6 +3,121 @@
 {% block header_title %}لوحة القيادة{% endblock %}
 
 {% block content %}
+<style>
+    /* Dashboard facelift: vibrant, glowing, modern */
+    .dash-hero {
+        background: radial-gradient(1200px 600px at 10% 0%, rgba(59,130,246,.35), transparent 60%),
+                    radial-gradient(900px 500px at 90% 10%, rgba(16,185,129,.28), transparent 55%),
+                    radial-gradient(800px 420px at 40% 100%, rgba(168,85,247,.18), transparent 60%),
+                    linear-gradient(135deg, #0b1220 0%, #0f172a 40%, #111827 100%);
+        border-radius: 18px;
+        padding: 18px 18px;
+        border: 1px solid rgba(148,163,184,.18);
+        box-shadow: 0 18px 50px rgba(2,6,23,.35);
+        margin-bottom: 18px;
+        position: relative;
+        overflow: hidden;
+    }
+    .dash-hero::after{
+        content:"";
+        position:absolute; inset:-2px;
+        background: conic-gradient(from 210deg, rgba(56,189,248,.0), rgba(56,189,248,.20), rgba(16,185,129,.16), rgba(168,85,247,.12), rgba(56,189,248,.0));
+        filter: blur(18px);
+        opacity:.55;
+        pointer-events:none;
+    }
+    .dash-hero-inner{ position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+    .dash-title{ color:#e2e8f0; font-weight:900; font-size:1.35rem; margin:0; }
+    .dash-sub{ color:#94a3b8; margin:0; font-size:.95rem; }
+    .dash-pill{
+        display:inline-flex; gap:8px; align-items:center;
+        padding:8px 12px; border-radius:999px;
+        background: rgba(255,255,255,.06);
+        border: 1px solid rgba(148,163,184,.22);
+        color:#e2e8f0; font-weight:700; font-size:.9rem;
+        box-shadow: inset 0 0 0 1px rgba(15,23,42,.35);
+    }
+    .dash-grid{ display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:14px; }
+    @media (max-width: 1100px){ .dash-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 650px){ .dash-grid{ grid-template-columns: 1fr; } }
+    .dash-card{
+        background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,250,252,.92));
+        border: 1px solid rgba(226,232,240,.9);
+        border-radius: 16px;
+        padding: 14px 14px;
+        box-shadow: 0 10px 28px rgba(15,23,42,.10);
+        transition: transform .18s ease, box-shadow .18s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .dash-card:hover{ transform: translateY(-2px); box-shadow: 0 16px 34px rgba(15,23,42,.14); }
+    .dash-card::before{
+        content:"";
+        position:absolute; inset:-40px -30px auto auto;
+        width:140px; height:140px; border-radius: 999px;
+        background: radial-gradient(circle at 30% 30%, rgba(56,189,248,.35), transparent 60%);
+        transform: rotate(18deg);
+        pointer-events:none;
+    }
+    .dash-kpi{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .dash-ico{
+        width:52px; height:52px; border-radius: 14px;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow: 0 10px 18px rgba(2,6,23,.12);
+        color:white; font-size:1.35rem;
+    }
+    .dash-num{ font-size: 1.45rem; font-weight: 900; color:#0f172a; }
+    .dash-lbl{ color:#475569; font-weight:700; }
+    .dash-hint{ color:#64748b; font-size:.85rem; margin-top:4px; }
+
+    .dash-table-card{
+        border: 1px solid rgba(226,232,240,.9);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 12px 30px rgba(15,23,42,.10);
+        background: white;
+    }
+    .dash-table-head{
+        background: linear-gradient(135deg, rgba(59,130,246,.16), rgba(16,185,129,.10));
+        padding: 14px 18px;
+        display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+        border-bottom: 1px solid rgba(226,232,240,.9);
+    }
+    .dash-table-title{ margin:0; font-weight:900; color:#0f172a; display:flex; align-items:center; gap:10px; }
+    .dash-table-title i{ color:#2563eb; }
+    .dash-mini-badges{ display:flex; gap:8px; flex-wrap:wrap; }
+    .dash-mini-badge{
+        background: rgba(15,23,42,.06);
+        border: 1px solid rgba(148,163,184,.22);
+        color:#0f172a; font-weight:800;
+        border-radius: 999px; padding: 6px 10px;
+        font-size:.85rem;
+    }
+    .dash-table tbody tr:hover{ background: rgba(56,189,248,.08); }
+    .dash-cell-pill{
+        display:inline-flex; align-items:center; justify-content:center;
+        min-width: 44px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-weight:900;
+        background: rgba(59,130,246,.10);
+        color:#1e40af;
+        border: 1px solid rgba(59,130,246,.18);
+    }
+</style>
+
+<div class="dash-hero">
+    <div class="dash-hero-inner">
+        <div>
+            <h2 class="dash-title"><i class="fas fa-gauge-high" style="color:#38bdf8;"></i> لوحة القيادة</h2>
+            <p class="dash-sub">واجهة سريعة ومضيئة لملخص المؤسسة — اليوم <span class="western-nums" id="dashToday">--/--/----</span></p>
+        </div>
+        <div class="dash-pill">
+            <i class="fas fa-shield-halved" style="color:#22c55e;"></i>
+            <span>حالة النظام: <strong>{{ db_status }}</strong></span>
+        </div>
+    </div>
+</div>
 <!-- Pending Updates Alert (Director) -->
 <div class="card" id="dashboardUpdatesCard" style="display:none; margin-bottom: 20px; background: #fff7ed; border: 1px solid #ffedd5;">
     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -19,46 +134,83 @@
     </div>
 </div>
 
-<div class="grid-4">
+<div class="dash-grid">
     {% if is_director %}
-    <div class="card" style="border-right: 4px solid #10b981;">
-        <div style="font-size: 3rem; color: #10b981; margin-bottom: 10px;"><i class="fas fa-coins"></i></div>
-        <div style="font-size: 1.5rem; font-weight: bold; direction: ltr;">
-            {% if openrouter_balance is not None %}
-                ${{ openrouter_balance }}
-            {% else %}
-                N/A
-            {% endif %}
-        </div>
-        <div style="color: #64748b;">رصيد الذكاء الاصطناعي</div>
-        {% if openrouter_balance is not None %}
-        <div style="margin-top: 10px; font-size: 0.8rem; text-align: left; direction: ltr;">
-            <div style="background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden; width: 100%;">
-                {% widthratio openrouter_balance 5 100 as percentage %}
-                <div style="background: {% if openrouter_balance > 1 %}#10b981{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage|default:'0' }}%;"></div>
+    <div class="dash-card">
+        <div class="dash-kpi">
+            <div>
+                <div class="dash-num western-nums" style="direction:ltr; display:flex; align-items:center; gap:10px;">
+                    <span id="aiBalanceValue">{% if openrouter_balance is not None %}${{ openrouter_balance }}{% else %}—{% endif %}</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius: 999px;" onclick="refreshAiBalance()" title="تحديث الرصيد الآن">
+                        <i class="fas fa-rotate"></i>
+                    </button>
+                </div>
+                <div class="dash-lbl">رصيد الذكاء الاصطناعي</div>
+                <div class="dash-hint" id="aiBalanceHint">
+                    {% if openrouter_balance is not None %}
+                        آخر تحديث تلقائي خلال دقائق.
+                    {% else %}
+                        {% if openrouter_balance_info and openrouter_balance_info.message %}
+                            {{ openrouter_balance_info.message }}
+                        {% else %}
+                            تعذر جلب الرصيد حالياً.
+                        {% endif %}
+                    {% endif %}
+                </div>
             </div>
-            <span style="color: #94a3b8; display: block; margin-top: 3px;">Out of $5.00 limit</span>
+            <div class="dash-ico" style="background: linear-gradient(135deg,#10b981,#22c55e);">
+                <i class="fas fa-coins"></i>
+            </div>
+        </div>
+        {% if openrouter_balance is not None %}
+        <div style="margin-top: 12px; font-size: 0.85rem; text-align: left; direction: ltr;">
+            <div style="background: #e2e8f0; height: 8px; border-radius: 999px; overflow: hidden; width: 100%;">
+                {% widthratio openrouter_balance 5 100 as percentage %}
+                <div style="background: {% if openrouter_balance > 1 %}linear-gradient(90deg,#22c55e,#10b981){% else %}linear-gradient(90deg,#f97316,#ef4444){% endif %}; height: 100%; width: {{ percentage|default:'0' }}%;"></div>
+            </div>
+            <span style="color: #94a3b8; display: block; margin-top: 6px;">OpenRouter (limit example: $5.00)</span>
         </div>
         {% endif %}
     </div>
     {% endif %}
 
-    <div class="card" style="border-right: 4px solid var(--primary);">
-        <div style="font-size: 3rem; color: var(--primary); margin-bottom: 10px;"><i class="fas fa-users"></i></div>
-        <div style="font-size: 1.5rem; font-weight: bold;">{{ total_students }}</div>
-        <div style="color: #64748b;">مجموع التلاميذ</div>
+    <div class="dash-card">
+        <div class="dash-kpi">
+            <div>
+                <div class="dash-num western-nums">{{ total_students }}</div>
+                <div class="dash-lbl">مجموع التلاميذ</div>
+                <div class="dash-hint">المؤسسة كاملة</div>
+            </div>
+            <div class="dash-ico" style="background: linear-gradient(135deg,#2563eb,#38bdf8);">
+                <i class="fas fa-users"></i>
+            </div>
+        </div>
     </div>
 
-    <div class="card" style="border-right: 4px solid var(--success);">
-        <div style="font-size: 3rem; color: var(--success); margin-bottom: 10px;"><i class="fas fa-utensils"></i></div>
-        <div style="font-size: 1.5rem; font-weight: bold;">{{ half_board_count }}</div>
-        <div style="color: #64748b;">تلاميذ نصف داخلي</div>
+    <div class="dash-card">
+        <div class="dash-kpi">
+            <div>
+                <div class="dash-num western-nums">{{ half_board_count }}</div>
+                <div class="dash-lbl">نصف داخلي</div>
+                <div class="dash-hint">للمطعم المدرسي</div>
+            </div>
+            <div class="dash-ico" style="background: linear-gradient(135deg,#14b8a6,#10b981);">
+                <i class="fas fa-utensils"></i>
+            </div>
+        </div>
     </div>
 
-    <div class="card" style="border-right: 4px solid var(--danger);">
-        <div style="font-size: 3rem; color: var(--danger); margin-bottom: 10px;"><i class="fas fa-database"></i></div>
-        <div style="font-size: 1.2rem; font-weight: bold;">{{ db_status }}</div>
-        <div style="color: #64748b;">حالة قاعدة البيانات</div>
+    <div class="dash-card">
+        <div class="dash-kpi">
+            <div>
+                <div class="dash-num">{{ db_status }}</div>
+                <div class="dash-lbl">قاعدة البيانات</div>
+                <div class="dash-hint">جاهزية الخدمات</div>
+            </div>
+            <div class="dash-ico" style="background: linear-gradient(135deg,#f97316,#ef4444);">
+                <i class="fas fa-database"></i>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -123,38 +275,41 @@
 </div>
 {% endif %}
 
-<div class="card mt-4" style="border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-radius: 12px; overflow: hidden;">
-    <div style="background-color: #f8fafc; padding: 15px 20px; border-bottom: 1px solid #e2e8f0;">
-        <h3 style="color: var(--primary); margin: 0; display: flex; align-items: center; gap: 10px;">
-            <i class="fas fa-chart-bar"></i> التعداد العام حسب المستوى والتمدرس
-        </h3>
+<div class="dash-table-card mt-4">
+    <div class="dash-table-head">
+        <h3 class="dash-table-title"><i class="fas fa-chart-bar"></i> التعداد العام حسب المستوى والتمدرس</h3>
+        <div class="dash-mini-badges">
+            <span class="dash-mini-badge">نصف داخلي: <span class="western-nums">{{ half_board_count }}</span></span>
+            <span class="dash-mini-badge">خارجي: <span class="western-nums">{{ ext_board_count }}</span></span>
+            <span class="dash-mini-badge">المجموع: <span class="western-nums">{{ total_students }}</span></span>
+        </div>
     </div>
-    <div style="overflow-x: auto;">
-        <table style="width:100%; border-collapse: collapse;">
+    <div style="overflow-x:auto;">
+        <table class="table dash-table mb-0" style="width:100%; border-collapse: collapse;">
             <thead>
-                <tr style="background:#f1f5f9; text-align:center;">
-                    <th style="padding:15px; font-weight:700; color:#475569; border-left:1px solid #e2e8f0;">المستوى</th>
-                    <th style="padding:15px; font-weight:700; color:#1e40af; border-left:1px solid #e2e8f0;">نصف داخلي</th>
-                    <th style="padding:15px; font-weight:700; color:#4b5563; border-left:1px solid #e2e8f0;">خارجي</th>
-                    <th style="padding:15px; font-weight:700; color:#0f172a;">المجموع</th>
+                <tr style="background:#f8fafc; text-align:center;">
+                    <th style="padding:14px; font-weight:900; color:#0f172a;">المستوى</th>
+                    <th style="padding:14px; font-weight:900; color:#1e40af;">نصف داخلي</th>
+                    <th style="padding:14px; font-weight:900; color:#334155;">خارجي</th>
+                    <th style="padding:14px; font-weight:900; color:#0f172a;">المجموع</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in detailed_stats %}
-                <tr style="border-bottom: 1px solid #f1f5f9; text-align:center; transition: background 0.2s;">
-                    <td style="padding:15px; font-weight:700; color:#334155; border-left:1px solid #f1f5f9;">{{ item.level }}</td>
-                    <td style="padding:15px; font-weight:600; color:#1e40af; background:#eff6ff; border-left:1px solid #white;" class="western-nums">{{ item.half }}</td>
-                    <td style="padding:15px; font-weight:600; color:#4b5563; border-left:1px solid #f1f5f9;" class="western-nums">{{ item.ext }}</td>
-                    <td style="padding:15px; font-weight:bold; color:#0f172a;" class="western-nums">{{ item.total }}</td>
+                <tr style="text-align:center;">
+                    <td style="padding:14px; font-weight:900; color:#0f172a;">{{ item.level }}</td>
+                    <td style="padding:14px;"><span class="dash-cell-pill western-nums">{{ item.half }}</span></td>
+                    <td style="padding:14px;"><span class="dash-cell-pill western-nums" style="background:rgba(148,163,184,.14);color:#334155;border-color:rgba(148,163,184,.26);">{{ item.ext }}</span></td>
+                    <td style="padding:14px;"><span class="dash-cell-pill western-nums" style="background:rgba(16,185,129,.12);color:#065f46;border-color:rgba(16,185,129,.22);">{{ item.total }}</span></td>
                 </tr>
                 {% empty %}
                 <tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">لا توجد بيانات متاحة حالياً</td></tr>
                 {% endfor %}
-                <tr style="border-top: 2px solid #e2e8f0; text-align:center; background:#f8fafc;">
-                    <td style="padding:15px; font-weight:800; color:#0f172a; border-left:1px solid #e2e8f0;">المجموع العام</td>
-                    <td style="padding:15px; font-weight:800; color:#1e40af; border-left:1px solid #white;" class="western-nums">{{ half_board_count }}</td>
-                    <td style="padding:15px; font-weight:800; color:#4b5563; border-left:1px solid #e2e8f0;" class="western-nums">{{ ext_board_count }}</td>
-                    <td style="padding:15px; font-weight:800; color:#0f172a;" class="western-nums">{{ total_students }}</td>
+                <tr style="text-align:center; background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(16,185,129,.10));">
+                    <td style="padding:14px; font-weight:900; color:#0f172a;">المجموع العام</td>
+                    <td style="padding:14px;"><span class="dash-cell-pill western-nums">{{ half_board_count }}</span></td>
+                    <td style="padding:14px;"><span class="dash-cell-pill western-nums" style="background:rgba(148,163,184,.14);color:#334155;border-color:rgba(148,163,184,.26);">{{ ext_board_count }}</span></td>
+                    <td style="padding:14px;"><span class="dash-cell-pill western-nums" style="background:rgba(16,185,129,.12);color:#065f46;border-color:rgba(16,185,129,.22);">{{ total_students }}</span></td>
                 </tr>
             </tbody>
         </table>
@@ -168,6 +323,8 @@
         const today = new Date().toLocaleDateString('ar-DZ', { numberingSystem: 'latn' });
         document.getElementById('schoolStatsDate').textContent = today;
         document.getElementById('canteenStatsDate').textContent = today;
+        const dashToday = document.getElementById('dashToday');
+        if (dashToday) dashToday.textContent = today;
 
         checkDashboardUpdates();
     });
@@ -175,7 +332,7 @@
     async function checkDashboardUpdates() {
         {% if is_director %}
         try {
-            const res = await fetch('/canteen/api/pending_updates/count/');
+            const res = await fetch('/canteen/api/pending_updates/count/?_t=' + Date.now(), { cache: 'no-store' });
             const data = await res.json();
             if (data.count > 0) {
                 document.getElementById('dashboardUpdatesCard').style.display = 'block';
@@ -183,6 +340,26 @@
             }
         } catch(e){}
         {% endif %}
+    }
+
+    async function refreshAiBalance() {
+        const valEl = document.getElementById('aiBalanceValue');
+        const hintEl = document.getElementById('aiBalanceHint');
+        if (valEl) valEl.innerText = '...';
+        try {
+            const res = await fetch("{% url 'api_openrouter_balance' %}?_t=" + Date.now(), { cache: 'no-store' });
+            const data = await res.json();
+            if (data && data.ok && data.balance != null) {
+                if (valEl) valEl.innerText = '$' + Number(data.balance).toFixed(2);
+                if (hintEl) hintEl.innerText = 'تم التحديث الآن.';
+            } else {
+                if (valEl) valEl.innerText = '—';
+                if (hintEl) hintEl.innerText = (data && data.message) ? data.message : 'تعذر جلب الرصيد.';
+            }
+        } catch (e) {
+            if (valEl) valEl.innerText = '—';
+            if (hintEl) hintEl.innerText = 'فشل الاتصال بالخادم.';
+        }
     }
 </script>
 {% endblock %}

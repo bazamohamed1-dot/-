@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import logout
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.core.management import call_command
 from .models import Student, CanteenAttendance, SchoolSettings, Employee, SystemMessage, Survey, PendingUpdate, Task, SchoolMemory, UserRole
 from datetime import date, datetime
@@ -17,6 +17,38 @@ from .utils import normalize_arabic
 from .utils_sync import sync_photos_logic
 from django.db.models import Q
 
+
+def _count_nav_surfaces(profile):
+    """عدد الواجهات الرئيسية المفتوحة للمستخدم (لتجنب إعادة التوجيه لواجهة واحدة فقط)."""
+    keys = [
+        'access_canteen', 'access_library', 'access_management', 'access_archive',
+        'access_guidance', 'access_hr', 'access_parents',
+    ]
+    n = sum(1 for k in keys if profile.has_perm(k))
+    if profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'):
+        n += 1
+    return n
+
+
+def unregister_sw_view(request):
+    """صفحة طوارئ: إلغاء تسجيل Service Worker. المسار يحتوي /api/ فلا يعترضه الـ SW القديم."""
+    html = '''<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>إلغاء Service Worker</title></head><body style="font-family: Cairo; padding: 2rem; text-align: center;">
+    <p id="msg">جاري إلغاء تسجيل Service Worker...</p>
+    <script>
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+            var p = Promise.all(regs.map(function(r) { return r.unregister(); }));
+            p.then(function() {
+                document.getElementById("msg").innerHTML = "تم إلغاء التسجيل. <a href='/'>العودة للصفحة الرئيسية</a>";
+                setTimeout(function(){ location.href = "/"; }, 1500);
+            });
+        });
+    } else {
+        document.getElementById("msg").innerHTML = "لا يوجد Service Worker. <a href='/'>العودة</a>";
+    }
+    </script></body></html>'''
+    return HttpResponse(html, content_type='text/html; charset=utf-8')
+
 def sync_photos_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
@@ -30,7 +62,9 @@ def sync_photos_view(request):
 def pending_updates_view(request):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')
-    pass
+    prof = getattr(request.user, 'profile', None)
+    if not request.user.is_superuser and not (prof and prof.role == 'director'):
+        return redirect('dashboard')
 
     updates = PendingUpdate.objects.all().order_by('-timestamp')
     context = {
@@ -58,19 +92,18 @@ def dashboard(request):
             if role == 'director':
                 pass # Continue to dashboard
             else:
-                # Instead of allowing them to see the main dashboard (which they may not have requested explicitly),
-                # always route them to their FIRST available permitted interface.
-                # Once there, they can use the sidebar to navigate to the other interfaces they have access to.
-                if profile.has_perm('access_canteen'): return redirect('canteen_home')
-                elif profile.has_perm('access_library'): return redirect('library_home')
-                elif profile.has_perm('access_management'): return redirect('students_management')
-                elif profile.has_perm('access_archive'): return redirect('archive_home')
-                elif profile.has_perm('access_guidance'): return redirect('guidance_home')
-                elif profile.has_perm('access_hr'): return redirect('hr_home')
-                elif profile.has_perm('access_parents'): return redirect('parents_home')
-                elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'): return redirect('analytics_dashboard')
+                # إعادة توجيه تلقائية فقط عندما تكون واجهة رئيسية واحدة؛ وإلا يبقى لوحة القيادة والشريط الجانبي.
+                if _count_nav_surfaces(profile) == 1:
+                    if profile.has_perm('access_canteen'): return redirect('canteen_home')
+                    elif profile.has_perm('access_library'): return redirect('library_home')
+                    elif profile.has_perm('access_management'): return redirect('students_management')
+                    elif profile.has_perm('access_archive'): return redirect('archive_home')
+                    elif profile.has_perm('access_guidance'): return redirect('guidance_home')
+                    elif profile.has_perm('access_hr'): return redirect('hr_home')
+                    elif profile.has_perm('access_parents'): return redirect('parents_home')
+                    elif profile.has_perm('access_analytics') or profile.has_perm('access_advanced_analytics'): return redirect('analytics_dashboard')
                 else:
-                    pass # Default dashboard for others (Teachers with no special interface perms)
+                    pass
         else:
             # No profile (e.g., admin). If not superuser, redirect
             if not request.user.is_superuser:
@@ -125,6 +158,16 @@ def dashboard(request):
     half_board_count = Student.objects.filter(attendance_system='نصف داخلي').count()
     ext_board_count = total_students - half_board_count
 
+    openrouter_balance = None
+    openrouter_balance_info = None
+    try:
+        from students.ai_utils import AIService
+        ai = AIService()
+        openrouter_balance_info = ai.get_openrouter_balance_info()
+        openrouter_balance = openrouter_balance_info.get('balance') if isinstance(openrouter_balance_info, dict) else None
+    except Exception as e:
+        # لا نكتم الخطأ حتى يظهر السبب في لوحة القيادة بدل N/A الغامضة
+        openrouter_balance_info = {'ok': False, 'balance': None, 'message': f'خطأ داخلي: {e}', 'key_present': False}
     context = {
         'total_students': total_students,
         'half_board_count': half_board_count,
@@ -136,9 +179,25 @@ def dashboard(request):
         'assigned_students': assigned_students,
         'teacher_classes': teacher_classes,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
-        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
+        'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser,
+        'openrouter_balance': openrouter_balance,
+        'openrouter_balance_info': openrouter_balance_info,
     }
     return render(request, 'students/dashboard.html', context)
+
+
+def api_openrouter_balance(request):
+    """API: إرجاع رصيد OpenRouter مع تشخيص. (Director only)"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'balance': None, 'message': 'Unauthorized'}, status=403)
+    if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.role == 'director')):
+        return JsonResponse({'ok': False, 'balance': None, 'message': 'Forbidden'}, status=403)
+    try:
+        from students.ai_utils import AIService
+        info = AIService(user=request.user).get_openrouter_balance_info()
+        return JsonResponse(info if isinstance(info, dict) else {'ok': False, 'balance': None, 'message': 'Unknown response'})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'balance': None, 'message': f'Error: {e}'}, status=500)
 
 def settings_view(request):
     if not request.user.is_authenticated:
@@ -444,7 +503,8 @@ def print_student_cards(request):
 
     settings = SchoolSettings.objects.first()
     school_name = settings.name if settings else "اسم المؤسسة"
-    academic_year = settings.academic_year if settings else "2024/2025"
+    from .school_year_utils import get_current_school_year
+    academic_year = get_current_school_year()
 
     context = {
         'students': students,
@@ -455,9 +515,77 @@ def print_student_cards(request):
 
 # --- New Modules ---
 
-from .models import TeacherAssignment, ClassAlias, Student
+from .models import TeacherAssignment, ClassAlias, Student, Employee
 from .ai_utils import analyze_assignment_document, analyze_global_assignment_content
 import difflib
+
+def sync_ta_to_analytics(teacher):
+    """Keep analytics_assignments in sync with TeacherAssignment so both sources show same data."""
+    if not teacher or not isinstance(teacher, Employee):
+        return
+    tas = TeacherAssignment.objects.filter(teacher=teacher)
+    data = [{'subject': ta.subject, 'classes': list(ta.classes or [])} for ta in tas]
+    teacher.analytics_assignments = data
+    teacher.save(update_fields=['analytics_assignments'])
+
+
+def _norm_subj_analytics(t):
+    if not t:
+        return ''
+    t = str(t).strip().replace('ـ', '').replace('  ', ' ')
+    if t.startswith('ال'):
+        t = t[2:].strip()
+    return t.lower()
+
+
+def _subject_matches_analytics(s1, s2):
+    n1, n2 = _norm_subj_analytics(s1), _norm_subj_analytics(s2)
+    return n1 == n2 or n1 in n2 or n2 in n1 or (s1 and s2 and (s1 in s2 or s2 in s1))
+
+
+def sync_all_analytics_assignments_from_hr():
+    """
+    ملء إسناد التحليل من الموارد البشرية لجميع الأساتذة (نفس منطق الأمر sync_analytics_assignments_from_hr).
+    يُستدعى تلقائياً عند فتح صفحة التحليل حتى لا يلزم استيراد الإسناد يدوياً.
+    """
+    teachers = Employee.objects.filter(rank='teacher')
+    for emp in teachers:
+        hr_assignments = list(
+            TeacherAssignment.objects.filter(teacher=emp).values_list('subject', 'classes')
+        )
+        if not hr_assignments:
+            continue
+        current = list(emp.analytics_assignments or [])
+        hr_by_subj = {}
+        for subj, classes in hr_assignments:
+            if not subj or str(subj).strip() == '/':
+                continue
+            subj = str(subj).strip()
+            cl = list(classes) if isinstance(classes, list) else ([classes] if classes else [])
+            if cl:
+                hr_by_subj[subj] = cl
+        if not hr_by_subj:
+            continue
+        changed = False
+        if not current:
+            current = [{'subject': s, 'classes': list(cl)} for s, cl in hr_by_subj.items()]
+            changed = True
+        else:
+            for a in current:
+                subj = (a.get('subject') or '').strip()
+                cl = a.get('classes')
+                if not subj:
+                    continue
+                if cl and isinstance(cl, list) and len(cl) > 0:
+                    continue
+                for hr_subj, hr_cl in hr_by_subj.items():
+                    if _subject_matches_analytics(subj, hr_subj):
+                        a['classes'] = list(hr_cl)
+                        changed = True
+                        break
+        if changed:
+            emp.analytics_assignments = current
+            emp.save(update_fields=['analytics_assignments'])
 
 def assignment_matching_view(request):
     """
@@ -534,19 +662,18 @@ def assignment_matching_view(request):
             return redirect(f"{request.path}?step=3")
 
         elif step == 3:
-            # Handle Final Teacher Mapping & Save
-            count = 0
+            # Group by teacher: same teacher may appear in multiple rows (e.g. two subjects)
+            teacher_aggregate = {}  # teacher_id or ('create_new', final_name) -> { teacher_obj, assignments[], main_subject }
             for idx, c in enumerate(candidates):
                 action = request.POST.get(f'match_{idx}')
-                if action == 'ignore': continue
+                if action == 'ignore':
+                    continue
 
                 final_name = request.POST.get(f'name_{idx}', c['name'])
-
                 subjects = request.POST.getlist(f'subject_{idx}[]')
                 block_indices = request.POST.getlist(f'block_indices_{idx}[]')
 
                 assignments = []
-                # Safely pair subjects with their specific block index to fetch the exact classes array
                 for j, subject in enumerate(subjects):
                     if subject.strip() and j < len(block_indices):
                         block_idx = block_indices[j]
@@ -557,15 +684,30 @@ def assignment_matching_view(request):
                         })
 
                 main_subject = subjects[0].strip() if subjects else c['subject']
+                key = ('create_new', final_name) if action == 'create_new' else int(action)
+
+                if key not in teacher_aggregate:
+                    teacher_aggregate[key] = {'assignments': [], 'main_subject': main_subject, 'final_name': final_name}
+                teacher_aggregate[key]['assignments'].extend(assignments)
+                if main_subject and main_subject != '/':
+                    teacher_aggregate[key]['main_subject'] = main_subject
+
+            count = 0
+            saved_teacher_ids = []
+            for key, agg in teacher_aggregate.items():
+                action = key if not isinstance(key, tuple) else 'create_new'
+                final_name = agg['final_name'] if isinstance(key, tuple) else None
+                assignments = [a for a in agg['assignments'] if a.get('subject')]
+                main_subject = agg['main_subject']
 
                 teacher = None
                 if action == 'create_new':
-                    parts = final_name.split()
+                    parts = (final_name or '').split()
                     ln = parts[0] if parts else "غير معروف"
                     fn = " ".join(parts[1:]) if len(parts) > 1 else ""
                     teacher = Employee.objects.create(
                         last_name=ln, first_name=fn,
-                        rank='teacher', subject=main_subject
+                        rank='teacher', subject=main_subject or '/'
                     )
                 else:
                     try:
@@ -573,25 +715,29 @@ def assignment_matching_view(request):
                         if main_subject and main_subject != '/':
                             teacher.subject = main_subject
                             teacher.save()
-                        # Clear existing assignments when updating via wizard to prevent duplicates
                         TeacherAssignment.objects.filter(teacher=teacher).delete()
                     except Employee.DoesNotExist:
                         continue
 
                 if teacher:
                     for assignment in assignments:
-                        if assignment.get('subject'):
-                            TeacherAssignment.objects.create(
-                                teacher=teacher,
-                                subject=assignment['subject'],
-                                classes=assignment.get('classes', [])
-                            )
+                        TeacherAssignment.objects.create(
+                            teacher=teacher,
+                            subject=assignment['subject'],
+                            classes=assignment.get('classes', [])
+                        )
+                    teacher.refresh_from_db()
+                    sync_ta_to_analytics(teacher)
                     count += 1
+                    saved_teacher_ids.append(str(teacher.id))
 
             messages.success(request, f"تم حفظ الإسناد لـ {count} أستاذ وربطهم بنجاح.")
             if 'ai_extracted_data' in request.session:
                 del request.session['ai_extracted_data']
-            return redirect('hr_home')
+            from django.urls import reverse
+            import time
+            order_param = '&order=' + ','.join(saved_teacher_ids) if saved_teacher_ids else ''
+            return redirect(f"{reverse('hr_home')}?_r={int(time.time())}{order_param}")
 
     # --- GET Display Logic for Steps ---
     context = {'step': step, 'candidates': candidates}
@@ -739,24 +885,41 @@ def assignment_matching_view(request):
             best_score = 0.0
             best_match = None
             c_norm = (c.get('name') or '').strip()
+            c_parts = [p.strip() for p in re.split(r'[\s\u064b-\u0652]+', c_norm) if len(p.strip()) > 1]
 
             for t in all_teachers:
-                t_ln = t.last_name or ''
-                t_fn = t.first_name or ''
+                t_ln = (t.last_name or '').strip()
+                t_fn = (t.first_name or '').strip()
 
                 t_full = f"{t_ln} {t_fn}".strip()
                 t_rev = f"{t_fn} {t_ln}".strip()
 
+                # التطابق بين اللقب والاسم: لا نقبل اقتراح أستاذ إلا إذا ظهر كل من اللقب والاسم في النص
                 if t_ln and t_fn and t_ln in c_norm and t_fn in c_norm:
                     score = 1.0
-                elif t_ln and t_ln in c_norm and len(t_ln) > 3:
+                elif t_ln and t_fn and t_ln in c_norm and t_fn not in c_norm:
+                    # نفس اللقب لكن اسم مختلف (مثل طرافي امباركة vs أرفيس امباركة) — لا نطابق
+                    score = 0.35
+                elif t_ln and t_ln in c_norm and len(t_ln) > 3 and not t_fn:
                     score = 0.8
+                elif t_ln and t_ln in c_norm and len(t_ln) > 3:
+                    score = 0.5
                 else:
                     score = max(
                         get_similarity(c_norm, t_full),
                         get_similarity(c_norm, t_rev),
                         get_similarity(c_norm, t_ln)
                     )
+
+                # عندما يتشارك أساتذة نفس اللقب، نعتمد الجزء المميز (الاسم الأول)
+                if c_parts and t_ln and t_fn and score >= 0.4:
+                    last_part = c_parts[-1] if c_parts else ''
+                    first_part = c_parts[0] if c_parts else ''
+                    if last_part and len(last_part) > 2:
+                        if (t_ln in last_part or last_part in t_ln) and (t_fn in first_part or first_part in t_fn or t_fn in c_norm):
+                            score = max(score, 0.95)
+                        elif (t_ln in last_part or last_part in t_ln) and (first_part not in t_fn and t_fn not in first_part and t_fn not in c_norm):
+                            score = min(score, 0.4)
 
                 if score > best_score:
                     best_score = score
@@ -773,6 +936,30 @@ def assignment_matching_view(request):
         context['all_teachers'] = all_teachers
 
     return render(request, 'students/assignment_match.html', context)
+
+def get_all_hr_assignments_api(request):
+    """Returns HR assignments for all teachers (for quick edit, always fresh from DB)."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'status': 'error', 'message': 'غير مصرح'})
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
+        return JsonResponse({'status': 'error', 'message': 'ليس لديك صلاحية'})
+    from .models import Employee
+    order_str = request.GET.get('order', '')
+    order_ids = [x.strip() for x in order_str.split(',') if x.strip()] if order_str else None
+
+    teachers = Employee.objects.filter(rank='teacher')
+    data = {}
+    for emp in teachers:
+        assignments = list(emp.assignments.all().values('subject', 'classes'))
+        data[str(emp.id)] = {
+            'name': f"{emp.last_name or ''} {emp.first_name or ''}".strip(),
+            'assignments': assignments
+        }
+    result = {'status': 'success', 'teachers': data}
+    if order_ids:
+        result['order'] = [i for i in order_ids if i in data]
+    return JsonResponse(result)
+
 
 def hr_home(request):
     if not request.user.is_authenticated:
@@ -795,10 +982,12 @@ def hr_home(request):
                     temp_path = tmp.name
 
                 from .import_utils import parse_hr_file
+                import re
                 employees_data = parse_hr_file(temp_path)
 
                 from django.db import transaction
                 count = 0
+                skipped_no_code = 0
 
                 with transaction.atomic():
                     for emp in employees_data:
@@ -850,50 +1039,67 @@ def hr_home(request):
                         dob = parse_d(emp.get('date_of_birth'))
                         eff_date = parse_d(emp.get('effective_date'))
 
-                        # Duplicate Prevention Logic:
-                        # 1. Try to find by unique Employee Code if present
-                        # 2. Try to find by Name + DOB if Code is generic/missing
+                        # شرط منع التكرار: الرمز الوظيفي مطلوب في الاستيراد (إلا اليدوي)
+                        emp_code = (emp.get('employee_code') or '').strip()
+                        if not emp_code or len(emp_code) < 4:
+                            skipped_no_code += 1
+                            continue
+                        ln = (emp.get('last_name') or '').strip()
+                        fn = (emp.get('first_name') or '').strip()
 
-                        emp_code = emp.get('employee_code')
-                        ln = emp.get('last_name', '')
-                        fn = emp.get('first_name', '')
+                        def _norm(s):
+                            if not s: return ''
+                            s = str(s).strip().replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
+                            s = s.replace('ة', 'ه').replace('ى', 'ي').replace('ئ', 'ي').replace('ؤ', 'و').replace('ء', '')
+                            s = re.sub(r'(^|\s)اع', r'\1ع', s)
+                            return s
 
-                        # Search for existing
+                        # Skip auto-generated codes (e.g. بنزفايزة123) for matching
+                        is_auto_code = bool(emp_code and re.match(r'^[^\d]+\d+$', str(emp_code)) and len(emp_code) < 20)
+
                         existing = None
-                        if emp_code:
+                        if emp_code and not is_auto_code:
                             existing = Employee.objects.filter(employee_code=emp_code).first()
 
                         if not existing and ln and fn:
                             existing = Employee.objects.filter(
-                                last_name=ln,
-                                first_name=fn,
-                                date_of_birth=dob
+                                last_name=ln, first_name=fn, date_of_birth=dob
                             ).first()
+                        if not existing and ln and fn:
+                            existing = Employee.objects.filter(
+                                last_name=ln, first_name=fn
+                            ).first()
+                        if not existing and ln and fn:
+                            ln_n, fn_n = _norm(ln), _norm(fn)
+                            for e in Employee.objects.filter(rank=sys_rank):
+                                if _norm(e.last_name or '') == ln_n and _norm(e.first_name or '') == fn_n:
+                                    existing = e
+                                    break
 
-                        # Data dict
-                        defaults={
-                            'last_name': ln,
-                            'first_name': fn,
-                            'date_of_birth': dob,
-                            'rank': sys_rank,
-                            'role': raw_rank,
-                            'subject': subject,
-                            'grade': emp.get('grade', ''),
-                            'effective_date': eff_date,
-                            'phone': emp.get('phone', ''),
-                            'email': emp.get('email', ''),
+                        defaults = {
+                            'last_name': ln, 'first_name': fn, 'date_of_birth': dob,
+                            'rank': sys_rank, 'role': raw_rank, 'subject': subject,
+                            'grade': emp.get('grade', ''), 'effective_date': eff_date,
+                            'phone': emp.get('phone', ''), 'email': emp.get('email', ''),
                         }
 
                         if existing:
                             for key, value in defaults.items():
                                 setattr(existing, key, value)
+                            if is_auto_code and existing.employee_code:
+                                pass
+                            elif emp_code and not is_auto_code:
+                                existing.employee_code = emp_code
                             existing.save()
                         else:
-                            Employee.objects.create(employee_code=emp_code, **defaults)
+                            Employee.objects.create(employee_code=emp_code or None, **defaults)
 
                         count += 1
 
-                messages.success(request, f"تم استيراد/تحديث {count} موظف.")
+                msg = f"تم استيراد/تحديث {count} موظف."
+                if skipped_no_code:
+                    msg += f" (تم تخطي {skipped_no_code} صفاً لعدم وجود رمز وظيفي صالح)"
+                messages.success(request, msg)
             except Exception as e:
                 messages.error(request, f"خطأ في الملف: {e}")
             finally:
@@ -911,7 +1117,7 @@ def hr_home(request):
                 role_title = request.POST.get('role') # Comes from the text input (e.g., "Professional Worker Lvl 1")
 
                 data = {
-                    'employee_code': request.POST.get('employee_code'),
+                    'employee_code': (request.POST.get('employee_code') or '').strip() or None,
                     'last_name': request.POST.get('last_name'),
                     'first_name': request.POST.get('first_name'),
                     'rank': sys_rank,
@@ -1035,13 +1241,15 @@ def hr_home(request):
 
     # Auto-Select Logic (If file was uploaded previously)
     auto_select_data = request.session.pop('auto_select_assignment', None)
+    teacher_order = request.GET.get('order', '')  # comma-separated IDs from assignment import
 
     context = {
         'employees': employees,
         'current_rank': rank_filter,
         'counts': counts,
         'all_classes': all_classes,
-        'auto_select_data': auto_select_data, # Pass to template
+        'auto_select_data': auto_select_data,
+        'teacher_order': teacher_order,
         'permissions': request.user.profile.permissions if hasattr(request.user, 'profile') else [],
         'is_director': request.user.profile.role == 'director' if hasattr(request.user, 'profile') else request.user.is_superuser
     }
@@ -1240,9 +1448,24 @@ def analytics_dashboard(request):
     if not (request.user.is_superuser or request.user.username == 'director' or hasattr(request.user, 'profile') and request.user.profile.has_perm('access_analytics')):
         return redirect('dashboard')
 
+    # مزامنة إسناد التحليل من الموارد البشرية تلقائياً مرة واحدة لكل جلسة عند فتح التحليل
+    if request.method == 'GET' and not request.session.get('analytics_hr_synced'):
+        try:
+            sync_all_analytics_assignments_from_hr()
+            request.session['analytics_hr_synced'] = True
+        except Exception:
+            pass
+
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'import_grades' and request.FILES.get('file'):
+            if not (
+                request.user.is_superuser
+                or (hasattr(request.user, 'profile') and request.user.profile.role == 'director')
+                or (hasattr(request.user, 'profile') and request.user.profile.has_perm('import_grades'))
+            ):
+                messages.error(request, 'لا تملك صلاحية استيراد العلامات.')
+                return redirect('analytics_dashboard')
             file = request.FILES['file']
             term = request.POST.get('term')
             import tempfile
@@ -1275,18 +1498,19 @@ def analytics_dashboard(request):
     teacher_subjects = []
     teacher_classes = []
 
-    # Get distinct academic years (levels) and classes
+    # Get distinct academic years (levels) and classes - prefer class_code for consistency
     levels = list(Student.objects.values_list('academic_year', flat=True).distinct())
     levels = [lvl for lvl in levels if lvl]
 
-    classes_qs = Student.objects.values('academic_year', 'class_name').distinct()
+    classes_qs = Student.objects.values('academic_year', 'class_name', 'class_code').distinct()
     class_map = {}
     from .analytics_utils import format_class_name
     for item in classes_qs:
         lvl = item['academic_year'] or 'غير محدد'
         raw_cls = item['class_name']
-        if raw_cls:
-            cls = format_class_name(lvl, raw_cls)
+        code = item.get('class_code')
+        cls = (code if code else format_class_name(lvl, raw_cls))
+        if raw_cls or cls:
             if lvl not in class_map:
                 class_map[lvl] = []
             if cls not in class_map[lvl]:
@@ -1303,128 +1527,290 @@ def analytics_dashboard(request):
     for lvl in class_map:
         class_map[lvl] = sorted(class_map[lvl], key=custom_sort)
 
-    selected_term = request.GET.get('term', '')
-    selected_level = request.GET.get('level', '')
-    selected_class = request.GET.get('class_name', '')
-    selected_teacher_id = request.GET.get('teacher_id', '')
-    selected_subject = request.GET.get('subject', '')
+    def _normalize(s):
+        import re
+        return re.sub(r'\s+', ' ', str(s).strip()).strip() if s else ''
+
+    def _strip_list(lst):
+        return [_normalize(str(x)) for x in lst if x is not None and _normalize(str(x))]
+
+    selected_terms = _strip_list(request.GET.getlist('term'))
+    selected_levels = _strip_list(request.GET.getlist('level'))
+    selected_classes = _strip_list(request.GET.getlist('class_name'))
+    selected_teacher_ids = _strip_list(request.GET.getlist('teacher_id'))
+    selected_subjects = _strip_list(request.GET.getlist('subject'))
     filter_applied = request.GET.get('filter_applied', '')
+    # توافق رجعي: دعم القيم المفردة من الروابط القديمة
+    if not selected_terms and request.GET.get('term'):
+        v = str(request.GET.get('term', '')).strip()
+        if v:
+            selected_terms = [v]
+    if not selected_levels and request.GET.get('level'):
+        v = str(request.GET.get('level', '')).strip()
+        if v:
+            selected_levels = [v]
+    if not selected_teacher_ids and request.GET.get('teacher_id'):
+        v = str(request.GET.get('teacher_id', '')).strip()
+        if v:
+            selected_teacher_ids = [v]
+    if not selected_subjects and request.GET.get('subject'):
+        v = str(request.GET.get('subject', '')).strip()
+        if v:
+            selected_subjects = [v]
 
-    if filter_applied:
-        include_zeros = request.GET.get('include_zeros') == 'true'
-    else:
-        include_zeros = True
+    selected_level = selected_levels[0] if len(selected_levels) == 1 else (selected_levels[0] if selected_levels else '')
+    selected_subject = selected_subjects[0] if len(selected_subjects) == 1 else (selected_subjects[0] if selected_subjects else '')
+    selected_teacher_id = selected_teacher_ids[0] if len(selected_teacher_ids) == 1 else (selected_teacher_ids[0] if selected_teacher_ids else '')
 
-    grades_qs = Grade.objects.all()
-    if selected_term:
-        grades_qs = grades_qs.filter(term=selected_term)
+    # وضع الإسناد الديناميكي للأستاذ: مفعّل افتراضياً، ويمكن إلغاؤه من الواجهة
+    dynamic_assignment = request.GET.get('dynamic_assignment', 'true') == 'true'
+
+    # احتساب الأصفار: الافتراضي عدم الاحتساب؛ التفعيل عبر تحديد الـ checkbox أو ?include_zeros=true
+    include_zeros = request.GET.get('include_zeros') == 'true'
+
+    from .school_year_utils import get_current_school_year
+    current_school_year = get_current_school_year()
+    grades_qs = Grade.objects.filter(academic_year=current_school_year)
+    grades_qs_for_teacher_compare = Grade.objects.filter(academic_year=current_school_year)
+    if selected_terms:
+        grades_qs = grades_qs.filter(term__in=selected_terms)
 
     # Subject Filtering
-    if selected_subject:
+    if selected_subjects:
         import django.db.models as models
-        grades_qs = grades_qs.filter(models.Q(subject__icontains=selected_subject))
+        q_subj = models.Q()
+        for s in selected_subjects:
+            q_subj |= models.Q(subject__icontains=s)
+        grades_qs = grades_qs.filter(q_subj)
 
-    # Teacher Assignment Filtering - Clean Refactor using class_code
-    if selected_teacher_id:
+    # تطبيع رمز القسم إلى صيغة 1م1 ليتطابق مع student.class_code أو academic_year+class_name
+    def _normalize_class_code(raw):
+        if not raw:
+            return None
+        v = re.sub(r'\s+', ' ', str(raw).strip()).strip()
+        if not v:
+            return None
+        m = re.match(r'^(\d+)م(\d+)$', v)
+        if m:
+            return v.replace(' ', '')
+        m = re.match(r'^(\d+)\s*م\s*(\d+)$', v)
+        if m:
+            return m.group(1) + 'م' + m.group(2)
+        arb_to_digit = {'أولى': '1', 'ثانية': '2', 'ثالثة': '3', 'رابعة': '4'}
+        for arb, digit in arb_to_digit.items():
+            if arb in v or digit in v:
+                num_match = re.search(r'(\d+)', v)
+                section = num_match.group(1) if num_match else '1'
+                return digit + 'م' + section
+        return v
+
+    # Teacher Assignment Filtering - Clean Refactor using class_code (يُفعّل فقط عند تفعيل الإسناد الديناميكي)
+    teacher_classes = []
+    teacher_subjects = []
+    if dynamic_assignment and selected_teacher_ids:
         from .models import Employee, TeacherAssignment
-        try:
-            teacher = Employee.objects.get(id=selected_teacher_id)
+        for tid in selected_teacher_ids:
+            try:
+                teacher = Employee.objects.get(id=tid)
+                if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
+                    for assign in teacher.analytics_assignments:
+                        subj = assign.get('subject', '').strip()
+                        if selected_subjects and not any(s.lower() in subj.lower() for s in selected_subjects):
+                            continue
+                        if subj and subj != '/' and subj not in teacher_subjects:
+                            teacher_subjects.append(subj)
+                        classes_list = assign.get('classes') or []
+                        if isinstance(classes_list, str):
+                            classes_list = [x.strip() for x in str(classes_list).replace('،', ',').split(',') if x.strip()]
+                        if classes_list:
+                            for c in classes_list:
+                                v = str(c).strip()
+                                if v:
+                                    teacher_classes.append(v)
+                                    norm = _normalize_class_code(c)
+                                    if norm and norm != v:
+                                        teacher_classes.append(norm)
+                        else:
+                            # إذا كان إسناد التحليل موجوداً لكن بدون أقسام (مثلاً تم استيراد المواد فقط)،
+                            # نرجع تلقائياً إلى أقسام الموارد البشرية لنفس المادة حتى تعمل فلترة الأفواج
+                            if subj:
+                                hr_qs = TeacherAssignment.objects.filter(teacher=teacher, subject__icontains=subj)
+                                for ha in hr_qs:
+                                    if ha.classes:
+                                        for c in ha.classes:
+                                            v = str(c).strip()
+                                            if v:
+                                                teacher_classes.append(v)
+                                                norm = _normalize_class_code(c)
+                                                if norm and norm != v:
+                                                    teacher_classes.append(norm)
+                else:
+                    assignments = TeacherAssignment.objects.filter(teacher=teacher)
+                    if selected_subjects:
+                        import django.db.models as models
+                        qs = models.Q()
+                        for s in selected_subjects:
+                            qs |= models.Q(subject__icontains=s)
+                        assignments = assignments.filter(qs)
+                    for assign in assignments:
+                        if assign.classes:
+                            for c in assign.classes:
+                                v = str(c).strip()
+                                if v:
+                                    teacher_classes.append(v)
+                                    norm = _normalize_class_code(c)
+                                    if norm and norm != v:
+                                        teacher_classes.append(norm)
+                        if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
+                            teacher_subjects.append(assign.subject)
+            except Employee.DoesNotExist:
+                pass
 
-            # Use analytics_assignments if available, else fallback to HR TeacherAssignment
-            teacher_classes = []
-            teacher_subjects = []
+        teacher_classes = list(set(teacher_classes))
 
-            if teacher.analytics_assignments and isinstance(teacher.analytics_assignments, list) and len(teacher.analytics_assignments) > 0:
-                 # Check if filtered by subject
-                 for assign in teacher.analytics_assignments:
-                      subj = assign.get('subject', '').strip()
-                      if selected_subject and selected_subject.lower() not in subj.lower():
-                           continue
-                      if subj and subj != '/' and subj not in teacher_subjects:
-                           teacher_subjects.append(subj)
-                      if assign.get('classes'):
-                           teacher_classes.extend(assign.get('classes'))
-            else:
-                assignments = TeacherAssignment.objects.filter(teacher=teacher)
+        # بعد توحيد المواد مع مواد النتائج: عند فلترة أستاذ فقط، فعّل تلقائياً كل مواده التدريسية في الفلتر
+        if teacher_subjects and not selected_subjects:
+            selected_subjects = list(teacher_subjects)
 
-                if selected_subject:
-                    assignments = assignments.filter(subject__icontains=selected_subject)
+        # عند اختيار مستوى مع الأستاذ: نستخدم تقاطع أقسام الأستاذ مع المستوى فقط (مع تطبيع الرموز)
+        # إذا كان التقاطع فارغاً (مثلاً المستوى "أولى" والأستاذ مسند لـ 4م1،4م2) نلغي مستوى الفلتر ونبقي أقسام الأستاذ
+        if selected_levels and teacher_classes:
+            level_classes = []
+            for sl in selected_levels:
+                level_classes.extend(class_map.get(sl) or class_map.get(sl + ' متوسط') or [])
+            level_classes = list(set(level_classes))
+            if level_classes:
+                level_set = set(str(c).strip() for c in level_classes)
+                for tc in level_classes:
+                    n = _normalize_class_code(tc)
+                    if n:
+                        level_set.add(n)
+                effective = [c for c in teacher_classes if (c in level_set or _normalize_class_code(c) in level_set)]
+                if effective:
+                    teacher_classes = effective
+                else:
+                    # تقاطع فارغ: نلغي فلتر المستوى حتى تظهر أقسام الأستاذ فقط
+                    selected_levels = []
+                    selected_level = ''
 
-                for assign in assignments:
-                    if assign.classes:
-                        teacher_classes.extend(assign.classes)
-                    if assign.subject and assign.subject != '/' and assign.subject not in teacher_subjects:
-                        teacher_subjects.append(assign.subject)
-
-            teacher_classes = list(set(teacher_classes))
-
-            if teacher_classes:
-                # Use strictly the class_code which matches the format stored in TeacherAssignment ('1م1')
-                grades_qs = grades_qs.filter(student__class_code__in=teacher_classes)
-
-            if teacher_subjects and not selected_subject:
-                import django.db.models as models
-                q_subjs = models.Q()
-                for subj in teacher_subjects:
-                    q_subjs |= models.Q(subject__icontains=subj)
-                grades_qs = grades_qs.filter(q_subjs)
-
-            if not selected_subject:
-                 subjects_list = teacher_subjects
-
-        except Employee.DoesNotExist:
-            pass
-
-    # Move auto-selection logic here:
-    if selected_teacher_id and teacher_classes:
-        temp_levels = []
-        for tc in teacher_classes:
-            import re
-            m = re.match(r'(\d+)م', tc)
-            if m:
-                lvl_digit = m.group(1)
-                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
-                arb_lvl = arb_map.get(lvl_digit, lvl_digit) + ' متوسط'
-                if arb_lvl not in temp_levels:
-                    temp_levels.append(arb_lvl)
-
-        if not selected_level and temp_levels:
-            selected_level = temp_levels[0]
-
-        if selected_level:
-            valid_classes_for_lvl = []
+        # Normalize teacher_classes: توحيد الصيغ (1م1، 1p4، أولى 1) لاستخدامها في الفلتر
+        if teacher_classes:
+            resolved_codes = set()
             for tc in teacher_classes:
-                if str(selected_level).split()[0] in str(tc) or str(selected_level).replace(' متوسط', '') in str(tc):
-                    valid_classes_for_lvl.append(tc)
-            if len(valid_classes_for_lvl) == 1 and not selected_class:
-                selected_class = valid_classes_for_lvl[0]
+                v = str(tc).strip()
+                if not v:
+                    continue
+                resolved_codes.add(v)
+                n = re.sub(r'([0-9])[pP]([0-9])', r'\1م\2', v)
+                if n != v:
+                    resolved_codes.add(n)
+                norm = _normalize_class_code(v)
+                if norm:
+                    resolved_codes.add(norm)
+            teacher_classes = list(resolved_codes)
+
+            import django.db.models as models
+            q_teacher = models.Q(student__class_code__in=teacher_classes)
+            arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+            for tc in teacher_classes:
+                v = str(tc).strip()
+                m = re.match(r'^(\d+)م(\d+)$', v)
+                if m:
+                    lvl_digit, section_num = m.group(1), m.group(2)
+                    arb_word = arb_map.get(lvl_digit, lvl_digit)
+                    q_teacher |= (
+                        (models.Q(student__academic_year__icontains=arb_word) |
+                         models.Q(student__academic_year__icontains=lvl_digit))
+                        & models.Q(student__class_name__icontains=section_num)
+                    )
+            grades_qs = grades_qs.filter(q_teacher)
+
+    # Move auto-selection logic here: عند فلترة أستاذ نفعّل مستواه وأفواجه فقط عند تفعيل الإسناد الديناميكي
+    if dynamic_assignment and selected_teacher_id and teacher_classes:
+        import re
+        # استخراج المستويات من class_map (مفتاح المستوى الذي يضم كل فوج) لضمان ظهور كل المستويات المسندة
+        temp_levels = []
+        normalized_teacher_classes = set()
+        for tc in teacher_classes:
+            v = str(tc).strip()
+            normalized_teacher_classes.add(v)
+            n = re.sub(r'([0-9])[pP]([0-9])', r'\1م\2', v)
+            normalized_teacher_classes.add(n)
+        for lvl, clist in class_map.items():
+            for c in clist:
+                c_norm = re.sub(r'([0-9])[pP]([0-9])', r'\1م\2', str(c).strip())
+                if c in normalized_teacher_classes or c_norm in normalized_teacher_classes or any(tc in str(c) or str(c) in tc for tc in normalized_teacher_classes):
+                    if lvl not in temp_levels:
+                        temp_levels.append(lvl)
+                    break
+        if not temp_levels:
+            for tc in teacher_classes:
+                m = re.match(r'(\d+)م', tc)
+                if m:
+                    lvl_digit = m.group(1)
+                    arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                    arb_lvl = arb_map.get(lvl_digit, lvl_digit) + ' متوسط'
+                    if arb_lvl not in temp_levels and arb_lvl in class_map:
+                        temp_levels.append(arb_lvl)
+
+        if not selected_levels and temp_levels:
+            selected_levels = list(temp_levels)
+            selected_level = selected_levels[0] if selected_levels else ''
+
+        # أفواج الأستاذ ضمن المستويات المختارة
+        level_classes = []
+        for sl in (selected_levels or []):
+            level_classes.extend(class_map.get(sl) or class_map.get(sl + ' متوسط') or [])
+        level_classes = list(set(level_classes))
+        level_set = set(level_classes)
+        valid_classes_for_lvl = [c for c in teacher_classes if c in level_set] if level_set else list(teacher_classes)
+        if not selected_classes and valid_classes_for_lvl:
+            selected_classes = list(valid_classes_for_lvl)
+
+        if selected_levels and not selected_level:
+            selected_level = selected_levels[0]
 
     # Now apply the global filters strictly using class_code/academic_year to avoid bugs
-    if selected_level:
+    if selected_levels and not (selected_teacher_ids and teacher_classes):
         import django.db.models as models
-        grades_qs = grades_qs.filter(
-            models.Q(student__academic_year=selected_level) |
-            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
-        )
-    if selected_class:
-        # Check if it's already a class code format '1م1'
-        import re
-        if re.match(r'^\d+م\d+$', selected_class):
-            grades_qs = grades_qs.filter(student__class_code=selected_class)
-        else:
-            # Fallback to older class mapping logic
-            from .analytics_utils import unformat_class_name
-            import django.db.models as models
-            raw_class = unformat_class_name(selected_class)
-            if raw_class and raw_class.isdigit():
-                grades_qs = grades_qs.filter(
-                    models.Q(student__class_name=selected_class) |
-                    models.Q(student__class_name=raw_class) |
-                    models.Q(student__class_name__endswith=f" {raw_class}") |
-                    models.Q(student__class_name__icontains=raw_class)
+        q_lvl = models.Q()
+        for sl in selected_levels:
+            q_lvl |= (models.Q(student__academic_year=sl) |
+                      models.Q(student__academic_year__icontains=(sl or '').replace(' متوسط', '').strip()))
+        grades_qs = grades_qs.filter(q_lvl)
+    if selected_classes and selected_levels:
+        # لا نطبق فلترة الأقسام إلا عند اختيار مستوى (الأقسام مرتبطة بالمستوى)
+        import django.db.models as models
+        code_classes = [c for c in selected_classes if re.match(r'^\d+م\d+$', str(c).strip())]
+        other_classes = [c for c in selected_classes if c not in code_classes]
+        q_class = models.Q()
+        if code_classes:
+            # أولاً: محاولة المطابقة مباشرة مع class_code إن كانت معبأة
+            q_class |= models.Q(student__class_code__in=code_classes)
+            # ثانياً: fallback عند غياب class_code (معظم الحالات الحالية) بالاعتماد على (المستوى، رقم الفوج)
+            arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+            for cc in code_classes:
+                m = re.match(r'^(\d+)م(\d+)$', str(cc).strip())
+                if not m:
+                    continue
+                lvl_digit, section_num = m.group(1), m.group(2)
+                arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+                # نبحث عن التلاميذ الذين مستوى دراستهم يطابق الرقم أو الاسم العربي، ورقم القسم يحتوي رقم الفوج
+                q_class |= (
+                    (models.Q(student__academic_year__icontains=arb_lvl) |
+                     models.Q(student__academic_year__icontains=lvl_digit))
+                    & models.Q(student__class_name__icontains=section_num)
                 )
+        for c in other_classes:
+            from .analytics_utils import unformat_class_name
+            raw_class = unformat_class_name(c)
+            if raw_class and raw_class.isdigit():
+                q_class |= (models.Q(student__class_name=c) | models.Q(student__class_name=raw_class) |
+                    models.Q(student__class_name__endswith=f" {raw_class}") |
+                    models.Q(student__class_name__icontains=raw_class))
             else:
-                grades_qs = grades_qs.filter(student__class_name=selected_class)
+                q_class |= models.Q(student__class_name=c)
+        grades_qs = grades_qs.filter(q_class)
 
     effective_subject = selected_subject
     if selected_teacher_id and not effective_subject and teacher_subjects:
@@ -1432,7 +1818,64 @@ def analytics_dashboard(request):
         if len(teacher_subjects) == 1:
             effective_subject = teacher_subjects[0]
 
-    local_stats = analyze_grades_locally(grades_qs, subject_filter=effective_subject, include_zeros=include_zeros)
+    # ترتيب التلاميذ: حسب الفلترة إن وُجدت، وإلا حسب المعدل الفصلي (كل المواد)
+    has_filter = bool(selected_terms or selected_levels or selected_classes or selected_subjects or selected_teacher_ids)
+    grades_qs_for_ranking = None
+    if not has_filter:
+        # عدم اختيار فلتر: الترتيب على أساس المعدل الفصلي (كل المواد، بدون فلتر مادة)
+        grades_qs_for_ranking = Grade.objects.filter(academic_year=current_school_year)
+
+    settings_obj = SchoolSettings.objects.first()
+    exempt_subjects = list(settings_obj.analytics_exempt_subjects) if settings_obj and getattr(settings_obj, 'analytics_exempt_subjects', None) else []
+    # قواعد إعفاء مادة حسب (تلميذ/فوج/مستوى/مؤسسة)
+    exemption_rules = []
+    try:
+        from .models import SubjectExemptionRule
+        for r in SubjectExemptionRule.objects.all().order_by('-created_at')[:500]:
+            exemption_rules.append({
+                'id': r.id,
+                'subject': r.subject,
+                'scope_type': r.scope_type,
+                'student_id': r.student_id,
+                'academic_year': r.academic_year,
+                'class_code': r.class_code,
+                'term': r.term,
+            })
+    except Exception:
+        exemption_rules = []
+
+    # إضافة المواد المعفاة بالمؤسسة (بدون فصل) إلى exempt_subjects لاستبعادها من كل الحسابات والترتيب
+    for r in exemption_rules:
+        if r.get('scope_type') == 'school' and (r.get('subject') or '').strip() and not (r.get('term') or '').strip():
+            s = str(r.get('subject')).strip()
+            if s and s not in exempt_subjects:
+                exempt_subjects.append(s)
+
+    # مجالات الإجازات (تُستخدم لاحقاً في تطبيق الملاحظة على ترتيب التلاميذ وفي القالب)
+    award_defaults = {'امتياز': 16, 'تهنئة': 14, 'تشجيع': 12, 'لوحة شرف': 10}
+    award_thresholds_raw = getattr(settings_obj, 'award_thresholds', None) if settings_obj else None
+    if isinstance(award_thresholds_raw, dict):
+        award_thresholds = {k: award_thresholds_raw.get(k) if award_thresholds_raw.get(k) is not None else award_defaults.get(k) for k in ['امتياز', 'تهنئة', 'تشجيع', 'لوحة شرف']}
+    else:
+        award_thresholds = award_defaults.copy()
+
+    def _award_val(d, key, default):
+        v = d.get(key)
+        if v is not None and v != '':
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+        return default
+
+    local_stats = analyze_grades_locally(
+        grades_qs,
+        subject_filter=effective_subject,
+        include_zeros=include_zeros,
+        grades_qs_for_ranking=grades_qs_for_ranking,
+        exempt_subjects=exempt_subjects,
+        exemption_rules=exemption_rules
+    )
 
     # Re-calculate exact total students from Student model based on filters to account for students without grades yet
     if local_stats is not None:
@@ -1441,36 +1884,92 @@ def analytics_dashboard(request):
         import re
         student_qs = Student.objects.all()
 
-        if selected_teacher_id and teacher_classes:
-            student_qs = student_qs.filter(class_code__in=teacher_classes)
-
-        if selected_level:
-            student_qs = student_qs.filter(
-                models.Q(academic_year=selected_level) |
-                models.Q(academic_year__icontains=selected_level.replace(' متوسط', '').strip())
-            )
-
-        if selected_class:
-            import re
-            if re.match(r'^\d+م\d+$', selected_class):
-                student_qs = student_qs.filter(class_code=selected_class)
-            else:
-                from .analytics_utils import unformat_class_name
-                raw_class = unformat_class_name(selected_class)
-                if raw_class and raw_class.isdigit():
-                    student_qs = student_qs.filter(
-                        models.Q(class_name=selected_class) |
-                        models.Q(class_name=raw_class) |
-                        models.Q(class_name__endswith=f" {raw_class}") |
-                        models.Q(class_name__icontains=raw_class)
+        if dynamic_assignment and selected_teacher_id and teacher_classes:
+            q_teacher_st = models.Q(class_code__in=teacher_classes)
+            arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+            for tc in teacher_classes:
+                m = re.match(r'^(\d+)م(\d+)$', str(tc).strip())
+                if m:
+                    lvl_digit, section_num = m.group(1), m.group(2)
+                    arb_word = arb_map.get(lvl_digit, lvl_digit)
+                    q_teacher_st |= (
+                        (models.Q(academic_year__icontains=arb_word) |
+                         models.Q(academic_year__icontains=lvl_digit))
+                        & models.Q(class_name__icontains=section_num)
                     )
+            student_qs = student_qs.filter(q_teacher_st)
+
+        if selected_levels and not (selected_teacher_ids and teacher_classes):
+            q_lvl = models.Q()
+            for sl in selected_levels:
+                q_lvl |= (models.Q(academic_year=sl) |
+                          models.Q(academic_year__icontains=(sl or '').replace(' متوسط', '').strip()))
+            student_qs = student_qs.filter(q_lvl)
+
+        if selected_classes and selected_levels:
+            import re
+            code_classes = [c for c in selected_classes if re.match(r'^\d+م\d+$', str(c).strip())]
+            other_classes = [c for c in selected_classes if c not in code_classes]
+            q_class = models.Q()
+            if code_classes:
+                # مطابقة مباشرة على class_code إن وُجد
+                q_class |= models.Q(class_code__in=code_classes)
+                # Fallback باستخدام (المستوى، رقم الفوج) عندما يكون class_code فارغاً
+                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                for cc in code_classes:
+                    m = re.match(r'^(\d+)م(\d+)$', str(cc).strip())
+                    if not m:
+                        continue
+                    lvl_digit, section_num = m.group(1), m.group(2)
+                    arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+                    q_class |= (
+                        (models.Q(academic_year__icontains=arb_lvl) |
+                         models.Q(academic_year__icontains=lvl_digit))
+                        & models.Q(class_name__icontains=section_num)
+                    )
+            for c in other_classes:
+                from .analytics_utils import unformat_class_name
+                raw_class = unformat_class_name(c)
+                if raw_class and raw_class.isdigit():
+                    q_class |= (models.Q(class_name=c) | models.Q(class_name=raw_class) |
+                        models.Q(class_name__endswith=f" {raw_class}") |
+                        models.Q(class_name__icontains=raw_class))
                 else:
-                    student_qs = student_qs.filter(class_name=selected_class)
+                    q_class |= models.Q(class_name=c)
+            student_qs = student_qs.filter(q_class)
 
         local_stats['total_students'] = student_qs.count()
         local_stats['total_males'] = student_qs.filter(gender='ذكر').count()
         local_stats['total_females'] = student_qs.filter(gender='أنثى').count()
         local_stats['total_repeaters'] = student_qs.filter(is_repeater=True).count()
+
+    # تطبيق مجالات الإجازات على ترتيب التلاميذ (الملاحظة حسب المعدل الفصلي)
+    if local_stats and award_thresholds and isinstance(local_stats.get('ranking_list'), list):
+        t_emtyaz = _award_val(award_thresholds, 'امتياز', 16)
+        t_tahnia = _award_val(award_thresholds, 'تهنئة', 14)
+        t_tashjeeb = _award_val(award_thresholds, 'تشجيع', 12)
+        t_lawha = _award_val(award_thresholds, 'لوحة شرف', 10)
+        for r in local_stats['ranking_list']:
+            if r.get('is_absent'):
+                r['remark'] = ''
+                continue
+            try:
+                score = float(r.get('score') or 0)
+            except (TypeError, ValueError):
+                r['remark'] = ''
+                continue
+            if score >= t_emtyaz:
+                r['remark'] = 'امتياز'
+            elif score >= t_tahnia:
+                r['remark'] = 'تهنئة'
+            elif score >= t_tashjeeb:
+                r['remark'] = 'تشجيع'
+            elif score >= t_lawha:
+                r['remark'] = 'لوحة شرف'
+            else:
+                r['remark'] = ''
+        import json as _json
+        local_stats['ranking_list_json'] = _json.dumps(local_stats['ranking_list'])
 
     token_cost = 0
     if local_stats and local_stats.get('markdown_data'):
@@ -1487,38 +1986,61 @@ def analytics_dashboard(request):
 
     import json
 
-    # Get Dynamic Subjects List
-    # We will declare teacher_subjects = [] at the top of the scope so it exists globally if missing
+    # قائمة المواد في واجهة تحليل النتائج: من ملف الإكسل (Grade) فقط، كما هي بدون زيادة أو حذف
     teacher_subjects = locals().get('teacher_subjects', [])
     teacher_classes = locals().get('teacher_classes', [])
 
-    if teacher_subjects:
-        subjects_list = teacher_subjects
-    else:
-        subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
-    subjects_list.sort()
+    from .import_utils import get_deduplicated_subjects_from_grades
+    subjects_list = get_deduplicated_subjects_from_grades()
 
     # Filter class_map to only show teacher classes if selected
     teacher_info = None
-    if selected_teacher_id and teacher_classes:
-        # Full class names are needed since class_map contains formatted names (e.g. 1 متوسط 1)
-        # but teacher_classes usually contains abbreviations (e.g. 1م1)
-        # We mapped them earlier into full_class_names list.
+    if dynamic_assignment and selected_teacher_id and teacher_classes:
+        # Normalize teacher_classes to class_code format (1م1) for matching
+        from .models_mapping import ClassAlias
+
+        def _normalize_class_code(val):
+            if not val or not str(val).strip():
+                return set()
+            v = str(val).strip()
+            # 1p4 -> 1م4, 2P1 -> 2م1 (p/P = متوسط)
+            n = re.sub(r'([0-9])[pP]([0-9])', r'\1م\2', v)
+            if n != v:
+                return {v, n}
+            return {v}
+
+        teacher_classes_normalized = set()
+        for tc in teacher_classes:
+            teacher_classes_normalized.add(str(tc).strip())
+            for n in _normalize_class_code(tc):
+                teacher_classes_normalized.add(n)
+            # Resolve via ClassAlias if exists
+            try:
+                alias = ClassAlias.objects.get(alias=str(tc).strip())
+                canon = f"{alias.canonical_level} {alias.canonical_class}".strip()
+                m = re.search(r'(\d+)[مmM]\s*(\d+)', canon) or re.search(r'(\d+)\s*متوسط\s*(\d+)', canon)
+                if m:
+                    teacher_classes_normalized.add(f"{m.group(1)}م{m.group(2)}")
+            except (ClassAlias.DoesNotExist, Exception):
+                pass
+        # Also add 1p4 -> 1م4 variants
+        for tc in list(teacher_classes_normalized):
+            for n in _normalize_class_code(tc):
+                teacher_classes_normalized.add(n)
+
         filtered_class_map = {}
         for lvl, clist in class_map.items():
             valid_cls = []
             for c in clist:
-                # We check if 'c' (e.g. "1 متوسط 1") matches any of the teacher's full class names or shortcuts
                 from .analytics_utils import unformat_class_name
                 raw_c = unformat_class_name(c)
-                # also build short format like 1م1
-                import re
                 short_c = c
-                m = re.search(r'(\d+)\s*متوسط\s*(\d+)', c)
+                m = re.search(r'(\d+)\s*متوسط\s*(\d+)', str(c))
                 if m:
                     short_c = f"{m.group(1)}م{m.group(2)}"
-
-                if c in teacher_classes or raw_c in teacher_classes or short_c in teacher_classes or (locals().get('full_class_names') and c in full_class_names):
+                if c in teacher_classes_normalized or raw_c in teacher_classes_normalized or short_c in teacher_classes_normalized:
+                    valid_cls.append(c)
+                elif any(tc in str(c) or str(c) in str(tc) for tc in teacher_classes_normalized):
                     valid_cls.append(c)
 
             if valid_cls:
@@ -1534,12 +2056,13 @@ def analytics_dashboard(request):
             if m:
                 return int(m.group(0))
             return 999
+
         levels = sorted(levels, key=level_sort_key)
 
-        # Ensure the selected_level and selected_class context matches the ones we auto-selected earlier
-        # so the template sets the correct 'selected' option in the HTML dropdowns.
-        if selected_level and selected_level not in levels:
-             selected_level = levels[0] if levels else ""
+        # Ensure the selected_levels and selected_classes context matches the ones we auto-selected earlier
+        if selected_levels and levels and selected_levels[0] not in levels:
+            selected_levels = [levels[0]]
+            selected_level = selected_levels[0]
 
         try:
             from .models import Employee
@@ -1549,24 +2072,109 @@ def analytics_dashboard(request):
                 'subjects': "، ".join(teacher_subjects),
                 'classes': "، ".join(teacher_classes)
             }
-        except Exception: pass
+        except Exception:
+            pass
 
-    # Get Teachers List for Dropdown
+    # Get Teachers List for Dropdown (عند الفلترة بالمادة: فقط أساتذة تلك المادة)
+    from .models import Employee, TeacherAssignment
+    teachers = list(Employee.objects.filter(rank='teacher').order_by('last_name'))
+
+    # Build teacher->subjects/classes and subject->teachers for dynamic filtering
+    teacher_assignments_map = {}
+    subject_teachers_map = {}
+    for t in teachers:
+        tid = str(t.id)
+        subjs, clss = [], []
+        if t.analytics_assignments and isinstance(t.analytics_assignments, list):
+            for a in t.analytics_assignments:
+                s = (a.get('subject') or '').strip()
+                if s and s != '/':
+                    subjs.append(s)
+                    lst = subject_teachers_map.setdefault(s, [])
+                    if tid not in lst:
+                        lst.append(tid)
+                clss.extend(a.get('classes') or [])
+        for ta in TeacherAssignment.objects.filter(teacher=t):
+            s = (ta.subject or '').strip()
+            if s and s != '/':
+                if s not in subjs:
+                    subjs.append(s)
+                    lst = subject_teachers_map.setdefault(s, [])
+                    if tid not in lst:
+                        lst.append(tid)
+                clss.extend(ta.classes or [])
+        teacher_assignments_map[tid] = {'subjects': list(set(subjs)), 'classes': list(set(clss))}
+
+    # نسخة كاملة من جميع الأساتذة (لأغراض ربط الأساتذة بمواد النتائج بعد الاستيراد)
     from .models import Employee
-    teachers = Employee.objects.filter(rank='teacher').order_by('last_name')
+    all_teachers_for_tls = list(Employee.objects.filter(rank='teacher').only('id', 'last_name', 'first_name', 'subject'))
 
+    # عند الفلترة بالمادة: إظهار أساتذة تلك المادة فقط في القائمة (قائمة الفلترة الرئيسية فقط)
+    if selected_subjects:
+        teacher_ids_for_subjects = set()
+        for s in selected_subjects:
+            teacher_ids_for_subjects.update(subject_teachers_map.get(s, []))
+        if teacher_ids_for_subjects:
+            teachers = [t for t in teachers if str(t.id) in teacher_ids_for_subjects]
+
+    # أسماء الأساتذة المختارين (للعرض في التسمية بدل "x أستاذ")
+    selected_teacher_names_list = []
+    if selected_teacher_ids:
+        id_to_name = {str(t.id): f"{t.last_name} {t.first_name}" for t in Employee.objects.filter(id__in=selected_teacher_ids).only('id', 'last_name', 'first_name')}
+        selected_teacher_names_list = [id_to_name.get(tid, '') for tid in selected_teacher_ids if id_to_name.get(tid)]
+        selected_teacher_names_list = [n for n in selected_teacher_names_list if n]
+
+    # Analysis scope description (what's being calculated)
+    analysis_scope_parts = []
+    if selected_subject:
+        analysis_scope_parts.append(f"المادة: {selected_subject}")
+    if selected_teacher_id and teacher_info:
+        analysis_scope_parts.append(f"الأستاذ: {teacher_info['name']}")
+        if teacher_subjects:
+            analysis_scope_parts.append(f"مواده: {', '.join(teacher_subjects)}")
+    if selected_levels:
+        analysis_scope_parts.append(f"المستوى: {'، '.join(selected_levels)}")
+    if selected_classes:
+        analysis_scope_parts.append(f"الأقسام: {', '.join(selected_classes)}")
+    analysis_scope = " | ".join(analysis_scope_parts) if analysis_scope_parts else "كل البيانات"
+
+    exempt_subjects_list = list(settings_obj.analytics_exempt_subjects) if settings_obj and getattr(settings_obj, 'analytics_exempt_subjects', None) else []
+    award_emtyaz = _award_val(award_thresholds, 'امتياز', 16)
+    award_tahnia = _award_val(award_thresholds, 'تهنئة', 14)
+    award_tashjeeb = _award_val(award_thresholds, 'تشجيع', 12)
+    award_lawha = _award_val(award_thresholds, 'لوحة شرف', 10)
     context = {
         'page_title': 'تحليل النتائج',
         'local_stats': local_stats,
+        'award_thresholds': award_thresholds,
+        'award_emtyaz': award_emtyaz,
+        'award_tahnia': award_tahnia,
+        'award_tashjeeb': award_tashjeeb,
+        'award_lawha': award_lawha,
         'levels': levels,
         'class_map_json': json.dumps(class_map),
         'token_cost': token_cost,
         'teachers': teachers,
+        'all_teachers_for_tls': all_teachers_for_tls,
         'teacher_info': teacher_info,
+        'teacher_assignments_map_json': json.dumps(teacher_assignments_map),
+        'subject_teachers_map_json': json.dumps(subject_teachers_map),
         'subjects_list': subjects_list,
+        'analytics_exempt_subjects': exempt_subjects_list,
+        'exemption_rules': exemption_rules,
         'selected_teacher_id': selected_teacher_id,
+        'selected_subject': selected_subject,
         'selected_level': selected_level,
-        'selected_class': selected_class
+        'selected_teacher_ids_list': [str(x) for x in selected_teacher_ids],
+        'selected_teacher_names_list': selected_teacher_names_list,
+        'selected_subjects_list': selected_subjects,
+        'selected_levels_list': selected_levels,
+        'selected_terms_list': selected_terms,
+        'selected_classes': selected_classes,
+        'selected_classes_json': json.dumps(selected_classes),
+        'analysis_scope': analysis_scope,
+        'teacher_classes': teacher_classes,
+        'dynamic_assignment': dynamic_assignment,
     }
     return render(request, 'students/analytics.html', context)
 
@@ -1584,9 +2192,11 @@ def advanced_analytics_view(request):
     selected_class = request.GET.get('class_name', '')
     selected_teacher_id = request.GET.get('teacher_id', '')
     selected_subject = request.GET.get('subject', '')
+    teacher_compare_ids = request.GET.getlist('teacher_compare') or request.GET.getlist('teacher_compare_ids')
 
-    # Retrieve all active grades
-    grades_qs = Grade.objects.all()
+    from .school_year_utils import get_current_school_year
+    current_school_year = get_current_school_year()
+    grades_qs = Grade.objects.filter(academic_year=current_school_year)
 
     # Apply Filters to the QuerySet
     # Compute teacher subjects BEFORE filtering the assignments by selected_subject
@@ -1615,6 +2225,7 @@ def advanced_analytics_view(request):
     if selected_subject:
         import django.db.models as models
         grades_qs = grades_qs.filter(models.Q(subject__icontains=selected_subject))
+        grades_qs_for_teacher_compare = grades_qs_for_teacher_compare.filter(models.Q(subject__icontains=selected_subject))
 
     if selected_teacher_id:
         from .models import Employee, TeacherAssignment
@@ -1642,7 +2253,28 @@ def advanced_analytics_view(request):
             teacher_classes = list(set(teacher_classes))
 
             if teacher_classes:
-                grades_qs = grades_qs.filter(student__class_code__in=teacher_classes)
+                # فلترة أفواج الأستاذ: class_code إن وُجد، وإلا fallback على (المستوى + رقم الفوج)
+                import django.db.models as models
+                import re
+                q_teacher = models.Q(student__class_code__in=teacher_classes)
+                arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                for cc in teacher_classes:
+                    m = re.match(r'^(\d+)م(\d+)$', str(cc).strip())
+                    if not m:
+                        continue
+                    lvl_digit, section_num = m.group(1), m.group(2)
+                    arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+                    q_teacher |= (
+                        (models.Q(student__academic_year__icontains=arb_lvl) |
+                         models.Q(student__academic_year__icontains=lvl_digit))
+                        & models.Q(student__class_name__icontains=section_num)
+                    )
+                    # دعم قوي عندما يكون class_name مثل: "رابعة 1"
+                    q_teacher |= (
+                        models.Q(student__class_name__icontains=arb_lvl)
+                        & models.Q(student__class_name__icontains=section_num)
+                    )
+                grades_qs = grades_qs.filter(q_teacher)
 
             if teacher_subjects and not selected_subject:
                 import django.db.models as models
@@ -1654,6 +2286,19 @@ def advanced_analytics_view(request):
         except Employee.DoesNotExist:
             pass
 
+    # Teacher info for UI badge
+    if selected_teacher_id:
+        try:
+            from .models import Employee
+            t = Employee.objects.get(id=selected_teacher_id)
+            teacher_info = {
+                'name': f"{t.last_name} {t.first_name}",
+                'subjects': "، ".join(teacher_subjects) if teacher_subjects else (t.subject or '/'),
+                'classes': "، ".join(teacher_classes) if teacher_classes else '—',
+            }
+        except Exception:
+            teacher_info = None
+
     # Apply global level/class filters ONLY if no teacher is selected (or if we want them to narrow down teacher classes)
     if selected_level:
         import django.db.models as models
@@ -1661,10 +2306,15 @@ def advanced_analytics_view(request):
             models.Q(student__academic_year=selected_level) |
             models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
         )
+        grades_qs_for_teacher_compare = grades_qs_for_teacher_compare.filter(
+            models.Q(student__academic_year=selected_level) |
+            models.Q(student__academic_year__icontains=selected_level.replace(' متوسط', '').strip())
+        )
     if selected_class:
         import re
         if re.match(r'^\d+م\d+$', selected_class):
             grades_qs = grades_qs.filter(student__class_code=selected_class)
+            grades_qs_for_teacher_compare = grades_qs_for_teacher_compare.filter(student__class_code=selected_class)
         else:
             from .analytics_utils import unformat_class_name
             import django.db.models as models
@@ -1676,8 +2326,15 @@ def advanced_analytics_view(request):
                     models.Q(student__class_name__endswith=f" {raw_class}") |
                     models.Q(student__class_name__icontains=raw_class)
                 )
+                grades_qs_for_teacher_compare = grades_qs_for_teacher_compare.filter(
+                    models.Q(student__class_name=selected_class) |
+                    models.Q(student__class_name=raw_class) |
+                    models.Q(student__class_name__endswith=f" {raw_class}") |
+                    models.Q(student__class_name__icontains=raw_class)
+                )
             else:
                 grades_qs = grades_qs.filter(student__class_name=selected_class)
+                grades_qs_for_teacher_compare = grades_qs_for_teacher_compare.filter(student__class_name=selected_class)
 
     if not grades_qs.exists():
         messages.warning(request, "لا توجد علامات مسجلة للقيام بتحليل متقدم (أو لا توجد نتائج مطابقة للفلتر).")
@@ -1713,6 +2370,85 @@ def advanced_analytics_view(request):
 
     # 2. Terms Comparison
     term_stats = get_detailed_stats(df, 'term')
+
+    # Teacher comparison stats (multi-teacher)
+    teacher_compare_stats = {}
+    try:
+        from .models import Employee, TeacherAssignment
+        import django.db.models as models
+        import re
+        compare_ids = [str(x).strip() for x in (teacher_compare_ids or []) if str(x).strip()]
+        if compare_ids:
+            base_qs = grades_qs_for_teacher_compare
+            for tid in compare_ids:
+                try:
+                    emp = Employee.objects.get(id=int(tid))
+                except Exception:
+                    continue
+                t_classes = []
+                t_subjects = []
+                if emp.analytics_assignments and isinstance(emp.analytics_assignments, list) and len(emp.analytics_assignments) > 0:
+                    for a in emp.analytics_assignments:
+                        subj = (a.get('subject') or '').strip()
+                        if subj and subj != '/' and subj not in t_subjects:
+                            t_subjects.append(subj)
+                        for c in a.get('classes', []) or []:
+                            v = str(c).strip()
+                            if v:
+                                t_classes.append(v)
+                else:
+                    for a in TeacherAssignment.objects.filter(teacher=emp):
+                        if a.subject and a.subject != '/' and a.subject not in t_subjects:
+                            t_subjects.append(a.subject)
+                        for c in a.classes or []:
+                            v = str(c).strip()
+                            if v:
+                                t_classes.append(v)
+                t_classes = list(set(t_classes))
+
+                qs_t = base_qs
+                if t_classes:
+                    # class_code إن وُجد، وإلا fallback على (المستوى + رقم الفوج) من class_name
+                    q_teacher = models.Q(student__class_code__in=t_classes)
+                    arb_map = {'1': 'أولى', '2': 'ثانية', '3': 'ثالثة', '4': 'رابعة'}
+                    for cc in t_classes:
+                        m = re.match(r'^(\d+)م(\d+)$', str(cc).strip())
+                        if not m:
+                            continue
+                        lvl_digit, section_num = m.group(1), m.group(2)
+                        arb_lvl = arb_map.get(lvl_digit, lvl_digit)
+                        q_teacher |= (
+                            (models.Q(student__academic_year__icontains=arb_lvl) |
+                             models.Q(student__academic_year__icontains=lvl_digit))
+                            & models.Q(student__class_name__icontains=section_num)
+                        )
+                        # دعم قوي عندما يكون class_name مثل: "رابعة 1"
+                        q_teacher |= (
+                            models.Q(student__class_name__icontains=arb_lvl)
+                            & models.Q(student__class_name__icontains=section_num)
+                        )
+                    qs_t = qs_t.filter(q_teacher)
+                if not selected_subject and t_subjects:
+                    q_subj = models.Q()
+                    for s in t_subjects:
+                        q_subj |= models.Q(subject__icontains=s)
+                    qs_t = qs_t.filter(q_subj)
+
+                df_t = pd.DataFrame(list(qs_t.values('student__id', 'score')))
+                if not df_t.empty:
+                    df_t = df_t[df_t['score'] > 0]
+                if df_t.empty:
+                    # Keep teacher entry so UI shows "0" instead of disappearing
+                    teacher_compare_stats[str(emp.id)] = {'name': f"{emp.last_name} {emp.first_name}", 'count': 0, 'avg': 0.0, 'success_pct': 0.0}
+                    continue
+                means = df_t.groupby('student__id')['score'].mean()
+                n = int(means.shape[0])
+                avg = float(round(means.mean(), 2)) if n else 0.0
+                succ = int((means >= 10).sum())
+                succ_pct = float(round((succ / n) * 100, 2)) if n else 0.0
+                teacher_compare_stats[str(emp.id)] = {'name': f"{emp.last_name} {emp.first_name}", 'count': n, 'avg': avg, 'success_pct': succ_pct}
+    except Exception:
+        teacher_compare_stats = {}
 
     # 3. Level/Class Comparison
     class_stats_by_level = {}
@@ -1828,12 +2564,9 @@ def advanced_analytics_view(request):
             if cls not in class_map[lvl]:
                 class_map[lvl].append(cls)
 
-    # Get Dynamic Subjects List
-    if teacher_subjects:
-        subjects_list = teacher_subjects
-    else:
-        subjects_list = [s for s in Grade.objects.values_list('subject', flat=True).distinct() if s and not s.startswith('معدل')]
-    subjects_list.sort()
+    # Get Dynamic Subjects List (مُطبّعة وبدون تكرار)
+    from .import_utils import get_deduplicated_subjects_from_grades
+    subjects_list = get_deduplicated_subjects_from_grades()
 
     # Get Teachers List for Dropdown
     from .models import Employee
@@ -1855,7 +2588,9 @@ def advanced_analytics_view(request):
         'selected_level': selected_level,
         'selected_class': selected_class,
         'selected_teacher_id': selected_teacher_id,
-        'selected_subject': selected_subject
+        'selected_subject': selected_subject,
+        'teacher_compare_ids': teacher_compare_ids,
+        'teacher_compare_stats_json': json.dumps(teacher_compare_stats, ensure_ascii=False),
     }
     return render(request, 'students/advanced_analytics.html', context)
 
@@ -1878,10 +2613,12 @@ def run_statistical_test(request):
     level = request.GET.get('level')
 
     from .models import Grade
+    from .school_year_utils import get_current_school_year
     import pandas as pd
     import scipy.stats as stats
 
-    grades_qs = Grade.objects.all()
+    current_school_year = get_current_school_year()
+    grades_qs = Grade.objects.filter(academic_year=current_school_year)
     if level:
         import django.db.models as models
         # Also do a broad match for level just in case DB has 'أولى' but frontend passed 'أولى متوسط'
@@ -1977,6 +2714,7 @@ def run_statistical_test(request):
 
     groups_data = {}
     arrays_for_test = []
+    arrays_named = []  # [(name, np.array)]
 
     for name, group in student_means.groupby(group_col):
         # Ignore empty or None names
@@ -1990,6 +2728,7 @@ def run_statistical_test(request):
                 'std': float(scores.std(ddof=1))
             }
             arrays_for_test.append(scores)
+            arrays_named.append((str(name), scores))
 
     if len(arrays_for_test) < 2:
         return JsonResponse({'error': 'لا توجد مجموعات كافية للمقارنة (تتطلب مجموعتين على الأقل)'})
@@ -1997,15 +2736,85 @@ def run_statistical_test(request):
     statistic = 0.0
     p_value = 1.0
     test_name = ""
+    effect = {}
+    assumptions = {}
+    post_hoc = None
+
+    # Assumptions: Levene (homogeneity of variances)
+    try:
+        lev_stat, lev_p = stats.levene(*arrays_for_test, center='median')
+        assumptions['levene'] = {'statistic': float(lev_stat), 'p_value': float(lev_p), 'ok': bool(lev_p >= 0.05)}
+    except Exception:
+        assumptions['levene'] = None
+
+    # Assumptions: Shapiro-Wilk per group (small/medium only)
+    try:
+        shapiro = {}
+        for gname, arr in arrays_named:
+            if len(arr) < 3 or len(arr) > 5000:
+                continue
+            st, pv = stats.shapiro(arr)
+            shapiro[gname] = {'statistic': float(st), 'p_value': float(pv), 'ok': bool(pv >= 0.05)}
+        assumptions['shapiro'] = shapiro
+    except Exception:
+        assumptions['shapiro'] = {}
 
     if test_type == 't_test_ind':
         if len(arrays_for_test) > 2:
             return JsonResponse({'error': 'اختبار T-Test يتطلب مجموعتين فقط. استخدم ANOVA.'})
         test_name = "Independent T-Test"
         statistic, p_value = stats.ttest_ind(arrays_for_test[0], arrays_for_test[1], equal_var=False)
+        # Effect size: Cohen's d (Hedges' g not needed here)
+        try:
+            import numpy as np
+            a = np.array(arrays_for_test[0], dtype=float)
+            b = np.array(arrays_for_test[1], dtype=float)
+            na, nb = len(a), len(b)
+            sa = float(a.std(ddof=1)) if na > 1 else 0.0
+            sb = float(b.std(ddof=1)) if nb > 1 else 0.0
+            sp = (((na - 1) * (sa ** 2) + (nb - 1) * (sb ** 2)) / max(na + nb - 2, 1)) ** 0.5
+            d = float((a.mean() - b.mean()) / sp) if sp > 0 else 0.0
+            effect['cohens_d'] = d
+        except Exception:
+            effect['cohens_d'] = None
     elif test_type == 'anova':
         test_name = "One-Way ANOVA"
         statistic, p_value = stats.f_oneway(*arrays_for_test)
+        # Effect size: Eta squared
+        try:
+            import numpy as np
+            all_vals = np.concatenate([np.array(x, dtype=float) for x in arrays_for_test])
+            grand_mean = float(all_vals.mean()) if len(all_vals) else 0.0
+            ss_between = 0.0
+            ss_total = float(((all_vals - grand_mean) ** 2).sum()) if len(all_vals) else 0.0
+            for _, arr in arrays_named:
+                arr = np.array(arr, dtype=float)
+                ss_between += len(arr) * ((float(arr.mean()) - grand_mean) ** 2)
+            eta2 = float(ss_between / ss_total) if ss_total > 0 else 0.0
+            effect['eta_squared'] = eta2
+        except Exception:
+            effect['eta_squared'] = None
+
+        # Post-hoc: pairwise t-tests with Bonferroni correction
+        try:
+            import itertools
+            pairs = []
+            k = len(arrays_named)
+            m = (k * (k - 1)) // 2 if k > 1 else 1
+            for (n1, a), (n2, b) in itertools.combinations(arrays_named, 2):
+                t, pv = stats.ttest_ind(a, b, equal_var=False)
+                pv_adj = min(float(pv) * m, 1.0)
+                pairs.append({
+                    'group_a': n1,
+                    'group_b': n2,
+                    't_statistic': float(t),
+                    'p_value': float(pv),
+                    'p_value_bonferroni': pv_adj,
+                    'significant_bonferroni': bool(pv_adj < 0.05),
+                })
+            post_hoc = {'method': 'pairwise_ttests_bonferroni', 'comparisons': pairs}
+        except Exception:
+            post_hoc = None
     else:
         return JsonResponse({'error': 'نوع الاختبار غير معروف'})
 
@@ -2014,7 +2823,10 @@ def run_statistical_test(request):
         'statistic': float(statistic),
         'p_value': float(p_value),
         'is_significant': bool(p_value < 0.05),
-        'groups': groups_data
+        'groups': groups_data,
+        'effect_size': effect,
+        'assumptions': assumptions,
+        'post_hoc': post_hoc,
     })
 
 
@@ -2168,6 +2980,34 @@ def get_gauss_data(request):
     }
     return JsonResponse(gauss_data)
 
+def get_teacher_assignments_api(request):
+    """Returns HR and analytics assignments for a teacher (for analytics modal)."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'status': 'error', 'message': 'غير مصرح'})
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+    if not has_access:
+        return JsonResponse({'status': 'error', 'message': 'ليس لديك صلاحية'})
+    teacher_id = request.GET.get('teacher_id')
+    if not teacher_id:
+        return JsonResponse({'status': 'error', 'message': 'معرف الأستاذ مطلوب'})
+    try:
+        from .models import Employee
+        emp = Employee.objects.get(id=teacher_id, rank='teacher')
+        hr_assignments = list(emp.assignments.all().values('subject', 'classes'))
+        analytics_assignments = emp.analytics_assignments if isinstance(emp.analytics_assignments, list) else []
+        return JsonResponse({
+            'status': 'success',
+            'hr_assignments': hr_assignments,
+            'analytics_assignments': analytics_assignments,
+        })
+    except Employee.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'الأستاذ غير موجود'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
 def save_analytics_teacher_assignment(request):
     """Saves teacher assignment specifically for analytics"""
     if not request.user.is_authenticated:
@@ -2234,12 +3074,24 @@ def upload_grades_preview_ajax(request):
             found_subjects = []
 
             import re
+            ignore_exact = {
+                'الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب',
+                'الجنس', 'النوع', 'تاريخ الميلاد', 'تاريخ الازدياد', 'الميلاد', 'تاريخ'
+            }
+
             for idx, header in enumerate(headers):
                 original_header = header.replace('\n', ' ').replace('\r', '').strip()
                 clean_header = re.sub(r'(ف|الفصل)\s*\d+', '', original_header).strip()
 
                 # Ignore non-subjects
-                if 'اللقب' in clean_header or 'الاسم' in clean_header or 'الإعادة' in clean_header or clean_header in ['الرقم', 'رقم', 'الملاحظة', 'التقدير', 'الغياب', 'المواظبة', 'اللقبوالاسم', 'الاسمواللقب']:
+                if (
+                    'اللقب' in clean_header
+                    or 'الاسم' in clean_header
+                    or 'الإعادة' in clean_header
+                    or clean_header in ignore_exact
+                    or 'تاريخ الميلاد' in clean_header
+                    or 'الجنس' in clean_header
+                ):
                     continue
 
                 if len(clean_header) > 2:
@@ -2324,6 +3176,124 @@ def delete_subject_ajax(request):
     return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
 
 
+def add_subject_exemption_rule_ajax(request):
+    """إضافة قاعدة إعفاء مادة حسب (تلميذ/فوج/مستوى)."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'غير مصرح'})
+
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+    if not has_access:
+        return JsonResponse({'success': False, 'error': 'ليس لديك صلاحية'})
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
+
+    subject = (request.POST.get('subject') or '').strip()
+    scope_type = (request.POST.get('scope_type') or '').strip()
+    term = (request.POST.get('term') or '').strip() or None
+
+    if not subject or scope_type not in ('school', 'student', 'class', 'level'):
+        return JsonResponse({'success': False, 'error': 'بيانات غير صحيحة'})
+
+    from .models import SubjectExemptionRule, Student
+
+    rule = SubjectExemptionRule(subject=subject, scope_type=scope_type, term=term)
+    if scope_type == 'school':
+        # إعفاء بالمؤسسة: لا مدخلات إضافية
+        pass
+    elif scope_type == 'student':
+        student_id_number = (request.POST.get('student_id_number') or '').strip()
+        if not student_id_number:
+            return JsonResponse({'success': False, 'error': 'رقم تعريف التلميذ مطلوب'})
+        try:
+            st = Student.objects.get(student_id_number=student_id_number)
+        except Student.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'لم يتم العثور على تلميذ بهذا رقم التعريف'})
+        rule.student = st
+    elif scope_type == 'class':
+        class_code = (request.POST.get('class_code') or '').strip()
+        if not class_code:
+            return JsonResponse({'success': False, 'error': 'رمز الفوج مطلوب'})
+        rule.class_code = class_code
+    elif scope_type == 'level':
+        academic_year = (request.POST.get('academic_year') or '').strip()
+        if not academic_year:
+            return JsonResponse({'success': False, 'error': 'المستوى مطلوب'})
+        rule.academic_year = academic_year
+
+    # منع التكرار البسيط
+    exists_q = SubjectExemptionRule.objects.filter(subject=subject, scope_type=scope_type, term=term)
+    if scope_type == 'student':
+        exists_q = exists_q.filter(student=rule.student)
+    elif scope_type == 'class':
+        exists_q = exists_q.filter(class_code=rule.class_code)
+    else:
+        exists_q = exists_q.filter(academic_year=rule.academic_year)
+    if exists_q.exists():
+        return JsonResponse({'success': True, 'duplicate': True})
+
+    rule.save()
+    return JsonResponse({'success': True, 'id': rule.id})
+
+
+def delete_subject_exemption_rule_ajax(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'غير مصرح'})
+
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+    if not has_access:
+        return JsonResponse({'success': False, 'error': 'ليس لديك صلاحية'})
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
+
+    rid = request.POST.get('rule_id')
+    if not rid:
+        return JsonResponse({'success': False, 'error': 'معرّف القاعدة مفقود'})
+
+    from .models import SubjectExemptionRule
+    try:
+        SubjectExemptionRule.objects.filter(id=int(rid)).delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def save_award_thresholds_ajax(request):
+    """حفظ مجالات الإجازات (أدنى معدل فصلي لكل إجازة): امتياز، تهنئة، تشجيع، لوحة شرف."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'غير مصرح'})
+    has_access = request.user.is_superuser or request.user.username == 'director'
+    if not has_access and hasattr(request.user, 'profile'):
+        has_access = request.user.profile.has_perm('access_analytics')
+    if not has_access:
+        return JsonResponse({'success': False, 'error': 'ليس لديك صلاحية'})
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'طلب غير صالح'})
+    import json
+    keys = ['امتياز', 'تهنئة', 'تشجيع', 'لوحة شرف']
+    data = {}
+    for k in keys:
+        val = request.POST.get('award_' + k)
+        if val is not None and str(val).strip() != '':
+            try:
+                data[k] = float(str(val).strip().replace(',', '.'))
+            except ValueError:
+                data[k] = 0
+        else:
+            data[k] = None
+    settings_obj = SchoolSettings.objects.first()
+    if not settings_obj:
+        settings_obj = SchoolSettings.objects.create()
+    settings_obj.award_thresholds = data
+    settings_obj.save(update_fields=['award_thresholds'])
+    return JsonResponse({'success': True, 'award_thresholds': data})
+
+
 def upload_grades_ajax(request):
     """Handles bulk uploading of multiple grade files with AJAX progress"""
     if request.method == 'POST':
@@ -2350,6 +3320,15 @@ def upload_grades_ajax(request):
             except json.JSONDecodeError:
                 pass
 
+        # Load optional teacher<->subjects links (from results subjects, not HR)
+        teacher_subject_links = None
+        links_json = request.POST.get('teacher_subject_links')
+        if links_json:
+            try:
+                teacher_subject_links = json.loads(links_json) or {}
+            except json.JSONDecodeError:
+                teacher_subject_links = None
+
         import tempfile
         import os
         from .grade_importer import process_grades_file, process_grades_file_ai
@@ -2375,6 +3354,93 @@ def upload_grades_ajax(request):
                 count, msg = process_grades_file_ai(temp_path, term)
             else:
                 count, msg = process_grades_file(temp_path, term, subject_mappings=subject_mappings)
+
+            # بعد اعتماد المواد: تحديث إسناد المواد للأساتذة بناءً على المواد المعتمدة (وليس مواد الموارد البشرية الخام)
+            if subject_mappings:
+                from .models import Employee, TeacherAssignment
+                # نبني خريطة: اسم_قديم -> اسم_معتمد (مع احترام خيار "الاحتفاظ بنفس الاسم")
+                normalized_map = {}
+                for old_name, new_name in subject_mappings.items():
+                    if not old_name:
+                        continue
+                    if new_name == "ignore":
+                        continue
+                    # الاحتفاظ بنفس الاسم: نستخدم الاسم كما في الملف
+                    canonical = old_name if (new_name in ("--احتفاظ بنفس الاسم--", "", None)) else new_name
+                    normalized_map[old_name.strip()] = canonical.strip()
+
+                if normalized_map:
+                    # تحديث TeacherAssignment.subject
+                    for old_name, canonical in normalized_map.items():
+                        TeacherAssignment.objects.filter(subject=old_name).update(subject=canonical)
+
+                    # تحديث analytics_assignments لكل أستاذ بحيث تستعمل نفس أسماء المواد المعتمدة
+                    for emp in Employee.objects.exclude(analytics_assignments=None):
+                        if not isinstance(emp.analytics_assignments, list):
+                            continue
+                        changed = False
+                        new_assignments = []
+                        for a in emp.analytics_assignments or []:
+                            subj = (a.get('subject') or '').strip()
+                            if subj in normalized_map:
+                                a['subject'] = normalized_map[subj]
+                                changed = True
+                            new_assignments.append(a)
+                        if changed:
+                            emp.analytics_assignments = new_assignments
+                            emp.save(update_fields=['analytics_assignments'])
+
+            # إذا اختار المستخدم ربط الأساتذة بمواد النتائج مباشرة بعد ربط المواد
+            if teacher_subject_links and isinstance(teacher_subject_links, dict):
+                from .models import Employee, TeacherAssignment
+                for tid, payload in teacher_subject_links.items():
+                    try:
+                        emp = Employee.objects.get(id=int(tid))
+                    except Exception:
+                        continue
+                    subjects = payload.get('subjects') if isinstance(payload, dict) else None
+                    if not subjects or not isinstance(subjects, list):
+                        continue
+                    subjects = [str(s).strip() for s in subjects if str(s).strip()]
+                    if not subjects:
+                        continue
+
+                    # دمج مع الإسناد الحالي: نحافظ على classes إن وُجدت لنفس المادة
+                    existing = {}
+                    if isinstance(emp.analytics_assignments, list):
+                        for a in emp.analytics_assignments or []:
+                            s = (a.get('subject') or '').strip()
+                            if not s:
+                                continue
+                            cl = a.get('classes')
+                            existing[s] = list(cl) if isinstance(cl, list) else ([cl] if cl else [])
+
+                    # إذا كانت الأقسام فارغة لمادة ما، نملأها تلقائياً من إسناد الموارد البشرية (حتى لا يلزم حفظ إسناد كل أستاذ يدوياً)
+                    def _norm_subj(t):
+                        t = (t or '').strip().replace('ـ', '').replace('  ', ' ')
+                        if t.startswith('ال'):
+                            t = t[2:].strip()
+                        return t.lower()
+
+                    hr_assignments = list(TeacherAssignment.objects.filter(teacher=emp).values_list('subject', 'classes'))
+                    for subj, classes in hr_assignments:
+                        if not subj or str(subj).strip() == '/':
+                            continue
+                        hr_subj = str(subj).strip()
+                        cl_list = list(classes) if isinstance(classes, list) else ([classes] if classes else [])
+                        if not cl_list:
+                            continue
+                        n_hr = _norm_subj(hr_subj)
+                        for s in subjects:
+                            if existing.get(s):
+                                continue
+                            n_s = _norm_subj(s)
+                            if n_hr in n_s or n_s in n_hr or hr_subj in s or s in hr_subj:
+                                existing[s] = list(cl_list)
+                                break
+
+                    emp.analytics_assignments = [{'subject': s, 'classes': list(existing.get(s, []))} for s in subjects]
+                    emp.save(update_fields=['analytics_assignments'])
 
             success = count > 0
             return JsonResponse({'success': success, 'message': msg, 'count': count})

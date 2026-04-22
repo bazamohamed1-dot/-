@@ -92,7 +92,7 @@ class StudentListSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'id', 'student_id_number', 'first_name', 'last_name',
-            'class_name', 'academic_year', 'level', 'gender', 'date_of_birth',
+            'class_name', 'class_code', 'academic_year', 'level', 'gender', 'date_of_birth',
             'place_of_birth', 'attendance_system', 'enrollment_date',
             'enrollment_number', 'exit_date', 'guardian_name', 'mother_name',
             'guardian_phone', 'address', 'photo', 'photo_url'

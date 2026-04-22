@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let server = [];
     try {
-        const res = await fetch('/canteen/api/pending_updates/');
+        const res = await fetch('/canteen/api/pending_updates/?_t=' + Date.now(), { cache: 'no-store' });
         if (res.ok) {
             const json = await res.json();
             server = Array.isArray(json) ? json : (json.results || []);

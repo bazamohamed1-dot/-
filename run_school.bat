@@ -1,9 +1,10 @@
 @echo off
+REM Use OEM code page for .bat parsing reliability on French/Arabic Windows; UTF-8 only for Python.
 chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 echo ==========================================
-echo      برنامج تسيير المؤسسات التربوية
+echo      School management app - Baza
 echo ==========================================
 
 REM 1. Check Virtual Environment
@@ -20,11 +21,17 @@ if %errorlevel% neq 0 goto ERROR_ACTIVATE
 REM 2. Check Dependencies
 echo [INFO] Checking dependencies...
 pip install -r requirements.txt > nul 2>&1
-if %errorlevel% equ 0 goto FIREWALL_SETUP
+if %errorlevel% equ 0 goto DJANGO_CHECK
 
 echo [WARN] Installing missing packages...
 pip install -r requirements.txt
 if %errorlevel% neq 0 goto ERROR_DEPS
+
+:DJANGO_CHECK
+echo [INFO] Django system check...
+python manage.py check
+if %errorlevel% neq 0 goto ERROR_CHECK
+goto FIREWALL_SETUP
 
 :FIREWALL_SETUP
 if exist .firewall_done goto START_APP
@@ -64,6 +71,10 @@ goto ERROR_PAUSE
 
 :ERROR_DEPS
 echo [ERROR] Failed to install dependencies. Check internet connection.
+goto ERROR_PAUSE
+
+:ERROR_CHECK
+echo [ERROR] manage.py check failed. Fix settings, .env, or migrations then retry.
 goto ERROR_PAUSE
 
 :ERROR_PAUSE

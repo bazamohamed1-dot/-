@@ -116,9 +116,22 @@ class Student(models.Model):
         return f"{self.last_name} {self.first_name}"
 
 class CanteenAttendance(models.Model):
+    REG_SCAN = 'scan'
+    REG_MANUAL = 'manual'
+    REGISTRATION_METHOD_CHOICES = [
+        (REG_SCAN, 'مسح البطاقة'),
+        (REG_MANUAL, 'إدخال يدوي'),
+    ]
+
     student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
     date = models.DateField(default=date.today, verbose_name="التاريخ")
     time = models.TimeField(auto_now_add=True, verbose_name="الوقت")
+    registration_method = models.CharField(
+        max_length=20,
+        choices=REGISTRATION_METHOD_CHOICES,
+        default=REG_SCAN,
+        verbose_name="طريقة التسجيل",
+    )
 
     class Meta:
         verbose_name = "حضور المطعم"
@@ -127,6 +140,40 @@ class CanteenAttendance(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.date}"
+
+
+class CanteenDailySummary(models.Model):
+    """لقطة يومية لإحصائيات المطعم (تلاميذ + فئات أخرى + ملاحظات) للتصدير التراكمي."""
+    date = models.DateField(unique=True, verbose_name="التاريخ")
+    meal_description = models.TextField(blank=True, verbose_name="مكونات الوجبة")
+    student_count = models.PositiveIntegerField(default=0, verbose_name="عدد التلاميذ")
+    supervisors_count = models.PositiveIntegerField(default=0, verbose_name="المشرفون المرافقون")
+    staff_count = models.PositiveIntegerField(default=0, verbose_name="الموظفون")
+    teachers_count = models.PositiveIntegerField(default=0, verbose_name="الأساتذة")
+    workers_count = models.PositiveIntegerField(default=0, verbose_name="العمال")
+    guests_count = models.PositiveIntegerField(default=0, verbose_name="الضيوف")
+    notes = models.TextField(blank=True, verbose_name="ملاحظات")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ملخص يومي للمطعم"
+        verbose_name_plural = "ملخصات المطعم اليومية"
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"ملخص مطعم {self.date}"
+
+    @property
+    def total_beneficiaries(self):
+        return (
+            self.student_count
+            + self.supervisors_count
+            + self.staff_count
+            + self.teachers_count
+            + self.workers_count
+            + self.guests_count
+        )
 
 class LibraryLoan(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="التلميذ")
@@ -160,10 +207,32 @@ class SchoolSettings(models.Model):
     canteen_close_time = models.TimeField(default="13:15", null=True, blank=True, verbose_name="وقت غلق المطعم")
     # Store days as comma-separated integers (0=Mon, 6=Sun).
     canteen_days = models.CharField(max_length=50, default="0,2,3,6", null=True, blank=True, verbose_name="أيام عمل المطعم")
+    # وصف الوجبة حسب التاريخ: {"2026-04-21": "عدس + بيض + ..."}
+    canteen_meals_by_date = models.JSONField(default=dict, blank=True, verbose_name="وصف الوجبات حسب اليوم")
 
     # AI Tone Settings
     ai_tone = models.CharField(max_length=50, default="professional", verbose_name="نبرة الذكاء الاصطناعي")
     ai_focus = models.CharField(max_length=50, default="academic", verbose_name="تركيز الذكاء الاصطناعي")
+
+    # تحليل النتائج: قائمة أسماء المواد المعفاة من التحليل (لا تدخل في أي حساب)
+    analytics_exempt_subjects = models.JSONField(default=list, blank=True, verbose_name="المواد المعفاة من التحليل")
+
+    # مجالات الإجازات: أدنى معدل فصلي لكل إجازة (يدوي)
+    award_thresholds = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="مجالات الإجازات (أدنى معدل فصلي)",
+        help_text='مثال: {"امتياز": 16, "تهنئة": 14, "تشجيع": 12, "لوحة شرف": 10}'
+    )
+
+    # معاملات المواد حسب المستوى لتحليل الخبراء (المعدل الفصلي = مرجح بالمعاملات)
+    # شكل: {"أولى متوسط": {"الرياضيات": 2, "اللغة العربية": 2, "التربية التشكيلية": 1, ...}, "ثانية متوسط": {...}}
+    subject_coefficients_by_level = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="معاملات المواد حسب المستوى",
+        help_text='لحساب المعدل الفصلي المرجح والمادة الحاكمة. مثال: {"أولى متوسط": {"الرياضيات": 2, "اللغة العربية": 2}}'
+    )
 
     class Meta:
         verbose_name = "إعدادات المؤسسة"
@@ -181,6 +250,45 @@ class UserActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.action} - {self.timestamp}"
+
+
+class SubjectExemptionRule(models.Model):
+    """
+    إعفاء مادة من التحليل حسب نطاق:
+    - تلميذ
+    - فوج (class_code مثل 1م2)
+    - مستوى (academic_year مثل أولى متوسط)
+    (اختياري) حسب فصل دراسي.
+    """
+
+    SCOPE_CHOICES = [
+        ('school', 'المؤسسة'),
+        ('student', 'تلميذ'),
+        ('class', 'فوج'),
+        ('level', 'مستوى'),
+    ]
+
+    subject = models.CharField(max_length=120, verbose_name="المادة")
+    scope_type = models.CharField(max_length=20, choices=SCOPE_CHOICES, verbose_name="نطاق الإعفاء")
+    student = models.ForeignKey(Student, null=True, blank=True, on_delete=models.CASCADE, verbose_name="التلميذ")
+    academic_year = models.CharField(max_length=50, null=True, blank=True, verbose_name="المستوى")
+    class_code = models.CharField(max_length=20, null=True, blank=True, verbose_name="رمز الفوج")
+    term = models.CharField(max_length=20, null=True, blank=True, verbose_name="الفصل (اختياري)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "قاعدة إعفاء مادة"
+        verbose_name_plural = "قواعد إعفاء المواد"
+
+    def __str__(self):
+        base = f"{self.subject} - {self.get_scope_type_display()}"
+        if self.scope_type == 'student' and self.student_id:
+            return f"{base}: {self.student}"
+        if self.scope_type == 'class' and self.class_code:
+            return f"{base}: {self.class_code}"
+        if self.scope_type == 'level' and self.academic_year:
+            return f"{base}: {self.academic_year}"
+        return base
 
 class ArchiveDocument(models.Model):
     reference_number = models.CharField(max_length=50, verbose_name="الرقم")
@@ -220,6 +328,10 @@ class EmployeeProfile(models.Model):
     totp_secret = models.CharField(max_length=100, null=True, blank=True, verbose_name="مفتاح المصادقة الثنائية")
     totp_enabled = models.BooleanField(default=False, verbose_name="تفعيل المصادقة الثنائية")
     must_change_password = models.BooleanField(default=False, verbose_name="يجب تغيير كلمة المرور")
+    client_cache_clear_required = models.BooleanField(
+        default=False,
+        verbose_name="إجبار تفريغ التخزين على العميل",
+    )
 
     def has_perm(self, perm):
         if self.role == 'director' or self.user.is_superuser:
@@ -507,6 +619,7 @@ class CohortExpertData(models.Model):
     # Cohort Effect
     current_year_z_score_avg = models.FloatField(null=True, blank=True, verbose_name="متوسط Z-Score الحالي")
     last_year_z_score_avg = models.FloatField(null=True, blank=True, verbose_name="متوسط Z-Score السابق")
+    last_year_raw_avg = models.FloatField(null=True, blank=True, verbose_name="متوسط المعدل العام الماضي (فعلي)")
     cohort_effect_analysis = models.CharField(max_length=200, null=True, blank=True, verbose_name="تحليل أثر الفوج")
 
     # Sensitivity Analysis
@@ -525,6 +638,7 @@ class HistoricalStudent(models.Model):
     student_id_number = models.CharField(max_length=50, null=True, blank=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
+    date_of_birth = models.DateField(null=True, blank=True, verbose_name="تاريخ الميلاد")
     academic_year = models.CharField(max_length=50) # The level they were in (e.g., أولى متوسط)
     class_name = models.CharField(max_length=50)    # The class they were in (e.g., أولى 1)
     class_code = models.CharField(max_length=20, blank=True, null=True)
@@ -540,5 +654,112 @@ class HistoricalGrade(models.Model):
     score = models.FloatField()
     historical_year = models.CharField(max_length=20)
 
+    class Meta:
+        unique_together = ('student', 'subject', 'term', 'historical_year')
+
     def __str__(self):
         return f"{self.student} - {self.subject} - {self.score}"
+
+
+class HistoricalImportFile(models.Model):
+    """سجل الملفات المستوردة لنتائج السنوات السابقة (حسب السنة)."""
+    historical_year = models.CharField(max_length=20, db_index=True)
+    filename = models.CharField(max_length=255)
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-imported_at']
+        verbose_name = "ملف استيراد سنة سابقة"
+        verbose_name_plural = "ملفات استيراد السنوات السابقة"
+
+    def __str__(self):
+        return f"{self.filename} ({self.historical_year})"
+
+
+# ----------------------------------------------------------
+# Auto-archive grades when school year changes
+# ----------------------------------------------------------
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+
+
+@receiver(pre_save, sender=SchoolSettings)
+def _archive_grades_on_year_change(sender, instance, **kwargs):
+    """
+    عند تغيير السنة الدراسية في الإعدادات:
+    ننقل علامات السنة القديمة من Grade إلى HistoricalGrade/HistoricalStudent (لكل الفصول)،
+    ثم نحذفها من Grade حتى تبدأ السنة الجديدة نظيفة.
+
+    ملاحظة: الأرشفة تعتمد على student_id_number كمعرف ثابت.
+    """
+    if not instance.pk:
+        return
+    try:
+        old = SchoolSettings.objects.get(pk=instance.pk)
+    except Exception:
+        return
+    old_year = (old.academic_year or '').strip()
+    new_year = (instance.academic_year or '').strip()
+    if not old_year or not new_year or old_year == new_year:
+        return
+
+    from django.db import transaction
+    from .import_utils import standardize_subject_name
+
+    with transaction.atomic():
+        grades_qs = Grade.objects.filter(academic_year=old_year).select_related('student')
+        if not grades_qs.exists():
+            return
+
+        # 1) Ensure HistoricalStudent exists per student_id_number for old_year
+        # Build cache: student_id_number -> HistoricalStudent
+        id_nums = list(grades_qs.values_list('student__student_id_number', flat=True).distinct())
+        id_nums = [x for x in id_nums if x]
+        existing = {
+            hs.student_id_number: hs
+            for hs in HistoricalStudent.objects.filter(historical_year=old_year, student_id_number__in=id_nums)
+        }
+
+        # Create missing historical students
+        to_create = []
+        students = Student.objects.filter(student_id_number__in=id_nums)
+        for s in students:
+            sid = (s.student_id_number or '').strip()
+            if not sid or sid in existing:
+                continue
+            to_create.append(HistoricalStudent(
+                student_id_number=sid,
+                first_name=s.first_name,
+                last_name=s.last_name,
+                date_of_birth=s.date_of_birth,
+                academic_year=s.academic_year or '',
+                class_name=s.class_name or '',
+                class_code=s.class_code or None,
+                historical_year=old_year,
+            ))
+        if to_create:
+            HistoricalStudent.objects.bulk_create(to_create, ignore_conflicts=True)
+            existing = {
+                hs.student_id_number: hs
+                for hs in HistoricalStudent.objects.filter(historical_year=old_year, student_id_number__in=id_nums)
+            }
+
+        # 2) Archive grades
+        hist_grade_objs = []
+        for g in grades_qs:
+            sid = (getattr(g.student, 'student_id_number', '') or '').strip()
+            hs = existing.get(sid)
+            if not hs:
+                continue
+            hist_grade_objs.append(HistoricalGrade(
+                student=hs,
+                subject=standardize_subject_name(g.subject),
+                term=g.term,
+                score=g.score,
+                historical_year=old_year
+            ))
+        if hist_grade_objs:
+            HistoricalGrade.objects.bulk_create(hist_grade_objs, ignore_conflicts=True)
+
+        # 3) Delete archived grades from Grade
+        grades_qs.delete()

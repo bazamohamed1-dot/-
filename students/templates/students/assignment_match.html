@@ -2,6 +2,13 @@
 {% block title %}مطابقة الإسناد{% endblock %}
 {% block header_title %}استيراد الإسناد - معالج الذكاء الاصطناعي{% endblock %}
 
+{% block extra_css %}
+<style>
+.classes-row-horizontal { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important; gap: 0.5rem 1rem !important; }
+.classes-row-horizontal .form-check { display: inline-flex !important; margin: 0 0.5rem 0.5rem 0 !important; white-space: nowrap !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card mb-4" style="background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
     <div style="display: flex; justify-content: space-between; padding: 20px; text-align: center; gap: 10px;">
@@ -93,6 +100,7 @@
         {% elif step == 3 %}
         <div class="alert alert-info">
             <i class="fas fa-info-circle"></i> المراجعة النهائية. تأكد من أسماء الأساتذة وارتباطهم. يمكنك تعديل أي تفاصيل قبل الحفظ.
+            <br><strong class="text-warning">تنبيه:</strong> إن وجدت أسماء متشابهة (مثل أرفيس شفية وأرفيس امباركة)، راجع أن كل صف مربوط بالأستاذ الصحيح قبل الحفظ.
         </div>
         <table class="table">
             <thead>
@@ -116,9 +124,9 @@
                                 <input type="text" name="subject_{{ forloop.counter0 }}[]" value="{{ item.subject }}" class="form-control mb-2" style="min-width: 120px;" placeholder="اكتب المادة هنا...">
 
                                 <label class="font-weight-bold">الأقسام</label>
-                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                <div class="d-flex flex-wrap gap-2 mt-1 classes-row-horizontal">
                                     {% for db_c in all_classes %}
-                                    <div class="form-check">
+                                    <div class="form-check form-check-inline me-2 mb-1">
                                         <input class="form-check-input" type="checkbox" id="class_{{ forloop.parentloop.counter0 }}_0_{{ forloop.counter0 }}" name="classes_{{ forloop.parentloop.counter0 }}_0[]" value="{{ db_c }}" {% if db_c in item.classes %}checked{% endif %}>
                                         <label class="form-check-label" for="class_{{ forloop.parentloop.counter0 }}_0_{{ forloop.counter0 }}">{{ db_c }}</label>
                                     </div>
@@ -186,13 +194,13 @@ function addWizardAssignmentBlock(teacherIndex, classesStr) {
         <input type="text" name="subject_${teacherIndex}[]" value="" class="form-control mb-2" style="min-width: 120px;" placeholder="اكتب المادة هنا..." required>
 
         <label class="font-weight-bold">الأقسام</label>
-        <div class="d-flex flex-wrap gap-2 mt-1">
+        <div class="d-flex flex-wrap gap-2 mt-1 classes-row-horizontal">
     `;
 
     classesArray.forEach((cls, idx) => {
         if (!cls.trim()) return;
         html += `
-            <div class="form-check">
+            <div class="form-check form-check-inline me-2 mb-1">
                 <input class="form-check-input" type="checkbox" id="class_${teacherIndex}_${blockIndex}_${idx}" name="classes_${teacherIndex}_${blockIndex}[]" value="${cls.trim()}">
                 <label class="form-check-label" for="class_${teacherIndex}_${blockIndex}_${idx}">${cls.trim()}</label>
             </div>

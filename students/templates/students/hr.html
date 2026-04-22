@@ -4,6 +4,13 @@
 
 {% block header_title %}تسيير الموارد البشرية{% endblock %}
 
+{% block extra_css %}
+<style>
+.dyn-classes-container, .class-checkbox-container { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important; gap: 0.5rem 1rem !important; }
+.dyn-classes-container .form-check, .class-checkbox-container .form-check { display: inline-flex !important; margin: 0 0.5rem 0.5rem 0 !important; white-space: nowrap !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -25,7 +32,7 @@
              <button class="btn btn-success" onclick="openImportModal()"><i class="fas fa-file-excel"></i> استيراد القوائم</button>
              <button class="btn btn-info" onclick="openAssignmentModal()"><i class="fas fa-upload"></i> استيراد الإسناد (AI)</button>
              <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> إضافة موظف</button>
-             <button class="btn btn-warning" onclick="toggleEditAssignments()"><i class="fas fa-edit"></i> تعديل الإسناد للأساتذة</button>
+             <button id="btnEditAssignments" class="btn btn-warning" onclick="toggleEditAssignments()"><i class="fas fa-edit"></i> تعديل الإسناد للأساتذة</button>
              <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
              <a href="{% url 'dashboard' %}" class="btn btn-dark"><i class="fas fa-arrow-right"></i> رجوع</a>
         </div>
@@ -112,7 +119,8 @@
 <div id="importModal" class="modal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
     <div class="modal-content" style="background: white; width: 500px; margin: 100px auto; padding: 20px; border-radius: 8px;">
         <h3>استيراد الموارد البشرية</h3>
-        <p>يجب أن يكون الملف بصيغة Excel ويحوي الأعمدة: الصورة، الرمز، اللقب، الاسم، تاريخ الازدياد، الرتبة، المادة، الدرجة، تاريخ السريان.</p>
+        <p>يجب أن يكون الملف بصيغة Excel ويحوي الأعمدة: <strong>الرمز الوظيفي</strong> (مطلوب)، اللقب، الاسم، تاريخ الازدياد، الرتبة، المادة، الدرجة، تاريخ السريان.</p>
+        <p class="text-muted small mb-0">الصفوف التي لا تحتوي رمزاً وظيفياً صالحاً (4 أحرف على الأقل) ستُتخطى لتفادي التكرار.</p>
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="import_file">
@@ -179,8 +187,8 @@
         if(row) row.style.opacity = '0.5'; // Visual feedback
 
         try {
-            const res = await fetch(`/canteen/hr/delete/${id}/`, {
-                method: 'GET',, fallback if Django requires GET without CSRF in the template, wait actually hr_delete is usually GET because it was a link. Let's send POST with CSRF and make view accept it or just GET. The view doesn't specify method, so GET is fine but better to be safe. Since it was an <a> tag, it was a GET request.
+            const res = await fetch(`/canteen/hr/${id}/delete/`, {
+                method: 'GET',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json'
@@ -211,8 +219,8 @@
             <input type="hidden" name="edit_id" id="editId">
             <div class="grid-2">
                 <div>
-                    <label>الرمز الوظيفي</label>
-                    <input type="text" name="employee_code" id="f_code" class="form-control" required>
+                    <label>الرمز الوظيفي <span class="text-muted">(اختياري في الإضافة اليدوية)</span></label>
+                    <input type="text" name="employee_code" id="f_code" class="form-control" placeholder="مطلوب عند الاستيراد من ملف">
                 </div>
 
                 <!-- System Category (Classification) -->
@@ -321,10 +329,38 @@
     // --- Dynamic Assignment Editor Logic ---
     const allGlobalClasses = {{ all_classes|safe_json|safe }};
 
+    function toCanonicalClass(str) {
+        if (!str) return '';
+        const s = String(str).trim();
+        const m = s.match(/(\d+)\s*م\s*(\d+)/i);
+        if (m) return m[1] + 'م' + m[2];
+        const m2 = s.match(/(\d+)م(\d+)/i);
+        if (m2) return m2[1] + 'م' + m2[2];
+        const m3 = s.match(/^(\d+)\s+(\d+)$/);
+        if (m3) return m3[1] + 'م' + m3[2];
+        const m4 = s.match(/^(\d+)\s+(\d+)م(\d+)$/);
+        if (m4) return m4[2] + 'م' + m4[3];
+        return s.replace(/\s+/g, '');
+    }
+
     function createAssignmentBlock(subject = '', classesArray = []) {
-        // Ensure no whitespace mismatch when determining checked states
-        const cleanClasses = classesArray.map(c => c.trim().replace(/\s+/g, ''));
-        const cleanGlobal = allGlobalClasses.map(c => c.trim().replace(/\s+/g, ''));
+        const normalizedAssigned = new Set((classesArray || []).map(c => toCanonicalClass(c)));
+        const cleanGlobal = allGlobalClasses.map(c => {
+            const t = String(c).trim();
+            return { raw: t, canon: toCanonicalClass(t) };
+        });
+        const seenCanon = new Set();
+        const combined = [];
+        cleanGlobal.forEach(({raw, canon}) => {
+            if (canon && !seenCanon.has(canon)) { seenCanon.add(canon); combined.push({raw, canon}); }
+        });
+        (classesArray || []).forEach(c => {
+            const canon = toCanonicalClass(c);
+            if (canon && !seenCanon.has(canon)) {
+                seenCanon.add(canon);
+                combined.push({ raw: c.trim(), canon });
+            }
+        });
 
         let blockHtml = `
             <div class="assignment-block mb-3 p-3 border rounded" style="background: #fdfdfd;">
@@ -334,20 +370,17 @@
                         <i class="fas fa-trash"></i> إزالة
                     </button>
                 </div>
-                <input type="text" class="form-control mb-2 dyn-subject" value="${subject}" placeholder="أدخل المادة (مثال: رياضيات)">
+                <input type="text" class="form-control mb-2 dyn-subject" value="${(subject || '').replace(/"/g, '&quot;')}" placeholder="أدخل المادة (مثال: رياضيات)">
                 <label class="font-weight-bold">الأقسام</label>
                 <div class="d-flex flex-wrap gap-2 mt-1 dyn-classes-container">
         `;
 
-        // Include any custom classes not in global list based on cleaned values, but display original arrays when possible
-        const combinedCleanClasses = [...new Set([...cleanGlobal, ...cleanClasses])];
-
-        combinedCleanClasses.forEach(cleanCls => {
-            const isChecked = cleanClasses.includes(cleanCls) ? 'checked' : '';
+        combined.forEach(({raw, canon}) => {
+            const isChecked = normalizedAssigned.has(canon) ? 'checked' : '';
             blockHtml += `
-                <div class="form-check">
-                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${cleanCls}" ${isChecked}>
-                    <label class="form-check-label">${cleanCls}</label>
+                <div class="form-check form-check-inline me-2 mb-1">
+                    <input class="form-check-input dyn-class-cb" type="checkbox" value="${raw.replace(/"/g, '&quot;')}" ${isChecked}>
+                    <label class="form-check-label">${raw.replace(/</g, '&lt;')}</label>
                 </div>
             `;
         });
@@ -373,7 +406,7 @@
 
         if (newClass) {
             const div = document.createElement('div');
-            div.className = 'form-check';
+            div.className = 'form-check form-check-inline me-2 mb-1';
             div.innerHTML = `
                 <input class="form-check-input dyn-class-cb" type="checkbox" value="${newClass}" checked>
                 <label class="form-check-label">${newClass}</label>
@@ -391,52 +424,66 @@
         if (mainCard.style.display !== 'none') {
             mainCard.style.display = 'none';
             editorCard.style.display = 'block';
+            const btnEdit = document.getElementById('btnEditAssignments');
+            if (btnEdit) { btnEdit.classList.remove('btn-warning'); btnEdit.classList.add('btn-primary'); }
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">جاري تحميل الإسنادات...</p></td></tr>';
 
-            tbody.innerHTML = '';
-            document.querySelectorAll('.teacher-assignment-data').forEach(btn => {
-                const id = btn.getAttribute('data-id');
-                const name = btn.getAttribute('data-name');
-                const assignmentsRaw = btn.getAttribute('data-assignments');
-
-                let assignments = [];
-                try {
-                    assignments = JSON.parse(assignmentsRaw);
-                } catch(e) {}
-
-                if (assignments.length === 0) {
-                    assignments.push({subject: '', classes: []});
-                }
-
-                const tr = document.createElement('tr');
-                tr.setAttribute('data-id', id);
-                tr.setAttribute('data-orig-assignments', JSON.stringify(assignments));
-
-                let blocksHtml = '';
-                assignments.forEach(a => {
-                    blocksHtml += createAssignmentBlock(a.subject, a.classes);
+            const orderParam = '{{ teacher_order|default:"" }}';
+            const url = '{% url "get_all_hr_assignments_api" %}?_t=' + Date.now() + (orderParam ? '&order=' + encodeURIComponent(orderParam) : '');
+            fetch(url, { cache: 'no-store', credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    tbody.innerHTML = '';
+                    if (data.status !== 'success' || !data.teachers) {
+                        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">فشل تحميل الإسنادات. حاول تحديث الصفحة.</td></tr>';
+                        return;
+                    }
+                    const teachers = data.teachers;
+                    let ids = Object.keys(teachers);
+                    if (data.order && data.order.length > 0) {
+                        const orderSet = new Set(data.order);
+                        const ordered = data.order.filter(i => ids.includes(i));
+                        const rest = ids.filter(i => !orderSet.has(i)).sort((a,b) => teachers[a].name.localeCompare(teachers[b].name));
+                        ids = ordered.concat(rest);
+                    } else {
+                        ids.sort((a,b) => teachers[a].name.localeCompare(teachers[b].name));
+                    }
+                    ids.forEach(id => {
+                        const t = teachers[id];
+                        let assignments = t.assignments || [];
+                        if (assignments.length === 0) {
+                            assignments = [{subject: '', classes: []}];
+                        }
+                        const tr = document.createElement('tr');
+                        tr.setAttribute('data-id', id);
+                        tr.setAttribute('data-orig-assignments', JSON.stringify(assignments));
+                        let blocksHtml = '';
+                        assignments.forEach(a => {
+                            blocksHtml += createAssignmentBlock(a.subject || '', a.classes || []);
+                        });
+                        tr.innerHTML = `
+                            <td style="vertical-align: top; font-weight: bold; width: 20%;">${t.name || ''}</td>
+                            <td class="assignments-cell">
+                                <div class="blocks-wrapper">${blocksHtml}</div>
+                                <button class="btn btn-sm btn-outline-primary mt-2" onclick="addAssignmentBlock(this)">
+                                    <i class="fas fa-plus"></i> إضافة مادة أخرى
+                                </button>
+                            </td>
+                            <td style="vertical-align: top; width: 10%;">
+                                <button class="btn btn-primary btn-save-row" onclick="saveSingleAssignment('${id}', this)">حفظ</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(err => {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">فشل تحميل الإسنادات. تأكد من الاتصال وحاول مرة أخرى.</td></tr>';
                 });
-
-                tr.innerHTML = `
-                    <td style="vertical-align: top; font-weight: bold; width: 20%;">${name}</td>
-                    <td class="assignments-cell">
-                        <div class="blocks-wrapper">
-                            ${blocksHtml}
-                        </div>
-                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="addAssignmentBlock(this)">
-                            <i class="fas fa-plus"></i> إضافة مادة أخرى
-                        </button>
-                    </td>
-                    <td style="vertical-align: top; width: 10%;">
-                        <button class="btn btn-primary btn-save-row" onclick="saveSingleAssignment('${id}', this)">
-                            حفظ
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
         } else {
             editorCard.style.display = 'none';
             mainCard.style.display = 'block';
+            const btnEdit = document.getElementById('btnEditAssignments');
+            if (btnEdit) { btnEdit.classList.remove('btn-primary'); btnEdit.classList.add('btn-warning'); }
             window.location.reload();
         }
     }
@@ -475,10 +522,11 @@
         formData.append('assignments', JSON.stringify(assignments));
 
         try {
-            const res = await fetch("{% url 'class_mapping_view' %}?action=quick_save", {
+            const res = await fetch("{% url 'class_mapping_view' %}?action=quick_save&_t=" + Date.now(), {
                 method: 'POST',
                 headers: {'X-CSRFToken': '{{ csrf_token }}'},
-                body: formData
+                body: formData,
+                cache: 'no-store'
             });
             const data = await res.json();
 
@@ -554,10 +602,11 @@
                 formData.append('assignments', JSON.stringify(assignments));
 
                 try {
-                    const res = await fetch("{% url 'class_mapping_view' %}?action=quick_save", {
+                    const res = await fetch("{% url 'class_mapping_view' %}?action=quick_save&_t=" + Date.now(), {
                         method: 'POST',
                         headers: {'X-CSRFToken': '{{ csrf_token }}'},
-                        body: formData
+                        body: formData,
+                        cache: 'no-store'
                     });
                     const data = await res.json();
                     if (data.status !== 'success') {
@@ -655,7 +704,7 @@ function addModalAssignmentBlock() {
                 if (cb && label) {
                     const cleanCls = cb.value.trim().replace(/\s+/g, '');
                     classCheckboxes += `
-                        <div class="form-check">
+                        <div class="form-check form-check-inline me-2 mb-1">
                             <input class="form-check-input class-checkbox" type="checkbox" name="classes_checked_${blockIndex}[]" value="${cleanCls}">
                             <label class="form-check-label">${cleanCls}</label>
                         </div>
@@ -707,7 +756,7 @@ function addCustomClassModal(btn) {
 
     if (newClass) {
         const div = document.createElement('div');
-        div.className = 'form-check';
+        div.className = 'form-check form-check-inline me-2 mb-1';
         div.innerHTML = `
             <input class="form-check-input class-checkbox" type="checkbox" value="${newClass}" checked>
             <label class="form-check-label">${newClass}</label>

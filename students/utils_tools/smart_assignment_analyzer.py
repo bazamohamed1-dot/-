@@ -11,6 +11,123 @@ logger = logging.getLogger(__name__)
 # Broad pattern: Digit + (optional text) + Digit
 CLASS_REGEX = r'\b(\d+)\s*[\u0600-\u06FFa-zA-Z]*\s*(\d+)\b'
 
+def _detect_assignment_columns(df):
+    """
+    Scans first 12 rows to find header row and column indices.
+    Structure: الأستاذ | المادة | الرتبة | [قسم1] | [قسم2] | [قسم3] | ...
+    الأقسام المسندة = كل عمود بعد آخر عمود metadata (الرتبة/المادة/الحجم الساعي).
+    Returns (name_col, subject_col, last_metadata_col, data_start_row).
+    """
+    name_keywords = ['الأستاذ', 'الاستاذ', 'اسم الأستاذ', 'الاسم', 'اسم', 'الأساتذة', 'الموظف']
+    subject_keywords = ['المادة', 'المادة المدرسة', 'المادة الدراسية', 'التخصص']
+    metadata_keywords = ['الرقم', 'الأستاذ', 'الاستاذ', 'الرتبة', 'المادة', 'الحجم الساعي', 'الحصص الأسبوعية', 'التوقيت']
+
+    best = {'name_col': None, 'subject_col': None, 'last_metadata_col': -1, 'data_start': 0, 'score': 0}
+
+    for row_idx in range(min(12, len(df))):
+        row = df.iloc[row_idx]
+        row_str = [str(c).strip() if pd.notna(c) and str(c).lower() != 'nan' else '' for c in row.values]
+        name_col, subject_col = None, None
+        last_meta = -1
+
+        for col_idx, cell in enumerate(row_str):
+            if not cell or len(cell) < 2:
+                continue
+            cell_lower = cell.lower()
+            for kw in name_keywords:
+                if kw in cell or kw in cell_lower:
+                    name_col = col_idx
+                    last_meta = max(last_meta, col_idx)
+                    break
+            for kw in subject_keywords:
+                if kw in cell or kw in cell_lower:
+                    subject_col = col_idx
+                    last_meta = max(last_meta, col_idx)
+                    break
+            for kw in metadata_keywords:
+                if kw in cell or kw in cell_lower:
+                    last_meta = max(last_meta, col_idx)
+                    break
+
+        score = (1 if name_col is not None else 0) + (1 if subject_col is not None else 0)
+        if score >= 1 and last_meta >= 0 and (score > best['score'] or (score == best['score'] and last_meta > best['last_metadata_col'])):
+            best = {'name_col': name_col, 'subject_col': subject_col, 'last_metadata_col': last_meta,
+                    'data_start': row_idx + 1, 'score': score}
+
+    if best['score'] >= 1 and best['name_col'] is not None:
+        return best['name_col'], best['subject_col'], best['last_metadata_col'], best['data_start']
+    return None, None, -1, 0
+
+
+def _is_likely_class_code(val):
+    """Returns True if the value looks like a class code (1م4, أولى 1, 4-2, etc)."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return False
+    s = str(val).strip()
+    if not s or len(s) > 20:
+        return False
+    if re.match(r'^-?\d+\.?\d*$', s):
+        return False
+    if re.match(r'^\d+م\d+$', s.replace(' ', '')):
+        return True
+    if re.match(r'^\d+\s*[مM]\s*\d+$', s, re.I):
+        return True
+    if re.search(r'أولى|ثانية|ثالثة|رابعة|متوسط', s):
+        return True
+    if re.match(r'^\d+[-/]\d+$', s):
+        return True
+    return False
+
+
+def _parse_single_cell_as_class(cell_value):
+    """Treats cell as single class code or extracts from it. Returns list of class codes."""
+    if cell_value is None or (isinstance(cell_value, float) and pd.isna(cell_value)):
+        return []
+    s = str(cell_value).strip()
+    if not s:
+        return []
+    parsed = _parse_classes_cell(s)
+    if parsed:
+        return parsed
+    if _is_likely_class_code(s):
+        normalized = re.sub(r'\s+', '', s)
+        if re.match(r'^\d+م\d+$', normalized):
+            return [normalized]
+        m = re.match(r'^(\d+)[-/](\d+)$', s)
+        if m:
+            return [f"{m.group(1)}م{m.group(2)}"]
+        return [s]
+    return []
+
+
+def _parse_classes_cell(cell_value):
+    """Extract class codes from a cell that may contain '1م4 2م4 3م4', '4م1-4م2', '1م1، 1م2', etc."""
+    if cell_value is None or (isinstance(cell_value, float) and pd.isna(cell_value)):
+        return []
+    text = str(cell_value).strip()
+    if not text:
+        return []
+
+    found = []
+    raw_classes = re.findall(r'\b\d+\s*(?:M|AM|م|متوسط)\s*\d+\b', text, re.IGNORECASE)
+    for rc in raw_classes:
+        clean = re.sub(r'\s+', ' ', rc).strip()
+        if clean:
+            found.append(clean)
+
+    word_classes = re.findall(r'\b(?:أولى|ثانية|ثالثة|رابعة|الاولى|الثانية|الثالثة|الرابعة|اولى|ثانيه|ثالثه|رابعه)\s*(?:متوسط)?\s*\d+\b', text)
+    for wc in word_classes:
+        clean = re.sub(r'\s+', ' ', wc).strip()
+        if clean:
+            found.append(clean)
+
+    digit_digit = re.findall(r'\b(\d+)\s*[-/،,]+\s*(\d+)\b', text)
+    for a, b in digit_digit:
+        found.append(f"{a}م{b}")
+
+    return list(set(found))
+
+
 def normalize_class_name(raw_name):
     """
     Returns the raw name cleaned up but NOT forced to '1AM1' format unless absolutely necessary.
@@ -38,20 +155,23 @@ def normalize_subject(subject):
     subjects_map = {
         'رياضيات': 'رياضيات', 'Math': 'رياضيات',
         'فيزياء': 'فيزياء', 'Physique': 'فيزياء',
-        'علوم': 'علوم طبيعية', 'Science': 'علوم طبيعية',
+        'معلوماتية': 'إعلام آلي', 'إعلام آلي': 'إعلام آلي', 'حاسوب': 'إعلام آلي',
+        'علوم الحاسوب': 'إعلام آلي', 'إعلام': 'إعلام آلي',
+        'علوم طبيعية': 'علوم طبيعية', 'علوم': 'علوم طبيعية', 'Science': 'علوم طبيعية',
         'عربية': 'لغة عربية', 'Arabe': 'لغة عربية',
         'فرنسية': 'لغة فرنسية', 'Français': 'لغة فرنسية',
         'انجليزية': 'لغة إنجليزية', 'Anglais': 'لغة إنجليزية',
         'تاريخ': 'تاريخ وجغرافيا', 'Histoire': 'تاريخ وجغرافيا',
         'جغرافيا': 'تاريخ وجغرافيا', 'Géographie': 'تاريخ وجغرافيا',
+        'اجتماعيات': 'تاريخ وجغرافيا',  # اجتماعيات = تاريخ وجغرافيا
         'إسلامية': 'تربية إسلامية', 'Islamique': 'تربية إسلامية',
         'مدنية': 'تربية مدنية', 'Civique': 'تربية مدنية',
         'إعلام': 'إعلام آلي', 'Informatique': 'إعلام آلي',
         'تكنولوجيا': 'تكنولوجيا', 'Technologie': 'تكنولوجيا',
         'بدنية': 'تربية بدنية', 'Sport': 'تربية بدنية',
         'موسيقى': 'تربية موسيقية', 'Musique': 'تربية موسيقية',
-        'تشكيلية': 'تربية تشكيلية', 'Dessin': 'تربية تشكيلية',
-        'أمازيغية': 'لغة أمازيغية', 'Tamazight': 'لغة أمازيغية'
+        'تشكيلية': 'تربية تشكيلية', 'رسم': 'تربية تشكيلية', 'Dessin': 'تربية تشكيلية',
+        'رياضة': 'تربية بدنية', 'أمازيغية': 'لغة أمازيغية', 'Tamazight': 'لغة أمازيغية'
     }
 
     for key, val in subjects_map.items():
@@ -62,26 +182,69 @@ def normalize_subject(subject):
 def extract_from_excel(file_path):
     """
     Extracts assignment candidates from an Excel file (Schedule).
-    Handles tabular schedules correctly without confusing horizontal columns.
+    First tries structure-aware parsing (detect headers: الأستاذ, المادة, الأقسام),
+    then falls back to text-based extraction for unstructured files.
     """
     candidates = []
     try:
-        # Load workbook, without forward filling axis=1 which corrupts the row
         df = pd.read_excel(file_path, header=None)
 
-        # Iterate through rows and columns carefully
+        name_col, subject_col, last_metadata_col, data_start = _detect_assignment_columns(df)
+        class_cols_start = last_metadata_col + 1
+
+        if name_col is not None and last_metadata_col >= 0:
+            for idx in range(data_start, len(df)):
+                row = df.iloc[idx]
+                cells = row.tolist() if hasattr(row, 'tolist') else list(row)
+
+                def safe_cell(col):
+                    if col is None or col < 0 or col >= len(cells):
+                        return ''
+                    v = cells[col]
+                    if pd.isna(v):
+                        return ''
+                    return str(v).strip()
+
+                name = safe_cell(name_col)
+                subject_raw = safe_cell(subject_col) if subject_col is not None else ''
+
+                parsed_classes = []
+                for col_idx in range(class_cols_start, len(cells)):
+                    cell_val = cells[col_idx] if col_idx < len(cells) else None
+                    parsed_classes.extend(_parse_single_cell_as_class(cell_val))
+
+                if not parsed_classes:
+                    row_text = "  ".join([str(c).strip() for c in cells if c and str(c).lower() != 'nan'])
+                    parsed_classes = _extract_classes_from_text(row_text)
+
+                subject = normalize_subject(subject_raw) if subject_raw else None
+                if not subject and subject_raw:
+                    subject = subject_raw.strip() if subject_raw.strip() else '/'
+                elif not subject:
+                    subject = '/'
+
+                if len(name) < 2 and (parsed_classes or subject != '/'):
+                    row_text = "  ".join([str(c).strip() for c in cells[:class_cols_start] if c and str(c).lower() != 'nan'])
+                    for noise in ['الرقم', 'الأستاذ', 'الرتبة', 'المادة', 'الحجم الساعي', 'الأقسام']:
+                        row_text = row_text.replace(noise, ' ')
+                    name = re.sub(r'\s+', ' ', row_text).strip()
+
+                if len(name) < 2:
+                    continue
+                if not parsed_classes and subject == '/':
+                    continue
+
+                extracted = {'name': name[:200], 'subject': subject, 'classes': list(set(parsed_classes))}
+                _merge_candidate(candidates, extracted)
+
+        if candidates:
+            return candidates
+
         for idx, row in df.iterrows():
             row_cells = [str(x).strip() for x in row.values if str(x).lower() != 'nan' and str(x).strip() != '']
-
             if not row_cells:
                 continue
-
-            # We process cell by cell to group subjects and classes locally
-            # Or we can do a smart line by line join if it's just a simple table.
-            # But the main issue was ffill(axis=1) duplicating data across empty columns.
             row_text = "  ".join(row_cells)
-
-            # Extract basic info
             extracted = _extract_candidate_from_text(row_text)
             if extracted:
                 _merge_candidate(candidates, extracted)
@@ -90,6 +253,18 @@ def extract_from_excel(file_path):
         logger.error(f"Excel Extraction Failed: {e}")
 
     return candidates
+
+
+def _extract_classes_from_text(text):
+    """Helper to extract class codes from joined row text."""
+    found = []
+    raw = re.findall(r'\b\d+\s*(?:M|AM|م|متوسط)\s*\d+\b', text, re.IGNORECASE)
+    for r in raw:
+        found.append(re.sub(r'\s+', ' ', r).strip())
+    word = re.findall(r'\b(?:أولى|ثانية|ثالثة|رابعة|الاولى|الثانية|الثالثة|الرابعة|اولى|ثانيه|ثالثه|رابعه)\s*(?:متوسط)?\s*\d+\b', text)
+    for w in word:
+        found.append(re.sub(r'\s+', ' ', w).strip())
+    return list(set(found))
 
 def extract_from_pdf(file_path):
     """

@@ -344,13 +344,7 @@ def parse_hr_file(file_path, override_header_indices=None):
 
         # Ensure we have minimal data
         if 'last_name' in emp_data or 'first_name' in emp_data:
-            # Generate code if missing
-            if 'employee_code' not in emp_data:
-                ln = emp_data.get('last_name', '')
-                fn = emp_data.get('first_name', '')
-                # Ensure unique seed using row index
-                emp_data['employee_code'] = f"{ln[:3]}{fn[:3]}{i}"
-
+            # لا نولّد الرمز الوظيفي آلياً — مطلوب في الملف لتفادي التكرار
             employees.append(emp_data)
 
     return employees
@@ -393,4 +387,35 @@ def standardize_subject_name(raw_name):
             if v_norm in name.lower():
                 return official_name
 
-    return name # Return cleaned original if no match found
+    return name  # Return cleaned original if no match found
+
+
+def normalize_subject_for_dedup(name):
+    """
+    مفتاح للتجميع: طمس الفروق (فراغ زائد، ة/ه، ى/ي) لدمج المكررات.
+    """
+    if not name:
+        return ""
+    s = str(name).strip()
+    s = re.sub(r'\s+', ' ', s)
+    s = re.sub(r'[إأآا]', 'ا', s)
+    s = s.replace('ة', 'ه').replace('ى', 'ي')
+    return s
+
+
+def get_deduplicated_subjects_from_grades():
+    """مواد من Grade للسنة الحالية (من الإعدادات) مُطبّعة ومجمعة (بدون تكرار)."""
+    from .models import Grade
+    from .school_year_utils import get_current_school_year
+    current_year = get_current_school_year()
+    qs = Grade.objects.filter(academic_year=current_year).values_list('subject', flat=True).distinct()
+    raw = [s for s in qs if s and not str(s).startswith('معدل')]
+    by_key = {}
+    for s in raw:
+        canonical = standardize_subject_name(s) or (s and str(s).strip())
+        if not canonical:
+            continue
+        key = normalize_subject_for_dedup(canonical)
+        if key and key not in by_key:
+            by_key[key] = canonical
+    return sorted(by_key.values(), key=lambda x: (x or ''))

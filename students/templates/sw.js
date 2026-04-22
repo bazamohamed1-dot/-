@@ -1,5 +1,5 @@
 {% load static %}
-const CACHE_NAME = 'school-pwa-v5'; // Bump version
+const CACHE_NAME = 'school-pwa-v13'; // v13: + baza_network.js (localhost دون إنترنت عام)
 const STATIC_ASSETS = [
     '/canteen/',
     '/canteen/dashboard/',
@@ -9,6 +9,8 @@ const STATIC_ASSETS = [
     '/canteen/pending_updates/',
     "{% static 'manifest.json' %}",
     "{% static 'images/logo.png' %}",
+    "{% static 'js/clear_app_storage.js' %}",
+    "{% static 'js/baza_network.js' %}",
     "{% static 'js/auth_manager.js' %}",
     "{% static 'js/offline_manager.js' %}",
     "{% static 'js/dexie.min.js' %}",
@@ -16,14 +18,14 @@ const STATIC_ASSETS = [
     "{% static 'js/browser-image-compression.js' %}",
     "{% static 'js/html5-qrcode.min.js' %}",
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
+    'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap',
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css'
 ];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             console.log('[Service Worker] Pre-caching offline pages');
-            // Use addAll with error handling to avoid one failure breaking everything
             return Promise.all(
                 STATIC_ASSETS.map(url => {
                     return cache.add(url).catch(err => console.warn('Failed to cache:', url, err));
@@ -48,99 +50,89 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
+function isSameOrigin(url) {
+    return url.origin === self.location.origin;
+}
+
 self.addEventListener('fetch', (event) => {
-    // Ignore non-HTTP(S) schemes (like chrome-extension://) to prevent Cache API TypeError
-    if (!event.request.url.startsWith('http')) {
-        return;
-    }
-
-    // 0. Bypass caching for Analytics and dynamic views (always need fresh data from server)
-    if (event.request.url.includes('/analytics/') || event.request.url.includes('/hr/') || event.request.url.includes('/mapping/') || event.request.url.includes('/dashboard/')) {
-        // To be extra safe, send no-cache headers in fetch
-        event.respondWith(
-            fetch(event.request, { cache: "no-store" })
-        );
-        return;
-    }
-
-    // 1. Handle Navigation Requests (HTML Pages)
-    if (event.request.mode === 'navigate') {
-        if (event.request.url.includes('/hr/') || event.request.url.includes('/analytics/') || event.request.url.includes('/dashboard/')) {
-            event.respondWith(fetch(event.request, { cache: "no-store" }));
-            return;
-        }
-
-        event.respondWith(
-            fetch(event.request)
-                .then((response) => {
-                    // Clone response BEFORE usage
-                    const responseToCache = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
-                    });
-                    return response;
-                })
-                .catch(() => {
-                    return caches.match(event.request)
-                        .then((response) => {
-                            if(response) return response;
-                            // Fallback to landing if specific page not cached
-                            return caches.match('/canteen/');
-                        });
-                })
-        );
-        return;
-    }
-
-    // IGNORE POST/PUT/DELETE
     if (event.request.method !== 'GET') {
         return;
     }
 
-    // 2. Handle GET API Requests (Data) - Network First, Cache Fallback
-    // This ensures we always try to get fresh data (like student lists) but fallback if offline.
-    if (event.request.url.includes('/api/') || event.request.url.includes('/canteen/')) {
-         // Do not cache API endpoints or dynamic dashboards with POST dependencies
-         if (event.request.url.includes('/hr/') || event.request.url.includes('/analytics/')) {
-              event.respondWith(fetch(event.request));
-              return;
-         }
+    const url = new URL(event.request.url);
 
-         event.respondWith(
-            fetch(event.request)
-                .then((response) => {
-                    // Check valid response
-                    if(!response || response.status !== 200 || response.type !== 'basic') {
-                        return response;
+    // موارد خارجية (خطوط، CDN): من الـ cache إن وُجد ثم الشبكة
+    if (!isSameOrigin(url)) {
+        event.respondWith(
+            caches.match(event.request).then((cached) => {
+                if (cached) return cached;
+                return fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.ok) {
+                        const copy = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
                     }
-
-                    const responseToCache = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
-                    });
-                    return response;
-                })
-                .catch(() => {
-                    return caches.match(event.request);
-                })
+                    return networkResponse;
+                });
+            })
         );
         return;
     }
 
-    // 3. Handle Static Assets (Images, JS, CSS) - Cache First or Stale-While-Revalidate
-    // For simplicity and speed, we use Stale-While-Revalidate
+    // واجهات API والمصادقة: دائماً للشبكة (الأوفلاين يُدار من التطبيق + IndexedDB)
+    if (url.pathname.includes('/api/') || url.pathname.includes('/auth/')) {
+        return;
+    }
+
+    const accept = event.request.headers.get('accept') || '';
+    const isNavigate = event.request.mode === 'navigate' || accept.includes('text/html');
+
+    if (isNavigate) {
+        event.respondWith(
+            fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse && networkResponse.ok) {
+                        const copy = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            try {
+                                cache.put(event.request, copy);
+                            } catch (e) {
+                                console.warn('[SW] cache.put navigate failed', e);
+                            }
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() =>
+                    caches.match(event.request).then(
+                        (cached) =>
+                            cached ||
+                            caches.match('/canteen/') ||
+                            caches.match('/canteen/dashboard/')
+                    )
+                )
+        );
+        return;
+    }
+
+    // باقي GET (static، صور، …): stale-while-revalidate
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            const fetchPromise = fetch(event.request).then((networkResponse) => {
-                if(networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-                     const responseToCache = networkResponse.clone();
-                     caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
-                    });
-                }
-                return networkResponse;
-            }).catch(e => cachedResponse); // If offline and cached, return cached
-            return cachedResponse || fetchPromise;
+        caches.match(event.request).then((cached) => {
+            const networkFetch = fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse && networkResponse.ok) {
+                        const copy = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            try {
+                                cache.put(event.request, copy);
+                            } catch (e) {
+                                console.warn('[SW] cache.put asset failed', e);
+                            }
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => cached);
+            return cached || networkFetch;
         })
     );
 });

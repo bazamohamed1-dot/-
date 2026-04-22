@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f766e;stop-opacity:1"/>
+      <stop offset="50%" style="stop-color:#047857;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#134e4a;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+  <rect width="800" height="400" fill="url(#g)"/>
+  <ellipse cx="400" cy="260" rx="220" ry="95" fill="#fef3c7" opacity="0.25" filter="url(#blur)"/>
+  <ellipse cx="400" cy="250" rx="180" ry="70" fill="#fcd34d" opacity="0.2"/>
+  <circle cx="280" cy="120" r="40" fill="#86efac" opacity="0.35"/>
+  <circle cx="520" cy="100" r="35" fill="#fde047" opacity="0.3"/>
+  <circle cx="620" cy="200" r="28" fill="#fca5a5" opacity="0.28"/>
+  <circle cx="180" cy="200" r="32" fill="#93c5fd" opacity="0.28"/>
+  <path d="M360 180 L440 180 L420 230 L380 230 Z" fill="#fef9c3" opacity="0.35"/>
+  <path d="M390 140 L410 140 L405 175 L395 175 Z" fill="#e2e8f0" opacity="0.4"/>
+</svg>

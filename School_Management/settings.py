@@ -187,9 +187,10 @@ if EMAIL_HOST:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Cache Control - Force reload on every request if DEBUG is True
+# Cache Control - Disable full-page caching to ensure updates appear immediately
+# (API and dynamic content must always be fresh; static files use whitenoise)
+CACHE_MIDDLEWARE_SECONDS = 0
 if DEBUG:
-    CACHE_MIDDLEWARE_SECONDS = 0
     WHITENOISE_MAX_AGE = 0
 
 # Increase Data Upload Limits to 10MB to handle large Base64 photo payloads

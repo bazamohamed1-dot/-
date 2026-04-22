@@ -68,6 +68,10 @@ def class_mapping_view(request):
                             emp.subject = ""
                             emp.save(update_fields=['subject'])
 
+                        emp.refresh_from_db()
+                        tas = TeacherAssignment.objects.filter(teacher=emp)
+                        emp.analytics_assignments = [{'subject': ta.subject, 'classes': list(ta.classes or [])} for ta in tas]
+                        emp.save(update_fields=['analytics_assignments'])
 
             return JsonResponse({'status': 'success'})
         except Exception as e:

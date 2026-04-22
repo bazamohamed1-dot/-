@@ -40,6 +40,8 @@ urlpatterns = [
 
     # QR Generation
     path('api/generate_qr/', qr_views.generate_user_qr, name='generate_user_qr'),
+    path('api/openrouter/balance/', ui_views.api_openrouter_balance, name='api_openrouter_balance'),
+    path('api/offline/bootstrap/', auth_views.offline_bootstrap, name='offline_bootstrap'),
 
     path('api/students/filters/', views.student_filters, name='student_filters'),
     path('api/', include(router.urls)),
@@ -65,6 +67,9 @@ urlpatterns = [
     path('delete_attendance/', views.delete_attendance, name='delete_attendance'),
     path('attendance_lists/', views.get_attendance_lists, name='attendance_lists'),
     path('export_canteen/', views.export_canteen_sheet, name='export_canteen'),
+    path('meal_plans/', views.canteen_meal_plans, name='canteen_meal_plans'),
+    path('daily_summary/', views.canteen_daily_summary, name='canteen_daily_summary'),
+    path('export_canteen_stats/', views.export_canteen_stats_excel, name='export_canteen_stats'),
 
     # Library API
     path('library/scan/', views.scan_library_card, name='library_scan'),
@@ -82,6 +87,7 @@ urlpatterns = [
 
     # New Interfaces
     path('hr/', ui_views.hr_home, name='hr_home'),
+    path('hr/assignments_api/', ui_views.get_all_hr_assignments_api, name='get_all_hr_assignments_api'),
     path('hr/assignment_match/', ui_views.assignment_matching_view, name='assignment_matching_view'),
     path('hr/mapping/', mapping_views.class_mapping_view, name='class_mapping_view'),
     path('hr/<int:pk>/delete/', ui_views.hr_delete, name='hr_delete'),
@@ -102,6 +108,10 @@ urlpatterns = [
     path('analytics/upload_grades_ajax/', ui_views.upload_grades_ajax, name='upload_grades_ajax'),
     path('analytics/rename_subject_ajax/', ui_views.rename_subject_ajax, name='rename_subject_ajax'),
     path('analytics/delete_subject_ajax/', ui_views.delete_subject_ajax, name='delete_subject_ajax'),
+    path('analytics/add_subject_exemption_rule_ajax/', ui_views.add_subject_exemption_rule_ajax, name='add_subject_exemption_rule_ajax'),
+    path('analytics/delete_subject_exemption_rule_ajax/', ui_views.delete_subject_exemption_rule_ajax, name='delete_subject_exemption_rule_ajax'),
+    path('analytics/save_award_thresholds_ajax/', ui_views.save_award_thresholds_ajax, name='save_award_thresholds_ajax'),
+    path('analytics/teacher_assignments/', ui_views.get_teacher_assignments_api, name='get_teacher_assignments_api'),
     path('analytics/save_analytics_teacher_assignment/', ui_views.save_analytics_teacher_assignment, name='save_analytics_teacher_assignment'),
     path('analytics/advanced/', ui_views.advanced_analytics_view, name='advanced_analytics_view'),
     path('analytics/gauss_data/', ui_views.get_gauss_data, name='get_gauss_data'),
@@ -110,9 +120,17 @@ urlpatterns = [
 
     # Expert Analysis (الخبراء)
     path('analytics/expert/', expert_views.expert_analysis_view, name='expert_analysis_view'),
+    path('analytics/expert/delete/<int:run_id>/', expert_views.expert_delete_run, name='expert_delete_run'),
     path('api/expert/run/', expert_api_views.api_expert_run, name='api_expert_run'),
+    path('api/expert/run_status/', expert_api_views.api_expert_run_status, name='api_expert_run_status'),
     path('api/expert/data/', expert_api_views.api_expert_data, name='api_expert_data'),
+    path('api/expert/student_term_grades/', expert_api_views.api_expert_student_term_grades, name='api_expert_student_term_grades'),
+    path('analytics/expert/export/', expert_views.expert_export_excel, name='expert_export_excel'),
     path('api/expert/generate_report/', expert_api_views.api_expert_generate_report, name='api_expert_generate_report'),
     path('api/expert/available_years/', expert_api_views.api_expert_available_years, name='api_expert_available_years'),
+    path('api/expert/imported_files_by_year/', expert_api_views.api_expert_imported_files_by_year, name='api_expert_imported_files_by_year'),
+    path('api/expert/historical_year_content/', expert_api_views.api_expert_historical_year_content, name='api_expert_historical_year_content'),
+    path('api/expert/subject_coefficients/', expert_api_views.api_expert_get_subject_coefficients, name='api_expert_get_subject_coefficients'),
+    path('api/expert/subject_coefficients/save/', expert_api_views.api_expert_save_subject_coefficients, name='api_expert_save_subject_coefficients'),
     path('api/expert/import_historical/', expert_api_views.api_import_historical_expert_data, name='api_import_historical_expert_data'),
 ]

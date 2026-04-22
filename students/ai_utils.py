@@ -9,113 +9,209 @@ from PyPDF2 import PdfReader
 from docx import Document
 from bs4 import BeautifulSoup
 
-# Provider Libraries
 try:
-    from google import genai
-    HAS_GEMINI = True
-except ImportError:
-    HAS_GEMINI = False
-
-try:
-    from groq import Groq
-    HAS_GROQ = True
-except ImportError:
-    HAS_GROQ = False
-
-try:
-    import anthropic
-    HAS_CLAUDE = True
-except ImportError:
-    HAS_CLAUDE = False
-
-try:
-    import requests # Required for OpenRouter fallback
+    import requests
     HAS_OPENROUTER = True
 except ImportError:
     HAS_OPENROUTER = False
 
 logger = logging.getLogger(__name__)
 
+# OpenRouter: نموذج DeepSeek عبر الاشتراك
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "deepseek/deepseek-chat"
+
+
 class AIService:
     """
-    Advanced AI Service with Multi-Provider Fallback (OpenRouter -> Google -> Groq -> Claude).
-    Updated to use `google-genai` (Official v1 SDK).
+    خدمة الذكاء الاصطناعي عبر OpenRouter فقط (نموذج DeepSeek).
+    يستخدم المفتاح OPENROUTER_API_KEY من متغيرات البيئة أو ملف .env.
     """
 
     def __init__(self, user=None):
         self.user = user
-        self.settings = SchoolSettings.objects.first()
-
-        # Load API Keys
+        self.settings = SchoolSettings.objects.first() if SchoolSettings.objects.exists() else None
         self.openrouter_keys = self._load_keys("OPENROUTER_API_KEY")
-        self.gemini_keys = self._load_keys("GOOGLE_API_KEY")
-        self.groq_keys = self._load_keys("GROQ_API_KEY")
-        self.claude_keys = self._load_keys("ANTHROPIC_API_KEY")
-
-        # Models Config
-        self.models_config = {
-            'openrouter': [
-                'deepseek/deepseek-chat', # Explicitly using DeepSeek via OpenRouter (paid, stable)
-            ],
-            # Try 2.0 first (Fastest), then 1.5-flash (Stable), then Pro
-            'gemini': ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-            # Updated to use currently active Groq models (removed decommissioned models)
-            'groq': ['llama3-8b-8192', 'gemma2-9b-it'],
-            'claude': ['claude-3-haiku-20240307']
-        }
-
-    def get_openrouter_balance(self):
-        """Fetches the current remaining credit balance from OpenRouter."""
-        if not self.openrouter_keys:
-            return None
-
-        # OpenRouter auth key endpoint caches results to avoid rate limits, so it's safe to call.
-        cache_key = "openrouter_balance"
-        cached_balance = cache.get(cache_key)
-        if cached_balance is not None:
-            return cached_balance
-
-        key = self.openrouter_keys[0]
-        try:
-            response = requests.get(
-                "https://openrouter.ai/api/v1/auth/key",
-                headers={"Authorization": f"Bearer {key}"},
-                timeout=5
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if 'data' in data:
-                    limit = data['data'].get('limit')
-                    usage = data['data'].get('usage')
-                    limit_remaining = data['data'].get('limit_remaining')
-
-                    balance = None
-                    if limit_remaining is not None:
-                        balance = float(limit_remaining)
-                    elif limit is not None and usage is not None:
-                        # Some OpenRouter API versions return limit and usage instead of limit_remaining
-                        balance = float(limit) - float(usage)
-
-                    if balance is not None:
-                        balance = round(balance, 4)
-                        cache.set(cache_key, balance, timeout=300)
-                        return balance
-        except Exception as e:
-            logger.error(f"Failed to fetch OpenRouter balance: {e}")
-
-        return None
+        # مفتاح الإدارة (Management Key) لقراءة الرصيد من /credits
+        self.openrouter_mgmt_keys = self._load_keys("OPENROUTER_MANAGEMENT_KEY")
 
     def _load_keys(self, prefix):
         keys = []
         k1 = os.environ.get(prefix)
-        if k1 and k1.strip(): keys.append(k1.strip().strip("'").strip('"'))
+        if k1 and k1.strip():
+            keys.append(k1.strip().strip("'").strip('"'))
         i = 2
         while True:
             k = os.environ.get(f"{prefix}_{i}")
-            if not k or not k.strip(): break
+            if not k or not k.strip():
+                break
             keys.append(k.strip().strip("'").strip('"'))
             i += 1
         return keys
+
+    def get_openrouter_balance(self):
+        """رصيد OpenRouter (المتبقي من الاعتماد). واجهة الصحيح: GET /api/v1/key"""
+        if not self.openrouter_keys or not HAS_OPENROUTER:
+            return None
+        cache_key = "openrouter_balance"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        key = self.openrouter_keys[0]
+        try:
+            resp = requests.get(
+                "https://openrouter.ai/api/v1/key",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.warning("OpenRouter key endpoint returned %s: %s", resp.status_code, resp.text[:300])
+                return None
+            data = resp.json()
+            # الاستجابة تحتوي على data: { limit_remaining, limit, usage, ... }
+            info = data.get("data") if isinstance(data.get("data"), dict) else data
+            if not info:
+                return None
+            limit_remaining = info.get("limit_remaining")
+            if limit_remaining is not None:
+                try:
+                    balance = round(float(limit_remaining), 4)
+                    cache.set(cache_key, balance, timeout=300)
+                    return balance
+                except (TypeError, ValueError):
+                    pass
+            limit = info.get("limit")
+            usage = info.get("usage")
+            if limit is not None and usage is not None:
+                try:
+                    balance = round(float(limit) - float(usage), 4)
+                    cache.set(cache_key, balance, timeout=300)
+                    return balance
+                except (TypeError, ValueError):
+                    pass
+        except requests.RequestException as e:
+            logger.warning("OpenRouter balance request failed: %s", e)
+        except Exception as e:
+            logger.exception("OpenRouter balance error: %s", e)
+        return None
+
+    def get_openrouter_balance_info(self):
+        """
+        معلومات الرصيد مع تشخيص واضح لواجهة لوحة القيادة.
+        Returns: { ok: bool, balance: float|None, message: str, key_present: bool }
+        """
+        key_present = bool(self.openrouter_keys and self.openrouter_keys[0])
+        mgmt_present = bool(self.openrouter_mgmt_keys and self.openrouter_mgmt_keys[0])
+        if not HAS_OPENROUTER:
+            return {'ok': False, 'balance': None, 'message': 'مكتبة requests غير متوفرة في الخادم.', 'key_present': key_present}
+        if not key_present and not mgmt_present:
+            return {'ok': False, 'balance': None, 'message': 'لم يتم ضبط مفاتيح OpenRouter في ملف .env (OPENROUTER_API_KEY أو OPENROUTER_MANAGEMENT_KEY).', 'key_present': False}
+
+        cache_key_info = "openrouter_balance_info"
+        cache_key_balance = "openrouter_balance"
+        cached = cache.get(cache_key_info)
+        if cached and isinstance(cached, dict) and 'ok' in cached:
+            return cached
+
+        # (1) الأفضل: /api/v1/credits يحتاج Management Key (يرجع total_credits و total_usage)
+        if mgmt_present:
+            mgmt_key = self.openrouter_mgmt_keys[0]
+            try:
+                resp = requests.get(
+                    "https://openrouter.ai/api/v1/credits",
+                    headers={
+                        "Authorization": f"Bearer {mgmt_key}",
+                        "Accept": "application/json",
+                        "X-Title": "baza-app",
+                        "User-Agent": "baza-app/1.0",
+                    },
+                    timeout=12,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    info_obj = data.get("data") if isinstance(data.get("data"), dict) else data
+                    total_credits = info_obj.get("total_credits")
+                    total_usage = info_obj.get("total_usage")
+                    if total_credits is not None and total_usage is not None:
+                        balance = round(float(total_credits) - float(total_usage), 4)
+                        cache.set(cache_key_balance, balance, timeout=300)
+                        info = {'ok': True, 'balance': balance, 'message': 'تم تحديث الرصيد (credits).', 'key_present': True, 'stale': False}
+                        cache.set(cache_key_info, info, timeout=180)
+                        return info
+                elif resp.status_code in (401, 403):
+                    # سنكمل بالـ API key endpoint كخطة بديلة
+                    pass
+                else:
+                    # 5xx: حاول عرض آخر رصيد معروف
+                    if resp.status_code >= 500:
+                        last_bal = cache.get(cache_key_balance)
+                        if last_bal is not None:
+                            info = {'ok': True, 'balance': last_bal, 'message': f"تعذر جلب الرصيد الآن (credits HTTP {resp.status_code}). تم عرض آخر رصيد معروف.", 'key_present': True, 'stale': True}
+                            cache.set(cache_key_info, info, timeout=60)
+                            return info
+            except requests.RequestException:
+                # نكمل للخطة البديلة
+                pass
+
+        # (2) بديل: /api/v1/key (قد لا يعكس الرصيد الحقيقي أو قد يتعطل)
+        if not key_present:
+            return {'ok': False, 'balance': None, 'message': 'لإظهار الرصيد بدقة، أنشئ Management Key في OpenRouter وضعه في OPENROUTER_MANAGEMENT_KEY داخل .env.', 'key_present': False}
+
+        key = self.openrouter_keys[0]
+        try:
+            resp = requests.get(
+                "https://openrouter.ai/api/v1/key",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Accept": "application/json",
+                    "X-Title": "baza-app",
+                    "User-Agent": "baza-app/1.0",
+                },
+                timeout=12,
+            )
+            if resp.status_code != 200:
+                # إن كان الخلل من جهة OpenRouter (5xx) نحاول إرجاع آخر رصيد معروف من الكاش بدل إظهار N/A
+                if resp.status_code >= 500:
+                    last_bal = cache.get(cache_key_balance)
+                    if last_bal is not None:
+                        info = {
+                            'ok': True,
+                            'balance': last_bal,
+                            'message': f"تعذر جلب الرصيد الآن (OpenRouter HTTP {resp.status_code}). تم عرض آخر رصيد معروف.",
+                            'key_present': True,
+                            'stale': True,
+                        }
+                        cache.set(cache_key_info, info, timeout=60)
+                        return info
+                msg = f"فشل جلب الرصيد من OpenRouter (HTTP {resp.status_code})."
+                if resp.status_code in (401, 403):
+                    msg += " المفتاح غير صالح أو لا يملك صلاحية."
+                if not mgmt_present:
+                    msg += " ملاحظة: لعرض الرصيد بدقة وثبات، استعمل OPENROUTER_MANAGEMENT_KEY مع /credits."
+                info = {'ok': False, 'balance': None, 'message': msg, 'key_present': True}
+                cache.set(cache_key_info, info, timeout=120)
+                return info
+
+            data = resp.json()
+            info_obj = data.get("data") if isinstance(data.get("data"), dict) else data
+            limit_remaining = info_obj.get("limit_remaining")
+            if limit_remaining is None:
+                limit = info_obj.get("limit")
+                usage = info_obj.get("usage")
+                if limit is not None and usage is not None:
+                    limit_remaining = float(limit) - float(usage)
+            balance = round(float(limit_remaining), 4) if limit_remaining is not None else None
+            info = {'ok': balance is not None, 'balance': balance, 'message': 'تم تحديث الرصيد.', 'key_present': True, 'stale': False}
+            cache.set(cache_key_info, info, timeout=180)
+            return info
+        except requests.RequestException as e:
+            info = {'ok': False, 'balance': None, 'message': f"تعذر الاتصال بـ OpenRouter: {e}", 'key_present': True}
+            cache.set(cache_key_info, info, timeout=120)
+            return info
+        except Exception:
+            info = {'ok': False, 'balance': None, 'message': "حدث خطأ داخلي أثناء جلب الرصيد.", 'key_present': True}
+            cache.set(cache_key_info, info, timeout=120)
+            return info
 
     def get_rag_context(self, query):
         keywords = query.split()
@@ -125,21 +221,17 @@ class AIService:
 
     def generate_response(self, system_instruction, user_query, rag_enabled=True, mode=None, page_context=None):
         if mode == 'bot_helper':
-            # Enhance system instruction for the bot helper specifically
             enhanced_instruction = "أنت مساعد ذكي مدمج في واجهة تطبيق تسيير مدرسة جزائرية (مسار). هدفك هو إرشاد المستخدم ومساعدته في فهم الشاشة الحالية أو الإجابة على أسئلته باختصار ووضوح."
             if page_context:
                 enhanced_instruction += f"\n\nالمستخدم يتواجد حالياً في الصفحة/الرابط التالي: {page_context}\nقدم إجابتك بناءً على هذا السياق إذا كان السؤال غير واضح."
             system_instruction = enhanced_instruction
-            # Disable RAG for simple UI helper queries to save tokens unless specifically needed
             rag_enabled = False
 
         context = ""
         if rag_enabled:
             context = self.get_rag_context(user_query)
 
-        # Mode-specific directives
         directives = "- Concise for greetings. Detailed for plans."
-
         prompt = f"""
         Role: School Director Consultant.
         Context: {system_instruction}
@@ -148,70 +240,33 @@ class AIService:
         Directives: {directives}
         """
 
-        # Caching logic
-        # Hash the prompt to create a unique and manageable key
         prompt_hash = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
         cache_key = f"ai_response_{prompt_hash}"
-
         cached_response = cache.get(cache_key)
         if cached_response:
             return cached_response
 
-        # We will track if we hit an INSUFFICIENT_FUNDS_ERROR
-        insufficient_funds = False
         final_response = None
+        insufficient_funds = False
+        last_error = None
 
-        # 1. OpenRouter (High Free Tier)
         if self.openrouter_keys and HAS_OPENROUTER:
-            resp = self._try_openrouter(prompt)
-            if resp == "INSUFFICIENT_FUNDS_ERROR":
-                insufficient_funds = True
-            elif resp:
-                final_response = resp
-
-        # Fallbacks (Only trigger if OpenRouter wasn't explicitly out of funds)
-        if not final_response and not insufficient_funds:
-            # 2. Google Gemini (v1 SDK)
-            if self.gemini_keys and HAS_GEMINI:
-                resp = self._try_gemini_v1(prompt)
-                if resp: final_response = resp
-
-            # 3. Groq
-            if not final_response and self.groq_keys and HAS_GROQ:
-                resp = self._try_groq(prompt)
-                if resp: final_response = resp
-
-            # 4. Claude
-            if not final_response and self.claude_keys and HAS_CLAUDE:
-                resp = self._try_claude(prompt)
-                if resp: final_response = resp
+            final_response, insufficient_funds, last_error = self._try_openrouter(prompt)
 
         if final_response:
-            # Cache the successful response for 2 days (172800 seconds)
             cache.set(cache_key, final_response, timeout=172800)
             return final_response
 
-        # Error handling
         if insufficient_funds:
             return "INSUFFICIENT_FUNDS_ERROR"
-
-        # If we got here, all providers failed. Let's try to get the last error from OpenRouter for debugging
-        last_or_error = getattr(self, '_last_openrouter_error', None)
-        if last_or_error:
-            return f"⚠️ عذراً، فشل الاتصال بالذكاء الاصطناعي.\nالسبب من خادم OpenRouter:\n{last_or_error}"
-
-        # Detailed Failure Message
-        return "⚠️ عذراً، لم أتمكن من الاتصال بأي خادم (OpenRouter, Google, Groq, Claude). يرجى التأكد من صحة المفاتيح في ملف .env ومن اتصال الإنترنت."
+        if last_error:
+            return f"⚠️ عذراً، فشل الاتصال بالذكاء الاصطناعي (OpenRouter).\nالسبب: {last_error}"
+        return "⚠️ عذراً، لم أتمكن من الاتصال بـ OpenRouter. يرجى التأكد من صحة المفتاح OPENROUTER_API_KEY في ملف .env ومن اتصال الإنترنت."
 
     def _handle_bot_helper_local(self, query):
-        """
-        Local, purely offline helper without using AI APIs.
-        Provides detailed mapping and answers based on simple keyword matching.
-        """
         import re
         q = query.lower()
 
-        # Responses logic
         if re.search(r'(إضافة|جديد|تسجيل)\s*(تلميذ|طالب|متعلم)', q):
             return "لإضافة تلميذ جديد: اذهب إلى 'تسيير التلاميذ' من القائمة الجانبية، انزل إلى أسفل نموذج الإدخال واضغط على زر 'جديد' (الأخضر)، ثم املأ البيانات واضغط 'حفظ'."
 
@@ -254,148 +309,59 @@ class AIService:
         return "عذراً، لم أفهم سؤالك. يرجى سؤالي عن وظيفة محددة في التطبيق مثل: 'كيف أضيف تلميذ؟'، 'كيف أعدل الإسناد؟'، أو 'كيف أطبع البطاقات؟'."
 
     def _try_openrouter(self, prompt):
+        """استدعاء OpenRouter (نموذج DeepSeek). يُرجع (response_text, insufficient_funds, last_error)."""
         keys = list(self.openrouter_keys)
         random.shuffle(keys)
         last_error = None
 
-        models = self.models_config['openrouter'] # ['deepseek/deepseek-chat']
-
-        for key in keys:
-            for model in models:
-                try:
-                    response = requests.post(
-                        url="https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {key}",
-                            "HTTP-Referer": "http://localhost", # Required by OpenRouter
-                            "X-Title": "School Management Agent", # Required by OpenRouter
-                        },
-                        json={
-                            "model": model,
-                            "messages": [
-                                {"role": "user", "content": prompt}
-                            ]
-                        },
-                        timeout=30 # Increased timeout for deepseek
-                    )
-
-                    if response.status_code == 200:
-                        data = response.json()
-                        if "choices" in data and len(data["choices"]) > 0:
-                            return data["choices"][0]["message"]["content"]
-                    else:
-                        # Parse OpenRouter specific errors (like 402 Payment Required)
-                        last_error = f"HTTP {response.status_code}: {response.text}"
-
-                        # Return special token if insufficient funds/payment issue
-                        # OpenRouter returns 402 for no credits, or sometimes 403
-                        if response.status_code == 402 or "insufficient_quota" in response.text.lower() or "balance" in response.text.lower():
-                            return "INSUFFICIENT_FUNDS_ERROR"
-
-                        print(f"OpenRouter Error ({model}): {last_error}")
-                        logger.warning(f"OpenRouter Error ({model}): {last_error}")
-                except Exception as e:
-                    last_error = str(e)
-                    print(f"OpenRouter Request Exception ({model}): {e}")
-                    logger.warning(f"OpenRouter Request Exception ({model}): {e}")
-                    continue
-
-        # If we exhausted all keys and models, return detailed error for debugging
-        if last_error:
-            logger.error(f"All OpenRouter attempts failed. Last error: {last_error}")
-            self._last_openrouter_error = last_error
-
-        return None
-
-    def _try_gemini_v1(self, prompt):
-        """Uses new google-genai SDK"""
-        if not self.gemini_keys:
-            logger.warning("No Google Keys Found")
-            return None
-
-        keys = list(self.gemini_keys)
-        random.shuffle(keys)
-
         for key in keys:
             try:
-                # Initialize Client per key
-                client = genai.Client(api_key=key)
-
-                for model in self.models_config['gemini']:
-                    try:
-                        # New SDK Call
-                        response = client.models.generate_content(
-                            model=model,
-                            contents=prompt
-                        )
-                        if response and response.text:
-                            return response.text
-                    except Exception as e:
-                        error_msg = f"Gemini V1 Fail ({model}) key=...{key[-4:]}: {e}"
-                        print(error_msg) # Force Print
-                        logger.warning(error_msg)
-                        continue
+                resp = requests.post(
+                    OPENROUTER_URL,
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "http://localhost",
+                        "X-Title": "School Management Agent",
+                    },
+                    json={
+                        "model": OPENROUTER_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                    timeout=60,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if "choices" in data and len(data["choices"]) > 0:
+                        return data["choices"][0]["message"]["content"], False, None
+                else:
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                    if resp.status_code == 402 or "insufficient_quota" in resp.text.lower() or "balance" in resp.text.lower():
+                        return None, True, last_error
+                    logger.warning("OpenRouter API error: %s", last_error)
             except Exception as e:
-                error_msg = f"Gemini Client Init Error for key=...{key[-4:]}: {e}"
-                print(error_msg)
-                logger.error(error_msg)
-        return None
-
-    def _try_groq(self, prompt):
-        keys = list(self.groq_keys)
-        random.shuffle(keys)
-        for key in keys:
-            try:
-                client = Groq(api_key=key)
-                for model in self.models_config['groq']:
-                    try:
-                        chat_completion = client.chat.completions.create(
-                            messages=[{"role": "user", "content": prompt}],
-                            model=model,
-                        )
-                        return chat_completion.choices[0].message.content
-                    except Exception as e:
-                        logger.warning(f"Groq Fail ({model}): {e}")
-                        continue
-            except Exception as e:
-                logger.error(f"Groq Client Error: {e}")
+                last_error = str(e)
+                logger.warning("OpenRouter request exception: %s", e)
                 continue
-        return None
 
-    def _try_claude(self, prompt):
-        keys = list(self.claude_keys)
-        random.shuffle(keys)
-        for key in keys:
-            try:
-                client = anthropic.Anthropic(api_key=key)
-                for model in self.models_config['claude']:
-                    try:
-                        msg = client.messages.create(
-                            model=model, max_tokens=1024,
-                            messages=[{"role": "user", "content": prompt}]
-                        )
-                        return msg.content[0].text
-                    except Exception as e:
-                        logger.warning(f"Claude Fail ({model}): {e}")
-                        continue
-            except Exception as e:
-                logger.error(f"Claude Client Error: {e}")
-                continue
-        return None
+        return None, False, last_error
 
-# Stub
-def analyze_assignment_document(a): pass
-def analyze_global_assignment(f): pass
 
-# Global AI Assignment Analysis
+def analyze_assignment_document(a):
+    pass
+
+
+def analyze_global_assignment(f):
+    pass
+
+
 def analyze_global_assignment_content(file_path):
     from students.utils_tools.smart_assignment_analyzer import extract_from_excel, extract_from_word, extract_from_pdf
     ext = os.path.splitext(file_path)[1].lower()
 
     raw_text = ""
-    # Attempt simple local extraction first based on type
     if ext in ['.xlsx', '.xls']:
-        return extract_from_excel(file_path) # Excel is usually tabular and well-handled locally
+        return extract_from_excel(file_path)
     elif ext == '.docx':
         from docx import Document
         try:
@@ -404,32 +370,32 @@ def analyze_global_assignment_content(file_path):
             for table in doc.tables:
                 for row in table.rows:
                     raw_text += " | ".join([cell.text for cell in row.cells]) + "\n"
-        except: pass
+        except Exception:
+            pass
     elif ext == '.pdf':
         try:
             import pdfplumber
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
                     raw_text += (page.extract_text() or "") + "\n"
-        except: pass
+        except Exception:
+            pass
     elif ext in ['.jpg', '.jpeg', '.png', '.webp']:
-        # If OCR is required in the future, it goes here.
-        # For now, we will rely on Gemini Vision if keys are available, otherwise text extraction
         pass
     else:
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 raw_text = f.read()
-        except: pass
+        except Exception:
+            pass
 
-    # If local parser failed or it's a file type that needs deep analysis
     if not raw_text.strip():
-        # Fallback to local old parsing if no text extracted
-        if ext == '.docx': return extract_from_word(file_path)
-        if ext == '.pdf': return extract_from_pdf(file_path)
+        if ext == '.docx':
+            return extract_from_word(file_path)
+        if ext == '.pdf':
+            return extract_from_pdf(file_path)
         return []
 
-    # Send to DeepSeek (or Fallback AI) via AIService
     ai = AIService()
     prompt = f"""
     قم بتحليل النص التالي المستخرج من جدول استعمال الزمن أو قائمة إسناد الأساتذة في مدرسة.
@@ -452,19 +418,15 @@ def analyze_global_assignment_content(file_path):
     {raw_text[:8000]}
     """
 
-    # Force OpenRouter (DeepSeek) or fallback
     response = ai.generate_response("أنت خبير في تحليل البيانات المدرسية وصياغتها بـ JSON دقيق.", prompt, rag_enabled=False)
 
     import json
     import re
     if response and response != "INSUFFICIENT_FUNDS_ERROR" and not response.startswith("⚠️"):
-        # Clean JSON markdown blocks if generated
         clean_json = re.sub(r'```json\s*', '', response)
         clean_json = re.sub(r'```\s*', '', clean_json).strip()
-
         try:
             candidates = json.loads(clean_json)
-            # Normalize to ensure standard structure
             normalized = []
             for c in candidates:
                 if isinstance(c, dict) and 'name' in c and 'classes' in c:
@@ -476,10 +438,10 @@ def analyze_global_assignment_content(file_path):
             if normalized:
                 return normalized
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse AI JSON response: {e}\nResponse: {clean_json}")
+            logger.error("Failed to parse AI JSON response: %s\nResponse: %s", e, clean_json[:500])
 
-    # Ultimate fallback if AI fails
-    if ext == '.docx': return extract_from_word(file_path)
-    if ext == '.pdf': return extract_from_pdf(file_path)
-
+    if ext == '.docx':
+        return extract_from_word(file_path)
+    if ext == '.pdf':
+        return extract_from_pdf(file_path)
     return []

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-sys-v5-dexie';
+const CACHE_NAME = 'school-sys-v6-baza-net';
 const ASSETS_TO_CACHE = [
     '/canteen/',  // Landing
     '/canteen/dashboard/',
@@ -7,6 +7,7 @@ const ASSETS_TO_CACHE = [
     '/canteen/management/',
     '/canteen/list/',
     '/canteen/archive/',
+    '/static/js/baza_network.js',
     '/static/js/auth_manager.js',
     '/static/js/offline_manager.js',
     '/static/manifest.json',

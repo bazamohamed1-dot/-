@@ -305,6 +305,46 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+/** يطابق مفتاح Dexie في offline_manager.js */
+const OFFLINE_BOOTSTRAP_CACHE_KEY = 'offline_bootstrap_v1';
+const STUDENTS_PAGE_SIZE = 20;
+
+function _normStudentSearch(s) {
+    return (s || '').toString().toLowerCase();
+}
+
+/** عند انقطاع الشبكة دون cache صفحة: بناء القائمة من نسخة bootstrap المحفوظة */
+async function tryLoadStudentsFromBootstrapPage(page, level, className, search) {
+    if (!window.OfflineManager) return null;
+    const payload = await window.OfflineManager.getCache(OFFLINE_BOOTSTRAP_CACHE_KEY);
+    if (!payload || !Array.isArray(payload.students)) return null;
+    let rows = payload.students.slice();
+    if (level) rows = rows.filter((s) => (s.academic_year || '') === level);
+    if (className) {
+        rows = rows.filter(
+            (s) =>
+                (s.class_name || '') === className ||
+                (s.class_code || '') === className
+        );
+    }
+    if (search && String(search).trim()) {
+        const q = _normStudentSearch(String(search).trim());
+        rows = rows.filter(
+            (s) =>
+                _normStudentSearch(s.student_id_number).includes(q) ||
+                _normStudentSearch(s.first_name).includes(q) ||
+                _normStudentSearch(s.last_name).includes(q)
+        );
+    }
+    const count = rows.length;
+    const start = (page - 1) * STUDENTS_PAGE_SIZE;
+    const pageRows = rows.slice(start, start + STUDENTS_PAGE_SIZE);
+    return {
+        data: pageRows,
+        totalPages: Math.max(1, Math.ceil(count / STUDENTS_PAGE_SIZE)),
+    };
+}
+
 async function fetchStudents(page = 1) {
     try {
         currentPage = page;
@@ -321,9 +361,10 @@ async function fetchStudents(page = 1) {
         if (level) params.append('academic_year', level);
         if (className) params.append('class_name', className);
         if (search) params.append('search', search);
+        params.append('_t', Date.now()); // Cache-bust: ensure fresh data after updates
 
         try {
-            const response = await fetch(`/canteen/api/students/?${params.toString()}`);
+            const response = await fetch(`/canteen/api/students/?${params.toString()}`, { cache: 'no-store' });
             if (!response.ok) {
                 const err = new Error('Network response was not ok');
                 err.responseStatus = response.status;
@@ -369,7 +410,19 @@ async function fetchStudents(page = 1) {
                         banner.innerHTML = '<i class="fas fa-eye"></i> عرض نسخة مخبأة (قد تكون قديمة)';
                     }
                 } else {
-                    throw fetchError; // Re-throw to show error table if no cache
+                    const boot = await tryLoadStudentsFromBootstrapPage(page, level, className, search);
+                    if (boot) {
+                        data = boot.data;
+                        totalPages = boot.totalPages;
+                        const banner = document.getElementById('offlineBanner');
+                        if (banner) {
+                            banner.style.display = 'block';
+                            banner.innerHTML =
+                                '<i class="fas fa-database"></i> عرض التلاميذ من النسخة المحلية (بعد أول اتصال ناجح)';
+                        }
+                    } else {
+                        throw fetchError;
+                    }
                 }
             } else {
                 throw fetchError;
@@ -621,17 +674,29 @@ async function saveCurrent() {
             lockFields(true); // Ensure fields are locked after save
 
             if (response.status === 202) {
-                // Pending Update (Offline or Non-Director)
-                if (!navigator.onLine) {
-                    alert("تم الحفظ محلياً (وضع العمل بدون اتصال). ستتم المزامنة عند عودة الإنترنت.");
+                // Pending Update: إما طابور العميل (offline_manager) أو انتظار موافقة المدير على السيرفر
+                const queuedLocally = result && result.message === 'Saved offline (Pending)';
+                if (queuedLocally) {
+                    alert(
+                        'تم حفظ التعديل محلياً بنجاح.\n\n' +
+                        'عند عودة الاتصال سيُرفَع تلقائياً كطلب يحتاج موافقة المدير قبل اعتماده نهائياً في قاعدة البيانات.'
+                    );
                 } else {
-                    alert("لقد تم الحفظ بانتظار موافقة المدير على التعديلات");
+                    alert('لقد تم الحفظ بانتظار موافقة المدير على التعديلات');
                 }
 
-                // Refresh table to show the pending item (from local or server pending list)
-                await fetchStudents();
+                try {
+                    await fetchStudents();
+                } catch (refreshErr) {
+                    console.warn('fetchStudents after pending save', refreshErr);
+                    try {
+                        await applyPendingUpdates();
+                        renderTable();
+                    } catch (e2) {
+                        console.warn('applyPendingUpdates fallback', e2);
+                    }
+                }
 
-                // Clear form to avoid confusion
                 prepareNew();
             } else {
                 // Direct Save
@@ -679,15 +744,32 @@ async function deleteStudent() {
         });
 
         if (response.ok) {
-            alert("تم الحذف بنجاح");
-            fetchStudents();
+            const delResult = await response.json().catch(() => ({}));
+            if (response.status === 202) {
+                const queuedLocally = delResult && delResult.message === 'Saved offline (Pending)';
+                alert(
+                    queuedLocally
+                        ? 'تم تسجيل طلب الحذف محلياً. سيُرفَع عند عودة الاتصال ويحتاج موافقة المدير إن اقتضى النظام ذلك.'
+                        : 'تم تسجيل الحذف كتحديث بانتظار المعالجة.'
+                );
+            } else {
+                alert('تم الحذف بنجاح');
+            }
+            try {
+                await fetchStudents();
+            } catch (e) {
+                try {
+                    await applyPendingUpdates();
+                    renderTable();
+                } catch (e2) {}
+            }
             prepareNew();
         } else {
-            alert("حدث خطأ أثناء الحذف");
+            alert('حدث خطأ أثناء الحذف');
         }
     } catch (error) {
         console.error(error);
-        alert("خطأ في الاتصال");
+        alert('خطأ في الاتصال');
     }
 }
 
@@ -699,7 +781,7 @@ async function deleteStudent() {
     async function populateFilters() {
         try {
             // Fetch distinct filters from API (covers all DB, not just paginated list)
-            const response = await fetch('/canteen/api/students/filters/');
+            const response = await fetch('/canteen/api/students/filters/?_t=' + Date.now(), { cache: 'no-store' });
             if (!response.ok) throw new Error("Failed to fetch filters");
             const data = await response.json();
 
@@ -801,7 +883,7 @@ async function applyPendingUpdates() {
     // 1. Get Server Pending (if online)
     let server = [];
     try {
-        const res = await fetch('/canteen/api/pending_updates/');
+        const res = await fetch('/canteen/api/pending_updates/?_t=' + Date.now(), { cache: 'no-store' });
         if (res.ok) server = await res.json();
     } catch(e) {}
 
@@ -1117,12 +1199,13 @@ async function handleImageSelection(input) {
         statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري ضغط الصورة...';
 
         try {
-            // Options for compression (Balanced for Quality/Network)
-            // Server will resize to 1000x1000 @ 95% quality.
+            // ضغط قوي لتوفير مساحة التخزين المحلية والمزامنة (الجودة كافية لصورة التعريف)
             const options = {
-                maxSizeMB: 1,            // Max 1MB (High quality input)
-                maxWidthOrHeight: 1200,  // Enough resolution for server to work with
+                maxSizeMB: 0.12,
+                maxWidthOrHeight: 640,
+                initialQuality: 0.52,
                 useWebWorker: true,
+                maxIteration: 18,
                 fileType: 'image/jpeg'
             };
 

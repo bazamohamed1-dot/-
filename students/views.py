@@ -6,13 +6,26 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, F, Q
 from django.utils import timezone
-from .models import Student, CanteenAttendance, LibraryLoan, SchoolSettings, ArchiveDocument, EmployeeProfile, SystemMessage, PendingUpdate, AttendanceRecord, Communication
+from .models import (
+    Student,
+    CanteenAttendance,
+    CanteenDailySummary,
+    LibraryLoan,
+    SchoolSettings,
+    ArchiveDocument,
+    EmployeeProfile,
+    SystemMessage,
+    PendingUpdate,
+    AttendanceRecord,
+    Communication,
+)
 from .serializers import StudentSerializer, StudentListSerializer, CanteenAttendanceSerializer, LibraryLoanSerializer, SchoolSettingsSerializer, ArchiveDocumentSerializer, SystemMessageSerializer, PendingUpdateSerializer
 from .utils import normalize_arabic
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from django.http import HttpResponse, FileResponse
 from datetime import date, timedelta, datetime
+from collections import defaultdict
 import os
 from io import BytesIO
 from django.conf import settings
@@ -345,7 +358,18 @@ class PendingUpdateViewSet(viewsets.ModelViewSet):
 
             if student:
                 if not CanteenAttendance.objects.filter(student=student, date=date.today()).exists():
-                        CanteenAttendance.objects.create(student=student, date=date.today())
+                    reg = data_payload.get('registration_method')
+                    if reg not in (CanteenAttendance.REG_SCAN, CanteenAttendance.REG_MANUAL):
+                        reg = (
+                            CanteenAttendance.REG_MANUAL
+                            if data_payload.get('student_id') and not data_payload.get('barcode')
+                            else CanteenAttendance.REG_SCAN
+                        )
+                    CanteenAttendance.objects.create(
+                        student=student,
+                        date=date.today(),
+                        registration_method=reg,
+                    )
 
         update.delete()
 
@@ -924,7 +948,11 @@ def scan_card(request):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Record attendance
-        attendance = CanteenAttendance.objects.create(student=student, date=today)
+        attendance = CanteenAttendance.objects.create(
+            student=student,
+            date=today,
+            registration_method=CanteenAttendance.REG_SCAN,
+        )
         return Response({
             'message': 'Attendance recorded',
             'student': StudentSerializer(student).data,
@@ -1004,8 +1032,18 @@ def manual_attendance(request):
     if CanteenAttendance.objects.filter(student=student, date=today).exists():
         return Response({'error': 'Student already recorded'}, status=status.HTTP_400_BAD_REQUEST)
 
-    CanteenAttendance.objects.create(student=student, date=today)
-    return Response({'message': 'Manual attendance recorded'}, status=status.HTTP_201_CREATED)
+    CanteenAttendance.objects.create(
+        student=student,
+        date=today,
+        registration_method=CanteenAttendance.REG_MANUAL,
+    )
+    return Response(
+        {
+            'message': 'Manual attendance recorded',
+            'student': StudentSerializer(student).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 @csrf_exempt
 @api_view(['DELETE'])
@@ -1067,10 +1105,18 @@ def get_attendance_lists(request):
 
     present_data = []
     present_ids = []
+    method_labels = {
+        CanteenAttendance.REG_SCAN: 'مسح البطاقة',
+        CanteenAttendance.REG_MANUAL: 'إدخال يدوي',
+    }
     for att in present_attendances:
         s_data = StudentSerializer(att.student).data
         s_data['attendance_time'] = att.time.strftime("%H:%M:%S")
         s_data['attendance_id'] = att.id # Include primary key for precise deletion
+        s_data['registration_method'] = att.registration_method
+        s_data['registration_method_label'] = method_labels.get(
+            att.registration_method, att.registration_method
+        )
         present_data.append(s_data)
         present_ids.append(att.student.id)
 
@@ -1088,42 +1134,275 @@ def export_canteen_sheet(request):
     if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('canteen_export'):
         return Response({'error': 'Unauthorized'}, status=403)
 
-    # Generates a cumulative report in-memory from DB history
     today = date.today()
     date_str = today.strftime("%Y-%m-%d")
 
-    # Get All History (Optimized)
-    # We want to export the log of attendance.
-    # If the user wants "Absent" records for past days, we'd need to generate them (since we only store presence).
-    # However, usually "Canteen Log" implies who ate.
-    # The prompt said: "Save attendance list... accumulate days".
-    # So we export all `CanteenAttendance` records.
+    qs = CanteenAttendance.objects.select_related('student').order_by('date', 'student__class_name', 'student__last_name')
+    if not qs.exists():
+        return Response({'message': 'لا يوجد سجلات حضور لتصديرها'}, status=status.HTTP_200_OK)
 
-    # Optimized Export using iterator and write_only mode for memory efficiency
-    all_attendance = CanteenAttendance.objects.select_related('student').order_by('-date', 'student__class_name')
+    by_date = defaultdict(list)
+    for att in qs.iterator(chunk_size=1000):
+        by_date[att.date].append(att)
 
-    if not all_attendance.exists():
-         return Response({'message': 'لا يوجد سجلات حضور لتصديرها'}, status=status.HTTP_200_OK)
+    method_labels = {
+        CanteenAttendance.REG_SCAN: 'مسح البطاقة',
+        CanteenAttendance.REG_MANUAL: 'إدخال يدوي',
+    }
 
-    wb = openpyxl.Workbook(write_only=True)
-    ws = wb.create_sheet("سجل_المطعم_التراكمي")
+    wb = openpyxl.Workbook()
+    first_sheet = True
+    for d in sorted(by_date.keys()):
+        title = d.strftime("%Y-%m-%d")[:31]
+        if first_sheet:
+            ws = wb.active
+            ws.title = title
+            first_sheet = False
+        else:
+            ws = wb.create_sheet(title=title)
+        ws.append(
+            [
+                "التاريخ",
+                "التوقيت",
+                "طريقة التسجيل",
+                "رقم التعريف",
+                "الاسم",
+                "اللقب",
+                "القسم",
+                "الحالة",
+            ]
+        )
+        for att in by_date[d]:
+            s = att.student
+            label = method_labels.get(att.registration_method, att.registration_method or '')
+            ws.append(
+                [
+                    str(att.date),
+                    att.time.strftime("%H:%M:%S"),
+                    label,
+                    s.student_id_number,
+                    s.first_name,
+                    s.last_name,
+                    s.class_name,
+                    "حاضر",
+                ]
+            )
 
-    # Header
-    ws.append(["التاريخ", "التوقيت", "رقم التعريف", "الاسم", "اللقب", "القسم", "الحالة"])
-
-    # Use iterator() to prevent loading all objects into memory
-    for att in all_attendance.iterator(chunk_size=1000):
-        s = att.student
-        time_str = att.time.strftime("%H:%M:%S")
-        ws.append([str(att.date), time_str, s.student_id_number, s.first_name, s.last_name, s.class_name, "حاضر"])
-
-    # Save to memory buffer
     output = BytesIO()
     wb.save(output)
     output.seek(0)
 
     response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_Full_{date_str}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Canteen_Attendance_ByDay_{date_str}.xlsx"'
+    return response
+
+
+def _canteen_meals_map():
+    settings_obj = SchoolSettings.objects.first()
+    if not settings_obj or not settings_obj.canteen_meals_by_date:
+        return {}
+    data = settings_obj.canteen_meals_by_date
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_iso_date(s):
+    if not s:
+        return None
+    try:
+        return datetime.strptime(str(s).strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def canteen_meal_plans(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_canteen'):
+        return Response({'error': 'Unauthorized'}, status=403)
+
+    settings_obj = SchoolSettings.objects.first()
+    if not settings_obj:
+        return Response({'error': 'لا توجد إعدادات مؤسسة'}, status=400)
+
+    if request.method == 'GET':
+        return Response({'meals': _canteen_meals_map()})
+
+    # POST — دمج مفاتيح التواريخ المرسلة، أو استبدال كامل عند replace=true
+    incoming = request.data.get('meals')
+    if not isinstance(incoming, dict):
+        return Response({'error': 'يتوقع حقل meals ككائن (تاريخ -> نص)'}, status=400)
+
+    replace_all = bool(request.data.get('replace'))
+
+    def _normalize_meals_dict(raw):
+        out = {}
+        for k, v in raw.items():
+            key = str(k).strip()[:10]
+            if not key:
+                continue
+            val = (v or '').strip() if isinstance(v, str) else str(v or '')
+            if val != '':
+                out[key] = val
+        return out
+
+    if replace_all:
+        current = _normalize_meals_dict(incoming)
+    else:
+        current = dict(_canteen_meals_map())
+        for k, v in incoming.items():
+            key = str(k).strip()[:10]
+            if not key:
+                continue
+            val = (v or '').strip() if isinstance(v, str) else str(v or '')
+            if val == '':
+                current.pop(key, None)
+            else:
+                current[key] = val
+
+    settings_obj.canteen_meals_by_date = current
+    settings_obj.save(update_fields=['canteen_meals_by_date'])
+    return Response({'ok': True, 'meals': current})
+
+
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def canteen_daily_summary(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('access_canteen'):
+        return Response({'error': 'Unauthorized'}, status=403)
+
+    d = _parse_iso_date(request.query_params.get('date')) or date.today()
+
+    if request.method == 'GET':
+        meals = _canteen_meals_map()
+        meal_today = meals.get(d.isoformat(), '') or meals.get(str(d), '')
+        student_live = CanteenAttendance.objects.filter(date=d).count()
+        row = CanteenDailySummary.objects.filter(date=d).first()
+        if row:
+            return Response(
+                {
+                    'date': d.isoformat(),
+                    'meal_description': row.meal_description,
+                    'student_count': row.student_count,
+                    'supervisors_count': row.supervisors_count,
+                    'staff_count': row.staff_count,
+                    'teachers_count': row.teachers_count,
+                    'workers_count': row.workers_count,
+                    'guests_count': row.guests_count,
+                    'notes': row.notes,
+                    'total': row.total_beneficiaries,
+                    'saved': True,
+                    'meal_plan_text': meal_today,
+                    'student_count_live': student_live,
+                }
+            )
+        return Response(
+            {
+                'date': d.isoformat(),
+                'meal_description': meal_today,
+                'student_count': student_live,
+                'supervisors_count': 0,
+                'staff_count': 0,
+                'teachers_count': 0,
+                'workers_count': 0,
+                'guests_count': 0,
+                'notes': '',
+                'total': student_live,
+                'saved': False,
+                'meal_plan_text': meal_today,
+                'student_count_live': student_live,
+            }
+        )
+
+    # POST — حفظ / تحديث الملخص
+    payload = request.data
+    meal_desc = (payload.get('meal_description') or '').strip()
+    try:
+        sc = int(payload.get('student_count', 0))
+    except (TypeError, ValueError):
+        sc = 0
+    sc = max(0, sc)
+
+    def _pi(name):
+        try:
+            return max(0, int(payload.get(name, 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    obj, _ = CanteenDailySummary.objects.update_or_create(
+        date=d,
+        defaults={
+            'meal_description': meal_desc,
+            'student_count': sc,
+            'supervisors_count': _pi('supervisors_count'),
+            'staff_count': _pi('staff_count'),
+            'teachers_count': _pi('teachers_count'),
+            'workers_count': _pi('workers_count'),
+            'guests_count': _pi('guests_count'),
+            'notes': (payload.get('notes') or '').strip(),
+        },
+    )
+    return Response(
+        {
+            'ok': True,
+            'date': d.isoformat(),
+            'total': obj.total_beneficiaries,
+            'saved': True,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def export_canteen_stats_excel(request):
+    if not hasattr(request.user, 'profile') or not request.user.profile.has_perm('canteen_export'):
+        return Response({'error': 'Unauthorized'}, status=403)
+
+    rows = CanteenDailySummary.objects.order_by('date')
+    if not rows.exists():
+        return Response({'message': 'لا توجد بطاقات إحصائية محفوظة للتصدير'}, status=status.HTTP_200_OK)
+
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet("إحصائيات_المطعم_التراكمية")
+    ws.append(
+        [
+            "التاريخ",
+            "مكونات الوجبة",
+            "التلاميذ",
+            "المشرفون المرافقون",
+            "الموظفون",
+            "الأساتذة",
+            "العمال",
+            "الضيوف",
+            "المجموع",
+            "الملاحظات",
+        ]
+    )
+    for r in rows.iterator():
+        ws.append(
+            [
+                r.date.isoformat(),
+                r.meal_description,
+                r.student_count,
+                r.supervisors_count,
+                r.staff_count,
+                r.teachers_count,
+                r.workers_count,
+                r.guests_count,
+                r.total_beneficiaries,
+                r.notes,
+            ]
+        )
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    today_str = date.today().strftime("%Y-%m-%d")
+    response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="Canteen_Stats_Cumulative_{today_str}.xlsx"'
     return response
 
 @api_view(['GET'])

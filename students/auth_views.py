@@ -12,14 +12,24 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from .models import EmployeeProfile, UserActivityLog, SchoolSettings, UserRole
-from .serializers import UserRoleSerializer
+from .models import EmployeeProfile, UserActivityLog, SchoolSettings, UserRole, Student
+from .serializers import UserRoleSerializer, StudentListSerializer
 from .auth_utils import send_password_reset_email, generate_random_password, send_new_account_email
 import secrets
 import pyotp
 import qrcode
 import base64
 from io import BytesIO
+
+
+def _consume_client_cache_clear(profile):
+    """يطلب من العميل تفريغ التخزين مرة واحدة بعد إجراء المدير (جهاز/صلاحيات/دور)."""
+    if not profile or not getattr(profile, 'client_cache_clear_required', False):
+        return False
+    profile.client_cache_clear_required = False
+    profile.save(update_fields=['client_cache_clear_required'])
+    return True
+
 
 # --- 2FA Views ---
 @api_view(['POST'])
@@ -89,15 +99,34 @@ def verify_2fa_login(request):
         login(request, user)
         UserActivityLog.objects.create(user=user, action='login_2fa')
 
-        return Response({
+        profile.refresh_from_db(fields=['client_cache_clear_required', 'permissions', 'role'])
+        clear_client = _consume_client_cache_clear(profile)
+        perms = profile.permissions
+        if isinstance(perms, str):
+            import json, ast
+            try:
+                p = json.loads(perms.replace("'", '"'))
+                perms = p if isinstance(p, list) else []
+            except Exception:
+                try:
+                    p = ast.literal_eval(perms)
+                    perms = p if isinstance(p, list) else []
+                except Exception:
+                    perms = [x.strip() for x in perms.split(',')] if ',' in perms else []
+        if not isinstance(perms, list):
+            perms = []
+        payload = {
             'message': 'Login Successful',
             'token': final_token,
             'role': profile.role,
             'username': user.username,
-            'must_change_password': profile.must_change_password
-        })
-    else:
-        return Response({'error': 'رمز خاطئ'}, status=400)
+            'must_change_password': profile.must_change_password,
+            'permissions': perms,
+        }
+        if clear_client:
+            payload['clear_offline_storage'] = True
+        return Response(payload)
+    return Response({'error': 'رمز خاطئ'}, status=400)
 
 # --- Forgot Password Views ---
 @api_view(['POST'])
@@ -305,14 +334,33 @@ def login_view(request):
             login(request, user)
             UserActivityLog.objects.create(user=user, action='login')
 
-            return Response({
+            perms = profile.permissions
+            if isinstance(perms, str):
+                import json, ast
+                try:
+                    p = json.loads(perms.replace("'", '"'))
+                    perms = p if isinstance(p, list) else []
+                except:
+                    try:
+                        p = ast.literal_eval(perms)
+                        perms = p if isinstance(p, list) else []
+                    except:
+                        perms = [x.strip() for x in perms.split(',')] if ',' in perms else []
+            if not isinstance(perms, list):
+                perms = []
+            clear_client = _consume_client_cache_clear(profile)
+            payload = {
                 'message': 'Login Successful',
                 'token': token,
                 'role': profile.role,
                 'username': user.username,
                 'device_id': device_id_to_send,
-                'must_change_password': profile.must_change_password
-            })
+                'must_change_password': profile.must_change_password,
+                'permissions': perms,
+            }
+            if clear_client:
+                payload['clear_offline_storage'] = True
+            return Response(payload)
         else:
             profile.failed_login_attempts += 1
             if profile.failed_login_attempts >= 3:
@@ -332,7 +380,25 @@ def verify_session(request):
         return Response({'valid': False, 'reason': 'NOT_LOGGED_IN'}, status=401)
     try:
         if request.user.profile.current_session_token == token:
-            return Response({'valid': True, 'role': request.user.profile.role})
+            prof = request.user.profile
+            prof.refresh_from_db(fields=['client_cache_clear_required'])
+            clear_client = _consume_client_cache_clear(prof)
+            perms = prof.permissions
+            if isinstance(perms, str):
+                import json, ast
+                try:
+                    perms = json.loads(perms.replace("'", '"'))
+                except:
+                    try:
+                        perms = ast.literal_eval(perms)
+                    except:
+                        perms = [p.strip() for p in perms.split(',')] if ',' in perms else []
+            if not isinstance(perms, list):
+                perms = []
+            payload = {'valid': True, 'role': prof.role, 'permissions': perms}
+            if clear_client:
+                payload['clear_offline_storage'] = True
+            return Response(payload)
     except: pass
     return Response({'valid': False}, status=401)
 
@@ -432,6 +498,8 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         role = request.data.get('role')
         email = request.data.get('email', '')
         permissions = request.data.get('permissions', [])
+        if isinstance(permissions, list):
+            permissions = list(dict.fromkeys(permissions))
 
         password = request.data.get('password')
 
@@ -483,9 +551,21 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
         user.save()
 
-        if permissions is not None: user.profile.permissions = permissions
-        if role: user.profile.role = role
+        perm_updated = False
+        role_updated = False
+        if permissions is not None:
+            if isinstance(permissions, list):
+                permissions = list(dict.fromkeys(permissions))
+            if user.profile.permissions != permissions:
+                perm_updated = True
+            user.profile.permissions = permissions
+        if role:
+            if user.profile.role != role:
+                role_updated = True
+            user.profile.role = role
 
+        if perm_updated or role_updated:
+            user.profile.client_cache_clear_required = True
         user.profile.save()
         return Response({'message': 'Updated'})
 
@@ -536,6 +616,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         import uuid
         new_id = str(uuid.uuid4())
         user.profile.device_id = f"PENDING:{new_id}"
+        user.profile.client_cache_clear_required = True
         user.profile.save()
         return Response({'message': 'Device Activated'})
 
@@ -544,5 +625,36 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         if not self.check_permission(request, 'manage_users'): return Response({'error': 'Unauthorized'}, status=403)
         user = self.get_object()
         user.profile.device_id = None
+        user.profile.client_cache_clear_required = True
         user.profile.save()
         return Response({'message': 'Device Reset'})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def offline_bootstrap(request):
+    """
+    نسخة محلية كاملة للتلاميذ فقط إن فعّل المدير للمستخدم صلاحية «العمل بالنسخة المحلية»
+    مع وجود وصول لتسيير التلاميذ أو المطعم.
+    """
+    profile = getattr(request.user, 'profile', None)
+    if not profile:
+        return Response({'error': 'Unauthorized'}, status=403)
+
+    out = {
+        'generated_at': timezone.now().isoformat(),
+        'students': None,
+        'students_truncated': False,
+    }
+
+    can_students = profile.has_perm('offline_cache_students') and (
+        profile.has_perm('access_management') or profile.has_perm('access_canteen')
+    )
+    if can_students:
+        total = Student.objects.count()
+        max_n = 12000
+        qs = Student.objects.all().order_by('id')[:max_n]
+        out['students'] = StudentListSerializer(qs, many=True).data
+        out['students_truncated'] = total > max_n
+
+    return Response(out)

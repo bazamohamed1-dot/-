@@ -324,6 +324,8 @@
         </div>
     </div>
 
+    <script src="{% static 'js/clear_app_storage.js' %}"></script>
+    <script src="{% static 'js/baza_network.js' %}"></script>
     <script>
         let temp2FAToken = null;
 
@@ -346,33 +348,13 @@
             window.location.reload(true);
         }
 
-        // FORCE UNREGISTER ALL SERVICE WORKERS IMMEDIATELY
-        // This runs before anything else to nuclear option the cache
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    console.log('Unregistering SW:', registration);
-                    registration.unregister();
-                }
-            });
-
-            // Clear all caches
-            caches.keys().then(function(names) {
-                for (let name of names) {
-                    caches.delete(name);
-                }
-            });
-        }
-
-        // Only re-register if NOT localhost and explicitly needed (e.g. Production)
-        // For now, we disable it locally completely to solve the stuck issue.
+        // تسجيل SW بنفس النسخة الثابتة (v11) حتى لا يُعاد التثبيت في كل تحميل
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
                 if (!isLocalhost) {
-                    // Register with timestamp to bust cache
-                    navigator.serviceWorker.register('/service-worker.js?v=' + new Date().getTime()).then(function(registration) {
+                    navigator.serviceWorker.register('/service-worker.js?v=13').then(function(registration) {
                         registration.update();
                     }).catch(err => console.log('SW Fail', err));
                 }
@@ -445,6 +427,8 @@
             spinner.style.display = 'block';
 
             try {
+                // لا نعتمد على navigator.onLine قبل الطلب: في Windows يكون false دون إنترنت عام
+                // حتى مع خادم Django محلي يعمل (localhost / LAN).
                 // Ensure Device ID
                 let deviceId = localStorage.getItem('device_id');
                 if (!deviceId) {
@@ -480,7 +464,10 @@
                         return;
                     }
 
-                    completeLogin(data);
+                    btn.disabled = false;
+                    btnText.style.display = 'block';
+                    spinner.style.display = 'none';
+                    await completeLogin(data);
                 } else {
                     // Handle Lockout
                     if (data.code === 'LOCKED') {
@@ -505,7 +492,9 @@
                     }
                 }
             } catch (err) {
-                errorMsg.textContent = 'خطأ في الاتصال بالخادم';
+                errorMsg.innerHTML = (!bazaNetworkOkForSameOrigin())
+                    ? 'لا يبدو أن عنوان الخادم الحالي يمكن الوصول إليه (شبكة داخلية أو إنترنت). تحقق من تشغيل الخادم والعنوان ثم أعد المحاولة.'
+                    : 'تعذّر الاتصال بالخادم. تحقق من العنوان والشبكة.';
                 errorMsg.style.display = 'block';
                 console.error(err);
                 btn.disabled = false;
@@ -528,7 +517,7 @@
                 const data = await response.json();
                 if(response.ok) {
                     document.getElementById('2faModal').style.display = 'none';
-                    completeLogin(data);
+                    await completeLogin(data);
                 } else {
                     alert(data.error || 'Invalid Code');
                 }
@@ -540,11 +529,37 @@
             temp2FAToken = null;
         }
 
-        function completeLogin(data) {
-            // Success
+        async function completeLogin(data) {
+            try {
+                if (typeof clearSchoolAppOfflineCaches === 'function') {
+                    const prevUser = localStorage.getItem('offline_last_user');
+                    if (data.clear_offline_storage || (prevUser && prevUser !== data.username)) {
+                        await clearSchoolAppOfflineCaches();
+                    }
+                }
+            } catch (e) { console.warn('clearSchoolAppOfflineCaches', e); }
+            localStorage.setItem('offline_last_user', data.username);
+            if (data.device_id) {
+                localStorage.setItem('device_id', data.device_id);
+            }
             sessionStorage.setItem('session_token', data.token);
             sessionStorage.setItem('user_role', data.role);
             sessionStorage.setItem('username', data.username);
+            if (data.permissions) {
+                sessionStorage.setItem('user_permissions', JSON.stringify(data.permissions));
+            } else {
+                sessionStorage.removeItem('user_permissions');
+            }
+            try {
+                localStorage.setItem('offline_session_token', data.token);
+                localStorage.setItem('offline_user_role', data.role);
+                localStorage.setItem('offline_username', data.username);
+                if (data.permissions) {
+                    localStorage.setItem('offline_user_permissions', JSON.stringify(data.permissions));
+                } else {
+                    localStorage.removeItem('offline_user_permissions');
+                }
+            } catch (e) { console.warn(e); }
 
             // Show Welcome Overlay
             document.getElementById('welcomeUser').textContent = data.username;

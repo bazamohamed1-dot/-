@@ -126,21 +126,280 @@
     </div>
 
 <div class="container-fluid py-4" dir="rtl">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
         <div>
             <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-brain text-primary me-2"></i>تحليل خبراء التربية</h1>
-            <p class="text-muted mt-1">المحرك المتقدم للتشخيص التربوي والتنبؤ (Z-Score & AI)</p>
+            <p class="text-muted mt-1 mb-0">المحرك المتقدم للتشخيص التربوي والتنبؤ (Z-Score & AI)</p>
         </div>
-        <div>
-            <button class="btn btn-warning me-2" id="btnRunEngine" onclick="runExpertEngine()">
-                <i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء
-            </button>
-            <button class="btn btn-success me-2" onclick="generateDiagnosticReport()">
-                <i class="fas fa-robot"></i> تقرير تشخيصي (AI)
-            </button>
-            <button class="btn btn-primary" onclick="generateMeetingMinutes()">
-                <i class="fas fa-file-signature"></i> توليد محضر الاجتماع (AI)
-            </button>
+    </div>
+
+    <!-- تبويبات داخلية: عمليات | عرض | قاعدة البيانات -->
+    <ul class="nav nav-tabs mb-4" id="expertInnerTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-ops-btn" data-bs-toggle="tab" data-bs-target="#tab-ops" type="button" role="tab">عمليات</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-display-btn" data-bs-toggle="tab" data-bs-target="#tab-display" type="button" role="tab">عرض النتائج</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-db-btn" data-bs-toggle="tab" data-bs-target="#tab-db" type="button" role="tab">قاعدة البيانات</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="expertInnerTabContent">
+        <!-- تبويب عمليات -->
+        <div class="tab-pane fade show active" id="tab-ops" role="tabpanel">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-tasks me-2"></i>العمليات</h5>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#importHistoricalModal">
+                            <i class="fas fa-file-excel"></i> استيراد نتائج سابقة
+                        </button>
+                        <button class="btn btn-warning" id="btnRunEngine" onclick="runExpertEngine()">
+                            <i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء
+                        </button>
+                        <button class="btn btn-success" onclick="generateDiagnosticReport()">
+                            <i class="fas fa-robot"></i> تقرير تشخيصي (AI)
+                        </button>
+                        <button class="btn btn-primary" onclick="generateMeetingMinutes()">
+                            <i class="fas fa-file-signature"></i> توليد محضر الاجتماع (AI)
+                        </button>
+                        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#subjectCoefficientsModal">
+                            <i class="fas fa-balance-scale"></i> معاملات المواد حسب المستوى
+                        </button>
+                    </div>
+                    <p class="small text-muted mb-2">
+                        السنة الحالية: <strong>{{ current_year }}</strong>
+                        | الفصل المرجعي (آخر فصل مستورد): <strong>{{ current_year_latest_term|default:"غير متوفر بعد" }}</strong>
+                        | للمقارنة والتنبؤ: <strong>{{ prev_year }}</strong> و<strong>{{ prev_year_before }}</strong>
+                        — من إعدادات المؤسسة. يُفضّل إعادة تشغيل المحرك بعد الاستيراد أو تغيير السنة.
+                    </p>
+                    <div id="engineRunningAlert" class="alert alert-warning align-items-center" style="display: none;">
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>جاري تشغيل المحرك في الخلفية. يتم التحقق تلقائياً من الانتهاء...</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" onclick="checkEngineThenReload()">تحقق الآن وتحديث الصفحة</button>
+                    </div>
+                    <div id="engineDoneAlert" class="alert alert-success" style="display: none;">
+                        <i class="fas fa-check-circle me-2"></i>انتهى تشغيل المحرك. <a href="#" onclick="location.reload(); return false;">حدّث الصفحة</a> لعرض النتائج.
+                    </div>
+                </div>
+            </div>
+            <div id="statusAlert" class="alert alert-info" style="display: none;"></div>
+            <!-- دليل تحليل خبراء التربية (داخل عمليات) -->
+            <div class="card shadow-sm border-primary mt-3">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center cursor-pointer" data-bs-toggle="collapse" data-bs-target="#expertGuideCollapse" aria-expanded="false">
+                    <h5 class="mb-0 text-primary"><i class="fas fa-book me-2"></i>دليل تحليل خبراء التربية</h5>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div id="expertGuideCollapse" class="collapse">
+                    <div class="card-body">
+                        <h6 class="text-dark border-bottom pb-2">ما هو تحليل خبراء التربية؟</h6>
+                        <p>محرك إحصائي متقدم يستخدم <strong>Z-Score</strong> و<strong>الانحدار الخطي</strong> لمقارنة أداء التلاميذ الحالي بأدائهم في السنة الماضية، وتحديد من يتقدم أو يتراجع عن توقعات النموذج، وتحديد «المادة الحاكمة».</p>
+                        <h6 class="text-dark border-bottom pb-2 mt-4">مراجع الحسابات</h6>
+                        <ul class="mb-2">
+                            <li><strong>السنة الحالية:</strong> نتائج من جدول Grade (مستوردة في <strong>لوحة تحليل النتائج</strong>). يُستعمل آخر فصل دراسي متاح.</li>
+                            <li><strong>السنوات الماضية:</strong> نتائج من HistoricalGrade (مستوردة عبر <strong>«استيراد نتائج سابقة»</strong> هنا في تحليل الخبراء).</li>
+                        </ul>
+                        <h6 class="text-dark border-bottom pb-2 mt-4">خطوات العمل</h6>
+                        <ol class="mb-0">
+                            <li>استيراد نتائج السنة الحالية من <strong>لوحة تحليل النتائج</strong> (Executive).</li>
+                            <li>استيراد نتائج السنوات السابقة من زر «استيراد نتائج سابقة» (Excel). ملفات السنوات السابقة قد تكون تراكمية: النظام يقرأ أعمدة «المادة ف1»، «المادة ف2»، «المادة ف3» ويستخرج النتائج حسب كل فصل.</li>
+                            <li>إدخال معاملات المواد من زر «معاملات المواد حسب المستوى» لاحتساب المعدل الفصلي المرجح بدقة (المعدل = مرجح بالمعاملات وليس متوسطاً بسيطاً).</li>
+                            <li>تحديث بيانات محرك الخبراء ليحسب Z-Score والأنماط والمادة الحاكمة.</li>
+                            <li>عرض النتائج من تبويب «عرض النتائج» أو تصدير إلى Excel للاجتماعات.</li>
+                        </ol>
+                        <h6 class="text-dark border-bottom pb-2 mt-4">رسالة الاستيراد وتحديث المحرك</h6>
+                        <ul>
+                            <li><strong>«تم استيراد … بنجاح»:</strong> تظهر عند انتهاء الخادم من المعالجة. شريط التقدم قد يبقى عند 95% حتى وصول الرد ثم يصل 100%.</li>
+                            <li><strong>تأخر التحديث:</strong> المحرك يعمل في الخلفية. استخدم «تحقق الآن وتحديث الصفحة» أو انتظر الرسالة «انتهى تشغيل المحرك» ثم حدّث الصفحة.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- تبويب عرض النتائج -->
+        <div class="tab-pane fade" id="tab-display" role="tabpanel">
+            {% if has_data %}
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div class="alert alert-success mb-0 py-2">
+                    <i class="fas fa-check-circle me-2"></i>البيانات متاحة. آخر تحديث: {{ latest_run.run_date|date:"Y-m-d H:i" }} (الفصل: {{ latest_run.term }})
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="{% url 'expert_export_excel' %}" class="btn btn-success btn-sm"><i class="fas fa-file-excel me-1"></i> تصدير Excel</a>
+                    <span class="badge bg-light text-dark border" title="الفصل المرجعي هو آخر فصل مستورد من لوحة التحليل">
+                        الفصل المرجعي: {{ current_year_latest_term|default:"—" }}
+                    </span>
+                    <select id="globalLevelFilter" class="form-select form-select-sm w-auto" onchange="loadExpertData()">
+                        <option value="">جميع المستويات</option>
+                        <option value="1">أولى</option>
+                        <option value="2">ثانية</option>
+                        <option value="3">ثالثة</option>
+                        <option value="4">رابعة</option>
+                    </select>
+                </div>
+            </div>
+            {% endif %}
+            <div id="tab-display-content">
+                {% if has_data %}
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-4">
+                        <div class="card shadow h-100 border-left-info">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-info"><i class="fas fa-users"></i> تأثير الفوج (Cohort Effect)</h6></div>
+                            <div class="card-body" id="cohortContainer"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card shadow h-100 border-left-warning">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-warning"><i class="fas fa-balance-scale"></i> المادة الحاكمة (Sensitivity/Beta)</h6></div>
+                            <div class="card-body" id="sensitivityContainer"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-4">
+                    <div class="col-xl-12 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-search"></i> كاشف الأنماط (Pattern Finder)</h6>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <label class="small text-muted mb-0">المستوى:</label>
+                                    <select id="patternLevelFilter" class="form-select form-select-sm" style="width: auto; min-width: 100px;" onchange="renderPatternFinder()">
+                                        <option value="">الكل</option>
+                                    </select>
+                                    <label class="small text-muted mb-0">القسم:</label>
+                                    <select id="patternSectionFilter" class="form-select form-select-sm" style="width: auto; min-width: 80px;" onchange="renderPatternFinder()">
+                                        <option value="">الكل</option>
+                                    </select>
+                                    <label class="small text-muted mb-0">النمط:</label>
+                                    <select id="patternFilter" class="form-select form-select-sm" style="width: auto; min-width: 120px;" onchange="renderPatternFinder()">
+                                        <option value="all">الكل</option>
+                                        <option value="قافز فجأة (أداء يفوق التوقع)">القافزين فجأة</option>
+                                        <option value="متراجع فجأة (أداء أقل من التوقع)">المتراجعين فجأة</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover" id="patternTable">
+                                        <thead class="table-light"><tr><th>التلميذ</th><th>المستوى</th><th>القسم</th><th>المعدل الحالي</th><th>الباقي</th><th>النمط</th><th>إجراء</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xl-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-th"></i> الخريطة الحرارية (Correlation Heatmap)</h6></div>
+                            <div class="card-body"><div id="heatmapChart" style="min-height: 400px;"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-line"></i> رادار التنبؤ</h6>
+                                <span id="forecastStudentName" class="badge bg-secondary">اختر تلميذ من الجدول</span>
+                            </div>
+                            <div class="card-body">
+                                <div id="forecastChart" style="min-height: 300px;"></div>
+                                <hr>
+                                <h6 class="font-weight-bold text-success"><i class="fas fa-flask"></i> مختبر المحاكاة (What-If)</h6>
+                                <div id="simulatorContainer"><div class="text-center text-muted">اختر تلميذ من الجدول أولاً.</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning text-center p-5">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                    <h4>لا توجد بيانات خبراء معالجة حالياً.</h4>
+                    <p class="mb-3">قم بالعمليات من تبويب «عمليات» (استيراد نتائج سابقة ثم تحديث محرك الخبراء).</p>
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importHistoricalModal"><i class="fas fa-file-excel"></i> استيراد نتائج سابقة</button>
+                    <button class="btn btn-warning ms-2" id="btnRunEngineNoData" onclick="runExpertEngine()"><i class="fas fa-cogs"></i> تحديث محرك الخبراء</button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- تبويب قاعدة البيانات -->
+        <div class="tab-pane fade" id="tab-db" role="tabpanel">
+            <div class="card shadow-sm border-info">
+                <div class="card-body">
+                    <p class="text-muted small">لمعرفة ما يحدث بالضبط: تشغيلات المحرك، بيانات الأفواج والتلاميذ، والبيانات المستوردة.</p>
+                    <div class="row mb-4 g-2">
+                        <div class="col-md-3"><div class="card bg-primary text-white"><div class="card-body py-2 text-center"><strong>تشغيلات المحرك</strong><br>{{ expert_runs|length }}</div></div></div>
+                        <div class="col-md-3"><div class="card bg-info text-white"><div class="card-body py-2 text-center"><strong>تلاميذ السنة الحالية</strong><br>{{ current_students_count }}</div></div></div>
+                        <div class="col-md-3"><div class="card bg-success text-white"><div class="card-body py-2 text-center"><strong>لهم أرشيف سابق (مطابَق)</strong><br>{{ current_students_with_archive_count }}</div></div></div>
+                        <div class="col-md-3"><div class="card bg-warning text-dark"><div class="card-body py-2 text-center"><strong>علامات تاريخية</strong><br>{{ historical_grade_count }}</div></div></div>
+                        <div class="col-md-3"><div class="card bg-secondary text-white"><div class="card-body py-2 text-center"><strong>عينة (تلاميذ خبراء)</strong><br>{{ student_expert_sample|length }}</div></div></div>
+                    </div>
+                    <h6 class="border-bottom pb-2">الملفات المستوردة حسب السنة</h6>
+                    <div id="importedFilesByYearContainer" class="mb-4">
+                        <p class="text-muted small">جاري التحميل...</p>
+                    </div>
+                    <h6 class="border-bottom pb-2">آخر تشغيلات المحرك</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>#</th><th>السنة</th><th>الفصل</th><th>التاريخ</th><th>الحالة</th><th>تحكم</th></tr></thead>
+                            <tbody>
+                                {% for r in expert_runs %}
+                                <tr>
+                                    <td>{{ r.id }}</td>
+                                    <td>{{ r.academic_year }}</td>
+                                    <td>{{ r.term }}</td>
+                                    <td>{{ r.run_date|date:"Y-m-d H:i" }}</td>
+                                    <td>{{ r.status }}</td>
+                                    <td>
+                                        <form method="post" action="{% url 'expert_delete_run' r.id %}" class="d-inline" onsubmit="return confirm('حذف هذه التشغيلة وجميع بياناتها؟');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">حذف</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="6" class="text-muted">لا توجد تشغيلات.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <h6 class="border-bottom pb-2">عينة بيانات الأفواج (الخبراء)</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>التشغيلة</th><th>المستوى</th><th>المادة الحاكمة</th><th>متوسط Z الحالي</th></tr></thead>
+                            <tbody>
+                                {% for c in cohort_sample %}
+                                <tr><td>{{ c.run_id }}</td><td>{{ c.academic_year_level }}</td><td>{{ c.ruling_subject|default:"—" }}</td><td>{{ c.current_year_z_score_avg|floatformat:3|default:"—" }}</td></tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-muted">لا توجد بيانات.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <h6 class="border-bottom pb-2">عينة بيانات التلاميذ (الخبراء)</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>التلميذ</th><th>القسم</th><th>المستوى</th><th>المعدل الحالي</th><th>المتوقع</th><th>النمط</th></tr></thead>
+                            <tbody>
+                                {% for s in student_expert_sample %}
+                                <tr>
+                                    <td>{% if s.student %}{{ s.student.last_name }} {{ s.student.first_name }}{% else %}—{% endif %}</td>
+                                    <td>{{ s.class_name }}</td>
+                                    <td>{{ s.academic_year_level }}</td>
+                                    <td>{{ s.current_avg|floatformat:2|default:"—" }}</td>
+                                    <td>{{ s.predicted_avg|floatformat:2|default:"—" }}</td>
+                                    <td>{{ s.status_pattern|default:"—" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="6" class="text-muted">لا توجد بيانات.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -167,165 +426,46 @@
         </div>
     </div>
 
-    <!-- Status Alert -->
-    <div id="statusAlert" class="alert alert-info" style="display: none;"></div>
-
-    {% if has_data %}
-        <div class="alert alert-success d-flex justify-content-between align-items-center">
-            <span><i class="fas fa-check-circle me-2"></i> البيانات متاحة. آخر تحديث: {{ latest_run.run_date|date:"Y-m-d H:i" }} (الفصل: {{ latest_run.term }})</span>
-
-            <div class="d-flex align-items-center">
-                <!-- Global Term Filter (used for running engine) -->
-                <select id="globalTermFilter" class="form-select form-select-sm w-auto me-2">
-                    <option value="الفصل الأول" {% if latest_run.term == 'الفصل الأول' %}selected{% endif %}>الفصل الأول</option>
-                    <option value="الفصل الثاني" {% if latest_run.term == 'الفصل الثاني' %}selected{% endif %}>الفصل الثاني</option>
-                    <option value="الفصل الثالث" {% if latest_run.term == 'الفصل الثالث' %}selected{% endif %}>الفصل الثالث</option>
-                </select>
-
-                <!-- Global Level Filter -->
-                <select id="globalLevelFilter" class="form-select form-select-sm w-auto" onchange="loadExpertData()">
-                    <option value="">جميع المستويات</option>
-                    <option value="1">أولى</option>
-                    <option value="2">ثانية</option>
-                    <option value="3">ثالثة</option>
-                    <option value="4">رابعة</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="row mb-4">
-            <!-- Section 4: Cohort & Sensitivity (Top Level KPIs) -->
-            <div class="col-md-6 mb-4">
-                <div class="card shadow h-100 border-left-info">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-users"></i> تأثير الفوج (Cohort Effect)</h6>
-                    </div>
-                    <div class="card-body" id="cohortContainer">
-                        <!-- Filled via JS -->
-                    </div>
+    <!-- معاملات المواد حسب المستوى -->
+    <div class="modal fade" id="subjectCoefficientsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title"><i class="fas fa-balance-scale text-warning"></i> معاملات المواد حسب المستوى</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-            </div>
-
-            <div class="col-md-6 mb-4">
-                <div class="card shadow h-100 border-left-warning">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-warning"><i class="fas fa-balance-scale"></i> المادة الحاكمة (Sensitivity/Beta)</h6>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">المعدل الفصلي يُحسب مرجحاً بمعاملات المواد. أدخل المعامل في كل خلية (مثال: الرياضيات = 2، التربية التشكيلية = 1).</p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="subjectCoefficientsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 180px;">المادة</th>
+                                    <th class="text-center">أولى متوسط</th>
+                                    <th class="text-center">ثانية متوسط</th>
+                                    <th class="text-center">ثالثة متوسط</th>
+                                    <th class="text-center">رابعة متوسط</th>
+                                    <th style="width: 44px;" class="text-center" title="حذف السطر">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="subjectCoefficientsTableBody"></tbody>
+                        </table>
                     </div>
-                    <div class="card-body" id="sensitivityContainer">
-                        <!-- Filled via JS -->
+                    <div class="d-flex align-items-center gap-2 mt-2">
+                        <input type="text" id="newSubjectName" class="form-control form-control-sm" style="max-width: 200px;" placeholder="اسم مادة جديدة">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSubjectRow()"><i class="fas fa-plus"></i> إضافة مادة</button>
                     </div>
+                    <div id="subjectCoefficientsMessage" class="mt-3 small"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" onclick="refreshSubjectsFromResults()"><i class="fas fa-sync"></i> تحديث قائمة المواد</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="loadSubjectCoefficients(false)"><i class="fas fa-download"></i> تحميل المعاملات</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSubjectCoefficients()"><i class="fas fa-save"></i> حفظ</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
                 </div>
             </div>
         </div>
-
-        <div class="row mb-4">
-            <!-- Section 1: Pattern Finder -->
-            <div class="col-xl-12 mb-4">
-                <div class="card shadow">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-search"></i> كاشف الأنماط (Pattern Finder) - القيمة المضافة</h6>
-                        <select id="patternFilter" class="form-select form-select-sm w-25" onchange="renderPatternFinder()">
-                            <option value="all">الكل</option>
-                            <option value="قافز فجأة (أداء يفوق التوقع)">القافزين فجأة (أداء يفوق التوقع)</option>
-                            <option value="متراجع فجأة (أداء أقل من التوقع)">المتراجعين فجأة (خطر)</option>
-                        </select>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover" id="patternTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>التلميذ</th>
-                                        <th>القسم</th>
-                                        <th>المعدل الحالي</th>
-                                        <th>الباقي (Residual)</th>
-                                        <th>النمط</th>
-                                        <th>إجراء</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Filled via JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <!-- Section 2: Heatmap -->
-            <div class="col-xl-6 mb-4">
-                <div class="card shadow h-100">
-                    <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-th"></i> الخريطة الحرارية للمواد (Correlation Heatmap)</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="heatmapChart" style="min-height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Section 3: Radar/Forecast -->
-            <div class="col-xl-6 mb-4">
-                <div class="card shadow h-100">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-line"></i> رادار التنبؤ (Future Forecast)</h6>
-                        <span id="forecastStudentName" class="badge bg-secondary">اختر تلميذ من الجدول</span>
-                    </div>
-                    <div class="card-body">
-                        <div id="forecastChart" style="min-height: 300px;"></div>
-
-                        <hr>
-                        <!-- Section 5: What-If Simulator -->
-                        <h6 class="font-weight-bold text-success"><i class="fas fa-flask"></i> مختبر المحاكاة (What-If)</h6>
-                        <p class="text-muted small">قم بتعديل نقطة أي مادة لرؤية تأثيرها المباشر على المعدل العام.</p>
-                        <div id="simulatorContainer">
-                            <div class="text-center text-muted">يرجى اختيار تلميذ أولاً. (يتم حساب المعدل العام بمتوسط المواد متساوية المعاملات).</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% else %}
-
-        <div class="alert alert-warning text-center p-5">
-            <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
-            <h4>لا توجد بيانات خبراء معالجة حالياً.</h4>
-
-            <div id="historicalDataBadge" class="badge bg-info p-2 mb-3" style="font-size: 1rem; display: none;">
-                <i class="fas fa-database me-1"></i> جاري فحص البيانات السابقة...
-            </div>
-
-            <!-- Import Historical Excel Form -->
-            <div class="card mb-4 mx-auto" style="max-width: 600px; border: 2px dashed #cbd5e1; background-color: #f8fafc;">
-                <div class="card-body">
-                    <h6 class="font-weight-bold text-primary mb-3"><i class="fas fa-file-excel"></i> استيراد البيانات السابقة (Excel) لتأثير الفوج والتنبؤ</h6>
-                    <form id="importHistoricalForm">
-                        <div class="input-group mb-3">
-                            <input type="file" class="form-control" id="historicalExcelFile" accept=".xlsx,.xls" multiple required>
-                            <button class="btn btn-outline-primary" type="button" id="btnUploadHistorical" onclick="uploadHistoricalData()"><i class="fas fa-upload"></i> رفع واستيراد</button>
-                        </div>
-                        <small class="text-muted d-block text-start">
-                            * يمكن للنظام التعرف التلقائي على السنة والمستوى من اسم الملف (مثال: تحليل النتائج الفصل الثالث 2024-2025-أولى متوسط 01.xlsx) أو من السطر 5.<br>
-                            * يجب أن تكون أسماء مواد الأعمدة متبوعة برقم الفصل (مثال: الرياضيات ف1، الفيزياء ف2).
-                        </small>
-                    </form>
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-center align-items-center mt-3">
-                <select id="globalTermFilter" class="form-select form-select-sm w-auto me-2">
-                    <option value="الفصل الأول">الفصل الأول</option>
-                    <option value="الفصل الثاني">الفصل الثاني</option>
-                    <option value="الفصل الثالث">الفصل الثالث</option>
-                </select>
-                <button id="btnRunEngine" class="btn btn-warning" onclick="runExpertEngine()"><i class="fas fa-cogs"></i> بدء المعالجة</button>
-            </div>
-            <p class="mt-3">قد يستغرق الأمر بعض الدقائق لمعالجة كافة البيانات.</p>
-
-        </div>
-    {% endif %}
+    </div>
 
 </div>
 
@@ -362,7 +502,99 @@
         {% else %}
             fetchAvailableYears();
         {% endif %}
+        loadImportedFilesByYear();
     });
+
+    document.getElementById('tab-db-btn')?.addEventListener('shown.bs.tab', function() {
+        loadImportedFilesByYear();
+    });
+
+    function loadImportedFilesByYear() {
+        const container = document.getElementById('importedFilesByYearContainer');
+        if (!container) return;
+        fetch("{% url 'api_expert_imported_files_by_year' %}", {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status !== 'success' || !data.years || data.years.length === 0) {
+                container.innerHTML = '<p class="text-muted small">لا توجد ملفات مستوردة حسب السنة، أو لم يتم استيراد أي ملف بعد.</p>';
+                return;
+            }
+            let html = '<div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>السنة الدراسية</th><th>الملفات المستوردة</th><th>عدد التلاميذ</th><th>عدد العلامات</th><th>محتوى القاعدة</th></tr></thead><tbody>';
+            data.years.forEach(function(y) {
+                let yearKey = (y.year || '').replace(/\s/g, '_');
+                let filesList = (y.files && y.files.length) ? y.files.map(function(f) {
+                    let dt = f.imported_at ? ' <span class="text-muted small">(' + f.imported_at + ')</span>' : '';
+                    return '<div><i class="fas fa-file-excel text-success me-1"></i>' + (f.filename || '—') + dt + '</div>';
+                }).join('') : '<span class="text-muted">—</span>';
+                html += '<tr><td><strong>' + (y.year || '—') + '</strong></td><td>' + filesList + '</td><td>' + (y.student_count || 0) + '</td><td>' + (y.grade_count || 0) + '</td><td><button type="button" class="btn btn-sm btn-outline-info btn-toggle-content" data-year="' + (y.year || '') + '" data-year-key="' + yearKey + '"><i class="fas fa-database me-1"></i> عرض المحتوى</button></td></tr>';
+                html += '<tr id="content-row-' + yearKey + '" class="historical-content-row" style="display:none;"><td colspan="5" class="bg-light p-3"><div id="content-body-' + yearKey + '" class="historical-content-body"><span class="text-muted">جاري التحميل...</span></div></td></tr>';
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+            // ربط أزرار عرض المحتوى
+            container.querySelectorAll('.btn-toggle-content').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var year = this.getAttribute('data-year');
+                    var yearKey = this.getAttribute('data-year-key');
+                    var contentRow = document.getElementById('content-row-' + yearKey);
+                    var contentBody = document.getElementById('content-body-' + yearKey);
+                    if (!contentRow || !contentBody) return;
+                    if (contentRow.style.display === 'none') {
+                        if (!contentBody.dataset.loaded) {
+                            loadHistoricalYearContent(year, yearKey, contentBody, contentRow);
+                        } else {
+                            contentRow.style.display = '';
+                        }
+                    } else {
+                        contentRow.style.display = 'none';
+                    }
+                });
+            });
+        })
+        .catch(function() {
+            container.innerHTML = '<p class="text-muted small">تعذر تحميل قائمة الملفات.</p>';
+        });
+    }
+
+    function loadHistoricalYearContent(year, yearKey, contentBody, contentRow) {
+        if (!year) return;
+        contentBody.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span> جاري تحميل محتوى السنة...</span>';
+        contentRow.style.display = '';
+        var url = "{% url 'api_expert_historical_year_content' %}?year=" + encodeURIComponent(year);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status !== 'success') {
+                contentBody.innerHTML = '<p class="text-danger small">تعذر تحميل المحتوى: ' + (data.message || 'خطأ') + '</p>';
+                return;
+            }
+            var students = data.students || [];
+            var grades = data.grades || [];
+            var studentsTotal = data.students_total || 0;
+            var gradesTotal = data.grades_total || 0;
+            var html = '<h6 class="border-bottom pb-2 text-primary">محتوى قاعدة البيانات — سنة ' + (data.year || year) + '</h6>';
+            html += '<p class="small text-muted">إجمالي التلاميذ: <strong>' + studentsTotal + '</strong> — إجمالي العلامات: <strong>' + gradesTotal + '</strong> (العرض محدود بعينة)</p>';
+            html += '<h6 class="mt-3">قائمة التلاميذ (عينة)</h6><div class="table-responsive mb-4"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>اللقب</th><th>الاسم</th><th>المستوى</th><th>القسم</th></tr></thead><tbody>';
+            students.forEach(function(s) {
+                html += '<tr><td>' + (s.last_name || '—') + '</td><td>' + (s.first_name || '—') + '</td><td>' + (s.academic_year || '—') + '</td><td>' + (s.class_name || '—') + '</td></tr>';
+            });
+            if (students.length === 0) html += '<tr><td colspan="4" class="text-muted">لا يوجد تلاميذ لهذه السنة.</td></tr>';
+            html += '</tbody></table></div>';
+            html += '<h6 class="mt-3">عينة العلامات</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>التلميذ</th><th>المادة</th><th>الفصل</th><th>العلامة</th></tr></thead><tbody>';
+            grades.forEach(function(g) {
+                html += '<tr><td>' + (g.student_name || '—') + '</td><td>' + (g.subject || '—') + '</td><td>' + (g.term || '—') + '</td><td>' + (g.score != null ? g.score : '—') + '</td></tr>';
+            });
+            if (grades.length === 0) html += '<tr><td colspan="4" class="text-muted">لا توجد علامات لهذه السنة.</td></tr>';
+            html += '</tbody></table></div>';
+            contentBody.innerHTML = html;
+            contentBody.dataset.loaded = '1';
+        })
+        .catch(function() {
+            contentBody.innerHTML = '<p class="text-danger small">تعذر الاتصال بالخادم.</p>';
+        });
+    }
 
     function fetchAvailableYears() {
         fetch("{% url 'api_expert_available_years' %}", {
@@ -497,118 +729,93 @@ function stopExpertProgress() {
             headers: {'X-CSRFToken': csrfTokenVal},
             body: formData
         })
-        .then(res => res.json())
+        .then(res => {
+            try { return res.json(); } catch(e) { return { status: 'error', message: res.statusText }; }
+        })
         .then(data => {
             btn.disabled = false;
             btn.innerHTML = originalText;
-            const overlay = document.getElementById('loadingOverlayExpert');
             stopExpertProgress();
-            if (data.status === 'success') {
+            if (data && data.status === 'success') {
                 alert(data.message);
-                fileInput.value = ''; // clear input
-                fetchAvailableYearsModal(); // Refresh the badge
+                fileInput.value = '';
+                if (typeof fetchAvailableYearsModal === 'function') fetchAvailableYearsModal();
+                if (typeof fetchAvailableYears === 'function') fetchAvailableYears();
             } else {
-                alert('خطأ: ' + data.message);
+                alert('خطأ: ' + (data && data.message ? data.message : 'فشل الاستيراد'));
             }
         })
         .catch(err => {
             btn.disabled = false;
             btn.innerHTML = originalText;
-            const overlay = document.getElementById('loadingOverlayExpert');
-            stopExpertProgress();
-            alert('حدث خطأ أثناء الاتصال بالخادم.');
-        });
-    }
-
-    function uploadHistoricalData() {
-        const fileInput = document.getElementById('historicalExcelFile');
-        if (!fileInput.files.length) {
-            alert('الرجاء اختيار ملف Excel أولاً.');
-            return;
-        }
-
-        const btn = document.getElementById('btnUploadHistorical');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الرفع...';
-
-        const overlay = document.getElementById('loadingOverlayExpert');
-        startExpertProgress('جاري استيراد وتحليل ملفات السنوات السابقة...');
-
-        const formData = new FormData();
-        for(let i=0; i<fileInput.files.length; i++) {
-            formData.append('files', fileInput.files[i]);
-        }
-
-        const csrfTokenVal = getCookie('csrftoken') || '{{ csrf_token }}';
-
-        fetch("{% url 'api_import_historical_expert_data' %}", {
-            method: 'POST',
-            headers: {'X-CSRFToken': csrfTokenVal},
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            const overlay = document.getElementById('loadingOverlayExpert');
-            stopExpertProgress();
-            if (data.status === 'success') {
-                alert(data.message);
-                fileInput.value = ''; // clear input
-                fetchAvailableYears(); // Refresh the badge
-            } else {
-                alert('خطأ: ' + data.message);
-            }
-        })
-        .catch(err => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            const overlay = document.getElementById('loadingOverlayExpert');
             stopExpertProgress();
             alert('حدث خطأ أثناء الاتصال بالخادم.');
         });
     }
 
 
+    let expertEnginePollTimer = null;
+    function stopExpertEnginePoll() {
+        if (expertEnginePollTimer) { clearInterval(expertEnginePollTimer); expertEnginePollTimer = null; }
+    }
+    function checkEngineThenReload() {
+        fetch("{% url 'api_expert_run_status' %}", { headers: { 'X-CSRFToken': csrftoken } })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success' && !data.running) {
+                    stopExpertEnginePoll();
+                    const runAlert = document.getElementById('engineRunningAlert');
+                    const doneAlert = document.getElementById('engineDoneAlert');
+                    if (runAlert) runAlert.style.display = 'none';
+                    if (doneAlert) doneAlert.style.display = 'flex';
+                    const btn = document.getElementById('btnRunEngine') || document.getElementById('btnRunEngineNoData');
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء'; }
+                    setTimeout(function() { location.reload(); }, 1500);
+                }
+            });
+    }
+    function pollExpertEngineStatus() {
+        expertEnginePollTimer = setInterval(function() {
+            fetch("{% url 'api_expert_run_status' %}", { headers: { 'X-CSRFToken': csrftoken } })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success' && !data.running) {
+                        stopExpertEnginePoll();
+                        document.getElementById('engineRunningAlert').style.display = 'none';
+                        const doneEl = document.getElementById('engineDoneAlert');
+                        if (doneEl) { doneEl.style.display = 'flex'; doneEl.classList.add('align-items-center'); }
+                        const btn = document.getElementById('btnRunEngine') || document.getElementById('btnRunEngineNoData');
+                        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء'; }
+                        setTimeout(function() { location.reload(); }, 2000);
+                    }
+                });
+        }, 4000);
+    }
     function runExpertEngine() {
-        const btn = document.getElementById('btnRunEngine');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التشغيل...';
-
-        const termSelect = document.getElementById('globalTermFilter') ? document.getElementById('globalTermFilter').value : 'الفصل الأول';
-
-        const payload = {
-            current_year: '{{ current_year }}',
-            current_term: termSelect,
-            prev_year: '{{ prev_year }}'
-        };
-
+        const btn = document.getElementById('btnRunEngine') || document.getElementById('btnRunEngineNoData');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التشغيل...'; }
+        // الفصل المرجعي يُحدد تلقائياً من آخر فصل مستورد (لا يعتمد على اختيار المستخدم)
+        const payload = { current_year: '{{ current_year }}', prev_year: '{{ prev_year }}' };
         fetch("{% url 'api_expert_run' %}", {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify(payload)
         })
         .then(response => response.json())
         .then(data => {
-            const alert = document.getElementById('statusAlert');
-            alert.style.display = 'block';
-            if(data.status === 'success') {
-                alert.className = 'alert alert-success';
-                alert.innerHTML = '<i class="fas fa-check"></i> ' + data.message + ' سيتم تحديث الصفحة قريباً. يرجى الانتظار وتحديث الصفحة يدوياً بعد قليل.';
+            const statusAlert = document.getElementById('statusAlert');
+            if (statusAlert) { statusAlert.style.display = 'block'; statusAlert.className = data.status === 'success' ? 'alert alert-success' : 'alert alert-danger'; statusAlert.innerHTML = data.status === 'success' ? '<i class="fas fa-check"></i> ' + data.message : '<i class="fas fa-times"></i> ' + data.message; }
+            if (data.status === 'success') {
+                const runAlert = document.getElementById('engineRunningAlert');
+                if (runAlert) { runAlert.style.display = 'flex'; runAlert.classList.add('align-items-center'); }
+                pollExpertEngineStatus();
             } else {
-                alert.className = 'alert alert-danger';
-                alert.innerHTML = '<i class="fas fa-times"></i> حدث خطأ: ' + data.message;
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء';
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء'; }
             }
         })
         .catch(err => {
             console.error(err);
-            btn.disabled = false;
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cogs"></i> تحديث بيانات محرك الخبراء'; }
         });
     }
 
@@ -641,38 +848,69 @@ function stopExpertProgress() {
             return;
         }
 
-        // Just take the first cohort if filtered, or average them (for simplicity, we display the first match)
-        const cohort = rawData.cohorts[0];
+        // اختر الفوج: حسب فلتر المستوى إن وُجد، وإلا أول فوج فيه بيانات (تأثير أو Z)
+        const levelFilter = document.getElementById('globalLevelFilter') ? document.getElementById('globalLevelFilter').value : '';
+        let cohort = rawData.cohorts[0];
+        if (levelFilter) {
+            cohort = rawData.cohorts.find(c => c.level && c.level.toString().indexOf(levelFilter) >= 0) || cohort;
+        } else {
+            const withData = rawData.cohorts.find(c => (c.cohort_effect_analysis && c.cohort_effect_analysis.indexOf('لا توجد بيانات سابقة') < 0) || c.current_year_z_score_avg != null);
+            if (withData) cohort = withData;
+        }
+        const noCohortData = !cohort.cohort_effect_analysis || cohort.cohort_effect_analysis.indexOf('لا توجد بيانات سابقة كافية') >= 0;
+        const hasZToShow = cohort.current_year_z_score_avg != null || cohort.last_year_z_score_avg != null;
 
-        // Cohort Effect UI
-        let cohortHtml = `
+        // Cohort Effect UI: اعرض الأرقام إن وُجدت أو إن المحرك أنتج تحليل فوج
+        let cohortHtml = '';
+        if (noCohortData && !hasZToShow) {
+            cohortHtml = `
+            <div class="alert alert-info small mb-0">
+                <strong>لماذا تظهر القيم صفراً؟</strong><br>
+                لم تُستورد بعد نتائج السنة الماضية، أو لم يُشغّل محرك الخبراء بعد الاستيراد. عندها لا يُحسب متوسط Z-Score.
+                <hr class="my-2">
+                <strong>ما الذي تفعله:</strong> من تبويب «عمليات» استخدم زر <strong>«استيراد نتائج سابقة»</strong> ثم <strong>«تحديث بيانات محرك الخبراء»</strong>. بعد انتهاء التشغيل ستظهر هنا متوسطات Z-Score وتأثير الفوج.
+            </div>
+            <p class="small text-muted mt-2 mb-0 text-center">يساعد هذا في تحديد ما إذا كان التراجع أو التحسن عاماً بسبب المنهج أم فردياً.</p>`;
+        } else {
+            const rawAvg = cohort.last_year_raw_avg != null ? Number(cohort.last_year_raw_avg).toFixed(2) : null;
+            cohortHtml = `
+            <div class="small text-muted mb-2">${cohort.level ? 'المستوى: ' + cohort.level : ''}</div>
             <div class="row text-center">
-                <div class="col-6">
-                    <div class="text-xs font-weight-bold text-uppercase mb-1 text-muted">متوسط Z-Score العام الماضي</div>
-                    <div class="h4 mb-0 font-weight-bold text-gray-800">${cohort.last_year_z_score_avg ? cohort.last_year_z_score_avg.toFixed(3) : 0}</div>
+                <div class="col-4">
+                    <div class="text-xs font-weight-bold text-uppercase mb-1 text-muted">متوسط المعدل العام الماضي</div>
+                    <div class="h4 mb-0 font-weight-bold text-gray-800">${rawAvg != null ? rawAvg : '—'}</div>
+                    <p class="small text-muted mb-0">(معدل فعلي مرجح)</p>
                 </div>
-                <div class="col-6">
+                <div class="col-4">
+                    <div class="text-xs font-weight-bold text-uppercase mb-1 text-muted">Z-Score العام الماضي</div>
+                    <div class="h4 mb-0 text-muted">0.000</div>
+                    <p class="small text-muted mb-0">(معيار المقارنة)</p>
+                </div>
+                <div class="col-4">
                     <div class="text-xs font-weight-bold text-uppercase mb-1 text-muted">متوسط Z-Score الحالي</div>
-                    <div class="h4 mb-0 font-weight-bold ${cohort.current_year_z_score_avg >= 0 ? 'text-success' : 'text-danger'}">${cohort.current_year_z_score_avg ? cohort.current_year_z_score_avg.toFixed(3) : 0}</div>
+                    <div class="h4 mb-0 font-weight-bold ${(cohort.current_year_z_score_avg || 0) >= 0 ? 'text-success' : 'text-danger'}">${cohort.current_year_z_score_avg != null ? Number(cohort.current_year_z_score_avg).toFixed(3) : '0.000'}</div>
                 </div>
             </div>
             <div class="mt-3 text-center">
-                <span class="badge ${cohort.current_year_z_score_avg >= 0 ? 'bg-success' : 'bg-danger'} p-2">${cohort.cohort_effect_analysis}</span>
+                <span class="badge ${(cohort.current_year_z_score_avg || 0) >= 0 ? 'bg-success' : 'bg-danger'} p-2">${cohort.cohort_effect_analysis || '—'}</span>
             </div>
             <p class="small text-muted mt-2 text-center">يساعد هذا في تحديد ما إذا كان التراجع أو التحسن عاماً بسبب المنهج أم فردياً.</p>
         `;
+        }
         cohortContainer.innerHTML = cohortHtml;
 
-        // Sensitivity UI
+        // Sensitivity UI (نفس الفوج حسب المستوى)
         let betas = cohort.sensitivity_betas || {};
-        let ruling_subject = cohort.ruling_subject || "غير محدد";
+        let ruling_subject = (cohort.ruling_subject && cohort.ruling_subject.trim()) ? cohort.ruling_subject : "غير محدد";
+        const hasRuling = ruling_subject && ruling_subject !== "غير محدد";
 
         let sortedBetas = Object.entries(betas).sort((a, b) => b[1] - a[1]).slice(0, 5); // Top 5
 
         let sensHtml = `
             <div class="mb-3">
                 <strong>المادة الحاكمة (بيضة القبان): </strong> <span class="badge bg-warning text-dark fs-6">${ruling_subject}</span>
-                <p class="small text-muted mt-1">هذه هي المادة التي لها أكبر تأثير على المعدل العام في هذا المستوى. رفع نقطة فيها يعطي أكبر عائد.</p>
+                ${!hasRuling ? '<p class="small text-info mt-1 mb-0"><strong>لماذا غير محدد؟</strong> لأن المحرك يحتاج نتائج السنة الماضية أولاً. من «عمليات»: استيراد نتائج سابقة ثم تحديث محرك الخبراء.</p>' : ''}
+                <p class="small text-muted mt-1 mb-0">هذه هي المادة التي لها أكبر تأثير على المعدل العام في هذا المستوى. رفع نقطة فيها يعطي أكبر عائد.</p>
             </div>
             <ul class="list-group list-group-flush small">
         `;
@@ -687,63 +925,111 @@ function stopExpertProgress() {
     }
 
     function renderPatternFinder() {
-        const filterVal = document.getElementById('patternFilter').value;
+        const filterVal = document.getElementById('patternFilter') ? document.getElementById('patternFilter').value : 'all';
+        const levelFilterEl = document.getElementById('patternLevelFilter');
+        const sectionFilterEl = document.getElementById('patternSectionFilter');
+        const levelFilter = levelFilterEl ? levelFilterEl.value : '';
+        const sectionFilter = sectionFilterEl ? sectionFilterEl.value : '';
         const tbody = document.querySelector('#patternTable tbody');
+        if (!tbody) return;
         tbody.innerHTML = '';
 
-        if(!rawData.students) return;
-
-        let students = rawData.students.filter(s => s.residual !== null);
-
-        if(filterVal !== 'all') {
-            students = students.filter(s => s.status_pattern === filterVal);
+        if(!rawData.students || rawData.students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">لا توجد بيانات تلاميذ. قم بتشغيل محرك الخبراء (بعد استيراد نتائج السنة الماضية).</td></tr>';
+            return;
         }
 
-        // Sort by absolute residual descending (most surprising first)
-        students.sort((a, b) => Math.abs(b.residual) - Math.abs(a.residual));
+        let students = rawData.students.filter(s => s.residual !== null && s.residual !== undefined);
+
+        // تعبئة فلتر المستوى والقسم (قيم فريدة من البيانات)
+        const levels = [...new Set(students.map(s => (s.level || '').toString().trim()).filter(Boolean))].sort();
+        const sections = [...new Set(students.map(s => (s.class_name || '').toString().trim()).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b)));
+        if (levelFilterEl) {
+            const curLevel = levelFilterEl.value;
+            levelFilterEl.innerHTML = '<option value="">الكل</option>' + levels.map(l => '<option value="' + l + '">' + l + '</option>').join('');
+            if (curLevel && levels.indexOf(curLevel) >= 0) levelFilterEl.value = curLevel;
+        }
+        if (sectionFilterEl) {
+            const curSection = sectionFilterEl.value;
+            sectionFilterEl.innerHTML = '<option value="">الكل</option>' + sections.map(s => '<option value="' + s + '">' + s + '</option>').join('');
+            if (curSection && sections.indexOf(curSection) >= 0) sectionFilterEl.value = curSection;
+        }
+
+        if (levelFilter) students = students.filter(s => (s.level || '').toString().trim() === levelFilter);
+        if (sectionFilter) students = students.filter(s => (s.class_name || '').toString().trim() === sectionFilter);
+        if(filterVal !== 'all') students = students.filter(s => s.status_pattern === filterVal);
+
+        if (students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">لا يوجد تلاميذ في هذه الفئة. غيّر المستوى أو القسم أو النمط.</td></tr>';
+            return;
+        }
+
+        // ترتيب: أولاً بالمستوى ثم القسم ثم الباقي (قافز/متراجع)
+        students.sort((a, b) => {
+            const lv = String(a.level || '').localeCompare(String(b.level || ''));
+            if (lv !== 0) return lv;
+            const cl = String(a.class_name || '').localeCompare(String(b.class_name || ''));
+            if (cl !== 0) return cl;
+            return Math.abs(b.residual) - Math.abs(a.residual);
+        });
 
         students.forEach((s, idx) => {
             let rowColor = '';
             if(s.status_pattern && s.status_pattern.includes('متراجع')) rowColor = 'table-danger';
             if(s.status_pattern && s.status_pattern.includes('قافز')) rowColor = 'table-success';
+            const safeName = (s.student_name || '').replace(/"/g, '&quot;');
+            const safeId = (s.student_id !== undefined && s.student_id !== null) ? String(s.student_id) : '';
 
             let tr = document.createElement('tr');
             tr.className = rowColor;
+            tr.setAttribute('data-student-name', safeName);
+            if (safeId) tr.setAttribute('data-student-id', safeId);
             tr.innerHTML = `
-                <td>${s.student_name}</td>
-                <td>${s.class_name}</td>
+                <td>${s.student_name || '—'}</td>
+                <td>${s.level || '—'}</td>
+                <td>${s.class_name || '—'}</td>
                 <td><span class="badge ${s.traffic_light === 'red' ? 'bg-danger' : (s.traffic_light==='green' ? 'bg-success' : 'bg-warning')}">${s.current_avg ? s.current_avg.toFixed(2) : '-'}</span></td>
                 <td><strong>${s.residual > 0 ? '+' : ''}${s.residual.toFixed(2)}</strong></td>
-                <td>${s.status_pattern}</td>
-                <td><button class="btn btn-sm btn-outline-primary" onclick='selectStudent(${idx})'>تحليل <i class="fas fa-arrow-left"></i></button></td>
+                <td>${s.status_pattern || '—'}</td>
+                <td><button type="button" class="btn btn-sm btn-outline-primary btn-pattern-analyze">تحليل <i class="fas fa-arrow-left"></i></button></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    function selectStudent(idx) {
-        // Need to rebuild full list to match index, so we find by name instead
-        // Actually since we filter, let's just use rawData
-        // Wait, the index passed is from the filtered list. Let's fix that.
-    }
-
-    // Better way to select student
-    document.querySelector('#patternTable').addEventListener('click', function(e) {
-        if(e.target.closest('button')) {
+    // زر تحليل في كاشف الأنماط: استخدام التفويض على الجدول مع data-student-name
+    const patternTable = document.querySelector('#patternTable');
+    if (patternTable) {
+        patternTable.addEventListener('click', function(e) {
+            const btn = e.target.closest('button.btn-pattern-analyze');
+            if (!btn) return;
             const tr = e.target.closest('tr');
-            const studentName = tr.cells[0].innerText;
-            const student = rawData.students.find(s => s.student_name === studentName);
-            if(student) {
+            if (!tr) return;
+            const studentId = tr.getAttribute('data-student-id');
+            const studentName = tr.getAttribute('data-student-name');
+            if ((!studentId && !studentName) || !rawData || !rawData.students) return;
+            let student = null;
+            if (studentId) {
+                student = rawData.students.find(s => String(s.student_id) === String(studentId));
+            }
+            if (!student && studentName) {
+                const nameDecoded = studentName.replace(/&quot;/g, '"').trim().replace(/\s+/g, ' ');
+                student = rawData.students.find(s => (s.student_name || '').trim().replace(/\s+/g, ' ') === nameDecoded || (s.student_name || '').trim() === studentName.trim());
+            }
+            if (student) {
                 currentSelectedStudent = student;
-                document.getElementById('forecastStudentName').innerText = student.student_name;
+                const nameEl = document.getElementById('forecastStudentName');
+                if (nameEl) nameEl.innerText = student.student_name;
                 renderForecastChart(student);
                 renderSimulator(student);
             }
-        }
-    });
+        });
+    }
 
     function renderHeatmap() {
         if(!rawData.cohorts || rawData.cohorts.length === 0) return;
+        const heatmapEl = document.querySelector("#heatmapChart");
+        if(!heatmapEl) return;
         const matrix = rawData.cohorts[0].correlation_matrix;
         if(!matrix || Object.keys(matrix).length === 0) return;
 
@@ -800,22 +1086,29 @@ function stopExpertProgress() {
         };
 
         if(heatmapChartInstance) heatmapChartInstance.destroy();
-        heatmapChartInstance = new ApexCharts(document.querySelector("#heatmapChart"), options);
+        heatmapChartInstance = new ApexCharts(heatmapEl, options);
         heatmapChartInstance.render();
     }
 
     function renderForecastChart(student) {
         if(!student.trend_history || student.trend_history.length === 0) {
-            document.getElementById('forecastChart').innerHTML = "<p class='text-muted text-center'>لا يوجد سجل اتجاه كافٍ.</p>";
+            document.getElementById('forecastChart').innerHTML = "<p class='text-muted text-center'>لا يوجد سجل اتجاه كافٍ. تأكد من استيراد نتائج السنة الحالية (لوحة تحليل النتائج) والسنة الماضية ثم تشغيل المحرك.</p>";
             return;
         }
-
-        const categories = student.trend_history.map(h => h.term);
-        const data = student.trend_history.map(h => h.score);
-
-        // Add predicted point
+        // ترتيب زمني: استخراج سنة وفصل ثم ترتيب (أقدم أولاً)
+        const termOrder = { 'الفصل الأول': 1, 'الفصل الثاني': 2, 'الفصل الثالث': 3 };
+        const sorted = student.trend_history.slice().sort(function(a, b) {
+            const ma = (a.term || '').match(/(\d{4})-(\d{4})\s*-\s*(.+)/);
+            const mb = (b.term || '').match(/(\d{4})-(\d{4})\s*-\s*(.+)/);
+            const ya = ma ? ma[1] : ''; const ta = ma ? (termOrder[ma[3]] || 0) : 0;
+            const yb = mb ? mb[1] : ''; const tb = mb ? (termOrder[mb[3]] || 0) : 0;
+            if (ya !== yb) return ya.localeCompare(yb);
+            return ta - tb;
+        });
+        const categories = sorted.map(h => h.term);
+        const data = sorted.map(h => h.score);
         categories.push('المتوقع (نهاية السنة)');
-        data.push(student.predicted_avg ? student.predicted_avg.toFixed(2) : null);
+        data.push(student.predicted_avg ? parseFloat(student.predicted_avg).toFixed(2) : null);
 
         let color = '#f1c40f'; // yellow
         if(student.traffic_light === 'green') color = '#2ecc71';
@@ -883,63 +1176,168 @@ function stopExpertProgress() {
     }
 
     function renderSimulator(student) {
-        // We will simulate the impact of the "Ruling Subject" or allow selecting a subject.
-        // For simplicity in UI, let's create a slider for the Ruling Subject if available.
+        // Simulator must be grounded in real grades & coefficients (no beta shortcuts).
         const cohort = rawData.cohorts.find(c => c.level === student.level) || rawData.cohorts[0];
-        const rulingSubj = cohort ? cohort.ruling_subject : "المادة الأساسية";
-
+        const defaultSubj = (cohort && cohort.ruling_subject) ? cohort.ruling_subject : null;
         const simContainer = document.getElementById('simulatorContainer');
+        if (!simContainer) return;
 
-        simContainer.innerHTML = `
-            <div class="mb-3">
-                <label for="simSlider" class="form-label">تجربة رفع نقطة: <strong>${rulingSubj || 'أحد المواد'}</strong></label>
-                <input type="range" class="form-range" min="0" max="20" step="0.5" id="simSlider" value="10">
-                <div class="d-flex justify-content-between text-muted small">
-                    <span>0</span>
-                    <span id="simCurrentValue" class="font-weight-bold text-primary">10</span>
-                    <span>20</span>
-                </div>
-            </div>
-            <div class="alert alert-info text-center">
-                المعدل العام المتوقع الجديد: <h4 id="simNewAvg" class="mb-0 font-weight-bold">${student.current_avg ? student.current_avg.toFixed(2) : '-'}</h4>
-            </div>
-        `;
+        if (!student || !student.student_id || !(rawData && rawData.run_info && rawData.run_info.id)) {
+            simContainer.innerHTML = `<div class="text-center text-muted">لا يمكن تشغيل المحاكاة: لم يتم العثور على معرف التلميذ أو التشغيلة.</div>`;
+            return;
+        }
 
-        const slider = document.getElementById('simSlider');
-        const valDisplay = document.getElementById('simCurrentValue');
-        const avgDisplay = document.getElementById('simNewAvg');
+        simContainer.innerHTML = `<div class="text-center text-muted py-3">جاري تحميل علامات التلميذ لمختبر المحاكاة...</div>`;
 
-        slider.addEventListener('input', function() {
-            valDisplay.innerText = this.value;
-            // Simple simulation formula:
-            // Since we assume equal coefficients for this demo simulator (as per requirements):
-            // Impact = (New Subject Score - Current Subject Score) / Total Number of Subjects
-            // To make it feel real without full subject data loaded per student here, we use the Beta if available
+        fetch(`{% url 'api_expert_student_term_grades' %}?run_id=${encodeURIComponent(rawData.run_info.id)}&student_id=${encodeURIComponent(student.student_id)}`)
+            .then(r => r.json())
+            .then(payload => {
+                if (!payload || payload.status !== 'success') {
+                    simContainer.innerHTML = `<div class="text-danger text-center">تعذر تحميل بيانات المحاكاة: ${(payload && payload.message) ? payload.message : 'خطأ غير معروف'}</div>`;
+                    return;
+                }
 
-            let beta = 0.1; // Default fallback
-            if(cohort && cohort.sensitivity_betas && cohort.sensitivity_betas[rulingSubj]) {
-                beta = cohort.sensitivity_betas[rulingSubj];
-            }
+                const subjects = payload.subjects || [];
+                if (!subjects.length) {
+                    simContainer.innerHTML = `<div class="text-center text-muted">لا توجد علامات مواد لهذا التلميذ في ${payload.run.academic_year} - ${payload.run.term}.</div>`;
+                    return;
+                }
 
-            // Assume the student's current score in this subject is roughly 10 for the slider delta
-            let delta = parseFloat(this.value) - 10;
+                const subjOptions = subjects.map(s => `<option value="${(s.subject || '').replace(/"/g,'&quot;')}">${s.subject} (نقطة: ${Number(s.score).toFixed(2)} / معامل: ${Number(s.coef || 1).toFixed(0)})</option>`).join('');
+                simContainer.innerHTML = `
+                    <div class="mb-2 text-muted small">مرجع المحاكاة: ${payload.run.academic_year} - ${payload.run.term}. يتم حساب المعدل كمتوسط مرجح بالمعاملات.</div>
+                    <div class="alert alert-warning py-2 px-3 small mb-3" style="text-align:right;">
+                        <strong>تنبيه مهم:</strong> هذه المحاكاة تغيّر <strong>نقطة مادة واحدة فقط</strong> وتعيد حساب <strong>المعدل المرجح</strong> بنفس معاملات المؤسسة. لذلك الارتفاع سيكون محدوداً بنسبة معامل المادة إلى مجموع المعاملات، ولن يقفز إلى 20 إلا إذا كانت بقية المواد أصلاً مرتفعة جداً.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اختر المادة للمحاكاة:</label>
+                        <select id="simSubjectSelect" class="form-select form-select-sm">${subjOptions}</select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="simSlider" class="form-label">تغيير نقطة المادة:</label>
+                        <input type="range" class="form-range" min="0" max="20" step="0.25" id="simSlider" value="10">
+                        <div class="d-flex justify-content-between text-muted small">
+                            <span>0</span>
+                            <span id="simCurrentValue" class="font-weight-bold text-primary">10</span>
+                            <span>20</span>
+                        </div>
+                        <div class="text-muted small mt-1">النقطة الأصلية: <strong id="simOriginalScore">-</strong> | المعامل: <strong id="simCoef">-</strong></div>
+                    </div>
+                    <div class="alert alert-info text-center">
+                        المعدل العام المتوقع الجديد:
+                        <h4 id="simNewAvg" class="mb-0 font-weight-bold">-</h4>
+                        <div class="text-muted small mt-1">
+                            المعدل الحالي (محسوب):
+                            <strong id="simBaseAvg" style="cursor:pointer; text-decoration: underline;" title="اضغط لمعرفة مصدر المعدل">-</strong>
+                            <span id="simBaseAvgHint" class="ms-2"></span>
+                        </div>
+                    </div>
+                `;
 
-            let baseAvg = student.current_avg || 10;
-            let newAvg = baseAvg + (delta * beta);
+                const select = document.getElementById('simSubjectSelect');
+                const slider = document.getElementById('simSlider');
+                const valDisplay = document.getElementById('simCurrentValue');
+                const avgDisplay = document.getElementById('simNewAvg');
+                const baseAvgEl = document.getElementById('simBaseAvg');
+                const origEl = document.getElementById('simOriginalScore');
+                const coefEl = document.getElementById('simCoef');
 
-            // Cap at 20
-            if(newAvg > 20) newAvg = 20;
-            if(newAvg < 0) newAvg = 0;
+                const totalCoef = Number(payload.total_coef || 0);
+                const baseAvg = Number(payload.current_avg || 0);
+                if (baseAvgEl) baseAvgEl.innerText = baseAvg.toFixed(2);
+                const baseHint = document.getElementById('simBaseAvgHint');
+                const src = payload.current_avg_source || 'computed';
+                if (baseHint) {
+                    baseHint.innerHTML = src === 'excel'
+                        ? `<span class="badge bg-success">من Excel</span>`
+                        : `<span class="badge bg-secondary">محسوب</span>`;
+                }
 
-            avgDisplay.innerText = newAvg.toFixed(2);
-        });
+                const setSubject = (subjName) => {
+                    const s = subjects.find(x => (x.subject || '') === subjName) || subjects[0];
+                    const orig = Number(s.score || 0);
+                    const coef = Number(s.coef || 1);
+                    if (origEl) origEl.innerText = orig.toFixed(2);
+                    if (coefEl) coefEl.innerText = coef.toFixed(0);
+                    if (slider) slider.value = String(orig);
+                    if (valDisplay) valDisplay.innerText = String(orig);
+                    // Initial render
+                    const newAvg0 = computeNewAvg(baseAvg, orig, orig, coef, totalCoef);
+                    if (avgDisplay) avgDisplay.innerText = newAvg0.toFixed(2);
+                };
+
+                const computeNewAvg = (base, oldScore, newScore, coef, totalW) => {
+                    // newAvg = (sum + (new-old)*coef) / totalW, where base = sum/totalW
+                    if (!totalW || totalW <= 0) return base;
+                    const sum = base * totalW;
+                    let v = (sum + (Number(newScore) - Number(oldScore)) * Number(coef)) / totalW;
+                    if (v > 20) v = 20;
+                    if (v < 0) v = 0;
+                    return v;
+                };
+
+                // Prefer ruling subject if it exists in list
+                const hasDefault = defaultSubj && subjects.some(s => s.subject === defaultSubj);
+                if (hasDefault && select) select.value = defaultSubj;
+                setSubject(select ? select.value : subjects[0].subject);
+
+                if (select) {
+                    select.addEventListener('change', () => setSubject(select.value));
+                }
+                if (slider) {
+                    slider.addEventListener('input', function() {
+                        if (valDisplay) valDisplay.innerText = this.value;
+                        const subjName = select ? select.value : subjects[0].subject;
+                        const s = subjects.find(x => (x.subject || '') === subjName) || subjects[0];
+                        const orig = Number(s.score || 0);
+                        const coef = Number(s.coef || 1);
+                        const newAvg = computeNewAvg(baseAvg, orig, parseFloat(this.value), coef, totalCoef);
+                        if (avgDisplay) avgDisplay.innerText = newAvg.toFixed(2);
+                    });
+                }
+
+                // Click to show source explanation
+                if (baseAvgEl) {
+                    baseAvgEl.addEventListener('click', function() {
+                        const srcLabel = payload.current_avg_source_label ? ` (${payload.current_avg_source_label})` : '';
+                        if ((payload.current_avg_source || '') === 'excel') {
+                            alert(
+                                `مصدر المعدل الحالي: من ملف Excel${srcLabel}\n` +
+                                `القيمة المستعملة: ${Number(payload.current_avg || 0).toFixed(2)}\n\n` +
+                                `ملاحظة: هذا المعدل يُؤخذ مباشرة من عمود/سطر "معدل الفصل" المطابق لفصل التشغيلة.`
+                            );
+                        } else {
+                            alert(
+                                `مصدر المعدل الحالي: محسوب من مواد التلميذ ومعاملاتها\n` +
+                                `القيمة المستعملة: ${Number(payload.current_avg || 0).toFixed(2)}\n` +
+                                `مجموع المعاملات: ${Number(payload.total_coef || 0).toFixed(0)}\n\n` +
+                                `الصيغة: مجموع(نقطة×معامل) ÷ مجموع المعاملات (مع تجاهل الغياب/0).`
+                            );
+                        }
+                    });
+                }
+            })
+            .catch(err => {
+                simContainer.innerHTML = `<div class="text-danger text-center">تعذر تحميل بيانات المحاكاة.</div>`;
+            });
     }
 
     function showAiLoading() {
-        const modal = new bootstrap.Modal(document.getElementById('aiModal'));
+        const el = document.getElementById('aiModal');
+        if (!el) return;
         document.getElementById('aiLoading').style.display = 'block';
         document.getElementById('aiContent').style.display = 'none';
-        modal.show();
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = new bootstrap.Modal(el);
+            modal.show();
+        } else {
+            el.style.display = 'block';
+            el.classList.add('show');
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            backdrop.id = 'aiModalBackdrop';
+            document.body.appendChild(backdrop);
+        }
     }
 
     function setAiContent(title, text) {
@@ -960,7 +1358,7 @@ function stopExpertProgress() {
         payload += `معلومات مساعدة: تأثير الفوج هو '${cohort.cohort_effect_analysis}'. المادة الحاكمة هي '${cohort.ruling_subject}'. متوسط Z-score هو ${cohort.current_year_z_score_avg}.\n`;
         payload += `أعطني فقرة تشخيصية واحدة مباشرة تعتمد على هذه الأرقام، وتحدد المشكلة بدقة.`;
 
-        callAiService("Diagnostic Report", payload);
+        callAiService("تقرير تشخيصي (AI)", payload, 'diagnostic');
     }
 
     function generateMeetingMinutes() {
@@ -978,10 +1376,10 @@ function stopExpertProgress() {
         }
         payload += `اكتب محضراً احترافياً، مرتباً في نقاط، يركز على هذه الإحصائيات ويقترح خطة دعم للمواد الحاكمة.`;
 
-        callAiService("محضر الاجتماع", payload);
+        callAiService("محضر الاجتماع (AI)", payload, 'minutes');
     }
 
-    function callAiService(title, prompt) {
+    function callAiService(title, prompt, reportType) {
         // We will reuse an existing AI endpoint or a new one.
         // Assuming we create a specialized endpoint for this, or use the general AI chat logic.
         // For this task, let's create a dedicated endpoint in ai_views or expert_api_views later,
@@ -993,7 +1391,7 @@ function stopExpertProgress() {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrftoken
             },
-            body: JSON.stringify({ prompt: prompt })
+            body: JSON.stringify({ prompt: prompt, report_type: reportType, run_id: (rawData && rawData.run_info && rawData.run_info.id) ? rawData.run_info.id : null })
         })
         .then(res => res.json())
         .then(data => {
@@ -1014,6 +1412,135 @@ function stopExpertProgress() {
         document.execCommand('copy');
         alert('تم نسخ النص بنجاح!');
     }
+
+    // إغلاق نافذة AI يدوياً إذا لم يكن Bootstrap متاحاً
+    (function() {
+        const aiModal = document.getElementById('aiModal');
+        if (!aiModal) return;
+        function hideAiModalFallback() {
+            aiModal.style.display = 'none';
+            aiModal.classList.remove('show');
+            const back = document.getElementById('aiModalBackdrop');
+            if (back) back.remove();
+        }
+        aiModal.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function(btn) {
+            btn.addEventListener('click', hideAiModalFallback);
+        });
+    })();
+
+    var LEVELS_COEF = ['أولى متوسط', 'ثانية متوسط', 'ثالثة متوسط', 'رابعة متوسط'];
+    var DEFAULT_SUBJECTS = ['الرياضيات', 'اللغة العربية', 'اللغة الفرنسية', 'العلوم الفيزيائية', 'علوم الطبيعة والحياة', 'التربية الإسلامية', 'التاريخ والجغرافيا', 'التربية التشكيلية', 'التربية الموسيقية', 'التربية البدنية', 'الإعلام الآلي', 'التربية المدنية'];
+
+    var EXCLUDED_SUBJECTS = ['المعدل العام', 'معدل عام'];
+    function renderCoefficientsTable(coefs, subjectsFromApi) {
+        var tbody = document.getElementById('subjectCoefficientsTableBody');
+        if (!tbody) return;
+        var exclude = function(s) { return !s || EXCLUDED_SUBJECTS.indexOf(s.trim()) >= 0; };
+        var subjects = [];
+        var seen = {};
+        function add(s) {
+            var t = (s || '').trim();
+            if (t && !exclude(t) && !seen[t]) { seen[t] = true; subjects.push(t); }
+        }
+        (subjectsFromApi || []).forEach(add);
+        for (var l in coefs || {}) {
+            for (var s in coefs[l]) add(s);
+        }
+        // لا نضيف مواد افتراضية تلقائياً. إن كانت القائمة فارغة: اتركها فارغة ليضبطها المستخدم أو يحدثها يدوياً.
+        subjects.sort(function(a,b){ return a.localeCompare(b); });
+        var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
+        tbody.innerHTML = '';
+        if (subjects.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">لا توجد مواد محمّلة حالياً. اضغط <strong>تحديث قائمة المواد</strong> لجلبها من نتائج السنة الحالية، أو أضفها يدوياً.</td></tr>';
+            return;
+        }
+        subjects.forEach(function(subj) {
+            var tr = document.createElement('tr');
+            tr.dataset.subject = subj;
+            tr.innerHTML = '<td class="align-middle"><strong>' + esc(subj) + '</strong></td>';
+            LEVELS_COEF.forEach(function(lvl) {
+                var val = (coefs && coefs[lvl] && coefs[lvl][subj] != null) ? coefs[lvl][subj] : '';
+                tr.innerHTML += '<td class="p-1"><input type="number" min="0" step="0.5" class="form-control form-control-sm text-center coef-input" data-level="' + lvl + '" value="' + val + '" placeholder="—"></td>';
+            });
+            tr.innerHTML += '<td class="p-1 text-center align-middle"><button type="button" class="btn btn-sm btn-outline-danger coef-delete-btn" title="حذف المادة من القائمة"><i class="fas fa-trash-alt"></i></button></td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    function addSubjectRow() {
+        var nameInp = document.getElementById('newSubjectName');
+        var name = (nameInp && nameInp.value) ? nameInp.value.trim() : '';
+        if (!name) return;
+        var tbody = document.getElementById('subjectCoefficientsTableBody');
+        if (!tbody) return;
+        var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
+        var exists = Array.prototype.some.call(tbody.querySelectorAll('tr'), function(r){ return r.dataset.subject === name; });
+        if (exists) { nameInp.value = ''; return; }
+        var tr = document.createElement('tr');
+        tr.dataset.subject = name;
+        tr.innerHTML = '<td class="align-middle"><strong>' + esc(name) + '</strong></td>';
+        LEVELS_COEF.forEach(function(lvl) {
+            tr.innerHTML += '<td class="p-1"><input type="number" min="0" step="0.5" class="form-control form-control-sm text-center coef-input" data-level="' + lvl + '" value="" placeholder="—"></td>';
+        });
+        tr.innerHTML += '<td class="p-1 text-center align-middle"><button type="button" class="btn btn-sm btn-outline-danger coef-delete-btn" title="حذف المادة من القائمة"><i class="fas fa-trash-alt"></i></button></td>';
+        tbody.appendChild(tr);
+        nameInp.value = '';
+    }
+
+    function loadSubjectCoefficients(includeSubjects) {
+        var msg = document.getElementById('subjectCoefficientsMessage');
+        fetch("{% url 'api_expert_get_subject_coefficients' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                renderCoefficientsTable(data.coefficients || {}, includeSubjects ? (data.subjects || []) : []);
+                if (msg) msg.innerHTML = includeSubjects ? '<span class="text-success">تم تحديث قائمة المواد من نتائج السنة الحالية.</span>' : '<span class="text-success">تم تحميل المعاملات. لتحديث المواد اضغط زر «تحديث قائمة المواد».</span>';
+            } else { if (msg) msg.innerHTML = '<span class="text-danger">' + (data.message || 'خطأ') + '</span>'; }
+        })
+        .catch(function() { if (msg) msg.innerHTML = '<span class="text-danger">فشل الاتصال.</span>'; });
+    }
+
+    function refreshSubjectsFromResults() {
+        loadSubjectCoefficients(true);
+    }
+
+    function saveSubjectCoefficients() {
+        var msg = document.getElementById('subjectCoefficientsMessage');
+        var tbody = document.getElementById('subjectCoefficientsTableBody');
+        if (!tbody) return;
+        var coefs = {};
+        LEVELS_COEF.forEach(function(l) { coefs[l] = {}; });
+        tbody.querySelectorAll('tr').forEach(function(tr) {
+            var subj = tr.dataset.subject;
+            if (!subj) return;
+            tr.querySelectorAll('.coef-input').forEach(function(inp) {
+                var lvl = inp.dataset.level;
+                var v = parseFloat(inp.value);
+                if (!isNaN(v) && v >= 0 && lvl) coefs[lvl][subj] = v;
+            });
+        });
+        fetch("{% url 'api_expert_save_subject_coefficients' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ coefficients: coefs })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (msg) msg.innerHTML = data.status === 'success' ? '<span class="text-success">' + (data.message || 'تم الحفظ.') + ' أعد تشغيل محرك الخبراء لتطبيق المعاملات.</span>' : '<span class="text-danger">' + (data.message || 'خطأ') + '</span>';
+        })
+        .catch(function() { if (msg) msg.innerHTML = '<span class="text-danger">فشل الاتصال.</span>'; });
+    }
+
+    // لا نحدّث المواد تلقائياً عند فتح النافذة — فقط حمّل المعاملات. المستخدم يضغط "تحديث قائمة المواد" إن أراد.
+    document.getElementById('subjectCoefficientsModal')?.addEventListener('show.bs.modal', function() { loadSubjectCoefficients(false); });
+
+    document.getElementById('subjectCoefficientsTableBody')?.addEventListener('click', function(e) {
+        var btn = e.target.closest('.coef-delete-btn');
+        if (btn) {
+            var tr = btn.closest('tr');
+            if (tr) tr.remove();
+        }
+    });
 
 </script>
 {% endblock %}
