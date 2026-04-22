@@ -871,14 +871,27 @@ def scan_card(request):
         barcode = str(barcode).strip()
 
         # Robust lookup
+        student = None
+        employee = None
+        is_employee = False
+
         try:
             student = Student.objects.get(student_id_number=barcode)
         except Student.DoesNotExist:
-            return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+            try:
+                employee = Employee.objects.get(employee_code=barcode)
+                is_employee = True
+            except Employee.DoesNotExist:
+                return Response({'error': 'Not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+            except Employee.MultipleObjectsReturned:
+                employee = Employee.objects.filter(employee_code=barcode).first()
+                if not employee:
+                    return Response({'error': 'Not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+                is_employee = True
         except Student.MultipleObjectsReturned:
             student = Student.objects.filter(student_id_number=barcode).first()
             if not student:
-                return Response({'error': 'Student not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'Not found', 'code': 'NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
 
         # Time Restriction Logic (Dynamic)
         settings_obj = SchoolSettings.objects.first()
@@ -902,7 +915,7 @@ def scan_card(request):
              return Response({
                  'error': 'المطعم مغلق اليوم',
                  'code': 'CLOSED_DAY',
-                 'student': StudentSerializer(student).data
+                 'student': StudentSerializer(student).data if not is_employee else None
              }, status=status.HTTP_403_FORBIDDEN)
 
         # Check Time
@@ -910,13 +923,18 @@ def scan_card(request):
              return Response({
                  'error': f'المطعم يفتح على الساعة {open_time.strftime("%H:%M")}',
                  'code': 'NOT_OPEN_YET',
-                 'student': StudentSerializer(student).data
+                 'student': StudentSerializer(student).data if not is_employee else None
              }, status=status.HTTP_403_FORBIDDEN)
 
         if current_time > close_time:
              today = date.today()
-             attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
-             student_data = StudentSerializer(student).data
+             if is_employee:
+                 attended = CanteenAttendance.objects.filter(employee=employee, date=today).exists()
+                 student_data = None
+             else:
+                 attended = CanteenAttendance.objects.filter(student=student, date=today).exists()
+                 student_data = StudentSerializer(student).data
+
              if attended:
                  return Response({
                      'error': 'انتهى الوقت (أكل مسبقاً)',
@@ -930,34 +948,52 @@ def scan_card(request):
                      'student': student_data
                  }, status=status.HTTP_403_FORBIDDEN)
 
-        # Check if Half-Board
-        if student.attendance_system != 'نصف داخلي':
-            return Response({
-                'error': 'Student is not Half-Board',
-                'student': StudentSerializer(student).data,
-                'code': 'NOT_HALF_BOARD'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check if already attended today
         today = date.today()
-        if CanteenAttendance.objects.filter(student=student, date=today).exists():
-            return Response({
-                'error': 'Student already took the meal',
-                'student': StudentSerializer(student).data,
-                'code': 'ALREADY_ATE'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if is_employee:
+            if CanteenAttendance.objects.filter(employee=employee, date=today).exists():
+                return Response({'error': 'Already took the meal', 'code': 'ALREADY_ATE'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Record attendance
-        attendance = CanteenAttendance.objects.create(
-            student=student,
-            date=today,
-            registration_method=CanteenAttendance.REG_SCAN,
-        )
-        return Response({
-            'message': 'Attendance recorded',
-            'student': StudentSerializer(student).data,
-            'attendance': CanteenAttendanceSerializer(attendance).data
-        }, status=status.HTTP_201_CREATED)
+            attendance = CanteenAttendance.objects.create(
+                employee=employee,
+                date=today,
+                registration_method=CanteenAttendance.REG_SCAN,
+            )
+            return Response({
+                'message': 'Attendance recorded',
+                'is_employee': True,
+                'employee_name': f"{employee.first_name} {employee.last_name}",
+                'employee_rank': employee.get_rank_display(),
+                'attendance': CanteenAttendanceSerializer(attendance).data
+            }, status=status.HTTP_201_CREATED)
+
+        else:
+            # Check if Half-Board
+            if student.attendance_system != 'نصف داخلي':
+                return Response({
+                    'error': 'Student is not Half-Board',
+                    'student': StudentSerializer(student).data,
+                    'code': 'NOT_HALF_BOARD'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if already attended today
+            if CanteenAttendance.objects.filter(student=student, date=today).exists():
+                return Response({
+                    'error': 'Student already took the meal',
+                    'student': StudentSerializer(student).data,
+                    'code': 'ALREADY_ATE'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Record attendance
+            attendance = CanteenAttendance.objects.create(
+                student=student,
+                date=today,
+                registration_method=CanteenAttendance.REG_SCAN,
+            )
+            return Response({
+                'message': 'Attendance recorded',
+                'student': StudentSerializer(student).data,
+                'attendance': CanteenAttendanceSerializer(attendance).data
+            }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         logger.error(f"Canteen Scan Error: {e}")
@@ -1016,34 +1052,57 @@ def manual_attendance(request):
         return Response({'error': f'انتهى وقت الإطعام ({close_time.strftime("%H:%M")})'}, status=status.HTTP_403_FORBIDDEN)
 
     student_id = request.data.get('student_id')
-    # Can search by internal ID or student_id_number
+    today = date.today()
+
+    student = None
+    employee = None
+    is_employee = False
+
+    # Can search by internal ID or student_id_number/employee_code
     try:
         student = Student.objects.get(id=student_id)
     except (Student.DoesNotExist, ValueError):
-         try:
+        try:
             student = Student.objects.get(student_id_number=student_id)
-         except Student.DoesNotExist:
-            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Student.DoesNotExist:
+            try:
+                employee = Employee.objects.get(employee_code=student_id)
+                is_employee = True
+            except Employee.DoesNotExist:
+                return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    if student.attendance_system != 'نصف داخلي':
-        return Response({'error': 'Student is not Half-Board'}, status=status.HTTP_400_BAD_REQUEST)
+    if is_employee:
+        if CanteenAttendance.objects.filter(employee=employee, date=today).exists():
+            return Response({'error': 'Already recorded'}, status=status.HTTP_400_BAD_REQUEST)
 
-    today = date.today()
-    if CanteenAttendance.objects.filter(student=student, date=today).exists():
-        return Response({'error': 'Student already recorded'}, status=status.HTTP_400_BAD_REQUEST)
+        CanteenAttendance.objects.create(
+            employee=employee,
+            date=today,
+            registration_method=CanteenAttendance.REG_MANUAL,
+        )
+        return Response({
+            'message': 'Success',
+            'is_employee': True,
+            'employee_name': f"{employee.first_name} {employee.last_name}",
+            'employee_rank': employee.get_rank_display()
+        }, status=status.HTTP_201_CREATED)
 
-    CanteenAttendance.objects.create(
-        student=student,
-        date=today,
-        registration_method=CanteenAttendance.REG_MANUAL,
-    )
-    return Response(
-        {
-            'message': 'Manual attendance recorded',
-            'student': StudentSerializer(student).data,
-        },
-        status=status.HTTP_201_CREATED,
-    )
+    else:
+        if student.attendance_system != 'نصف داخلي':
+            return Response({'error': 'Student is not Half-Board'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if CanteenAttendance.objects.filter(student=student, date=today).exists():
+            return Response({'error': 'Student already recorded'}, status=status.HTTP_400_BAD_REQUEST)
+
+        CanteenAttendance.objects.create(
+            student=student,
+            date=today,
+            registration_method=CanteenAttendance.REG_MANUAL,
+        )
+        return Response(
+            {'message': 'Success', 'student': StudentSerializer(student).data},
+            status=status.HTTP_201_CREATED
+        )
 
 @csrf_exempt
 @api_view(['DELETE'])
@@ -1418,11 +1477,7 @@ def student_filters(request):
     # Exclude empty or null values
     levels_raw = list(Student.objects.exclude(academic_year__isnull=True).exclude(academic_year__exact='').values_list('academic_year', flat=True).distinct())
 
-    # Use class_code as the primary class identifier if available, otherwise fallback to class_name
-    class_codes_raw = list(Student.objects.exclude(class_code__isnull=True).exclude(class_code__exact='').values_list('class_code', flat=True).distinct())
-    classes_fallback = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').filter(class_code__isnull=True).values_list('class_name', flat=True).distinct())
-
-    classes_raw = class_codes_raw + classes_fallback
+    classes_raw = list(Student.objects.exclude(class_name__isnull=True).exclude(class_name__exact='').values_list('class_name', flat=True).distinct())
 
     derived_levels = set(levels_raw)
 
@@ -1446,24 +1501,15 @@ def student_filters(request):
     # Build a mapping of level -> available classes
     level_class_map = {}
     for level in levels:
-        level_classes = list(set(
+        level_classes_names = list(set(
             str(c).strip() for c in
             Student.objects.filter(academic_year=level)
-            .exclude(class_code__isnull=True)
-            .exclude(class_code__exact='')
-            .values_list('class_code', flat=True)
+            .exclude(class_name__isnull=True)
+            .exclude(class_name__exact='')
+            .values_list('class_name', flat=True)
         ))
 
-        if not level_classes: # fallback to name if no codes
-            level_classes = list(set(
-                str(c).strip() for c in
-                Student.objects.filter(academic_year=level)
-                .exclude(class_name__isnull=True)
-                .exclude(class_name__exact='')
-                .values_list('class_name', flat=True)
-            ))
-
-        level_class_map[level] = sorted(level_classes, key=custom_sort)
+        level_class_map[level] = sorted(level_classes_names, key=custom_sort)
 
     return Response({
         'levels': levels,
