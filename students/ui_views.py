@@ -1255,6 +1255,32 @@ def hr_home(request):
     }
     return render(request, 'students/hr.html', context)
 
+def update_employee_meals(request):
+    if not request.user.is_authenticated:
+        return redirect('canteen_landing')
+    if hasattr(request.user, 'profile') and not request.user.profile.has_perm('access_hr'):
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        employee_id = request.POST.get('employee_id')
+        added_meals = request.POST.get('added_meals', 0)
+
+        try:
+            employee = Employee.objects.get(pk=employee_id)
+            added_meals = int(added_meals)
+            if added_meals > 0:
+                employee.remaining_meals += added_meals
+                employee.save()
+                messages.success(request, f"تمت إضافة {added_meals} وجبة بنجاح للموظف {employee.first_name} {employee.last_name}.")
+            else:
+                messages.error(request, "قيمة الرصيد المضافة غير صالحة.")
+        except Employee.DoesNotExist:
+            messages.error(request, "لم يتم العثور على الموظف.")
+        except ValueError:
+            messages.error(request, "قيمة عدد الوجبات غير صالحة.")
+
+    return redirect('hr_home')
+
 def hr_delete(request, pk):
     if not request.user.is_authenticated:
         return redirect('canteen_landing')

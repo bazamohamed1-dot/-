@@ -91,6 +91,7 @@ urlpatterns = [
     path('hr/assignment_match/', ui_views.assignment_matching_view, name='assignment_matching_view'),
     path('hr/mapping/', mapping_views.class_mapping_view, name='class_mapping_view'),
     path('hr/<int:pk>/delete/', ui_views.hr_delete, name='hr_delete'),
+    path('hr/update_meals/', ui_views.update_employee_meals, name='update_employee_meals'),
     path('parents/', ui_views.parents_home, name='parents_home'),
     path('guidance/', ui_views.guidance_home, name='guidance_home'),
 

@@ -951,7 +951,13 @@ def scan_card(request):
         today = date.today()
         if is_employee:
             if CanteenAttendance.objects.filter(employee=employee, date=today).exists():
-                return Response({'error': 'Already took the meal', 'code': 'ALREADY_ATE'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'تم تسجيل حضورك مسبقاً اليوم', 'code': 'ALREADY_ATE'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if employee.remaining_meals <= 0:
+                return Response({'error': 'رصيد الوجبات الخاص بك غير كافٍ', 'code': 'INSUFFICIENT_MEALS'}, status=status.HTTP_400_BAD_REQUEST)
+
+            employee.remaining_meals -= 1
+            employee.save()
 
             attendance = CanteenAttendance.objects.create(
                 employee=employee,
@@ -959,10 +965,11 @@ def scan_card(request):
                 registration_method=CanteenAttendance.REG_SCAN,
             )
             return Response({
-                'message': 'Attendance recorded',
+                'message': f'تم تسجيل الحضور بنجاح. عدد الوجبات المتبقية: {employee.remaining_meals}',
                 'is_employee': True,
                 'employee_name': f"{employee.first_name} {employee.last_name}",
                 'employee_rank': employee.get_rank_display(),
+                'remaining_meals': employee.remaining_meals,
                 'attendance': CanteenAttendanceSerializer(attendance).data
             }, status=status.HTTP_201_CREATED)
 
