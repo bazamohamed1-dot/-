@@ -49,6 +49,7 @@
                     <th>الرتبة</th>
                     <th>المادة</th>
                     <th>رقم الهاتف</th>
+                    <th>رصيد المطعم</th>
                     <th>الإجراءات</th>
                 </tr>
             </thead>
@@ -70,6 +71,11 @@
                     <td>{{ emp.subject|default:"-" }}</td>
                     <td>{{ emp.phone }}</td>
                     <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openMealsModal('{{ emp.id }}', '{{ emp.first_name|escapejs }} {{ emp.last_name|escapejs }}', '{{ emp.employee_code|escapejs }}')" title="إدارة رصيد المطعم">
+                            <i class="fas fa-utensils"></i> {{ emp.remaining_meals }}
+                        </button>
+                    </td>
+                    <td>
                         {% if emp.rank == 'teacher' %}
                         <!-- Hidden element storing assignment data for the Quick Assignment Editor -->
                         <span class="teacher-assignment-data" style="display:none;"
@@ -83,7 +89,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="6" class="text-center">لا توجد بيانات</td></tr>
+                <tr><td colspan="7" class="text-center">لا توجد بيانات</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -862,5 +868,85 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 });
+
+
+<!-- Meals Modal -->
+<div id="mealsModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h4><i class="fas fa-utensils text-primary"></i> إدارة رصيد المطعم</h4>
+            <span class="close" onclick="closeMealsModal()">&times;</span>
+        </div>
+        <form method="POST" action="{% url 'update_employee_meals' %}">
+            {% csrf_token %}
+            <input type="hidden" name="employee_id" id="mealEmpId">
+            <div class="modal-body text-center">
+                <h5 id="mealEmpName" class="mb-3"></h5>
+                <div class="form-group mb-3">
+                    <label class="font-weight-bold mb-2">إضافة رصيد (عدد الوجبات):</label>
+                    <div class="input-group justify-content-center" style="width: 200px; margin: 0 auto;">
+                        <input type="number" name="added_meals" class="form-control text-center" min="1" required>
+                    </div>
+                    <small class="text-muted d-block mt-2">سيتم إضافة هذا العدد إلى الرصيد الحالي للموظف.</small>
+                </div>
+                <!-- JS Barcode Area -->
+                <div class="mt-4 p-3 bg-light rounded">
+                    <h6>بطاقة المطعم للموظف</h6>
+                    <svg id="empBarcode"></svg>
+                    <p class="text-muted small mt-2 mb-0">يمكن طباعة هذا الرمز واستخدامه في جهاز المسح الخاص بالمطعم.</p>
+                    <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="printBarcode()"><i class="fas fa-print"></i> طباعة الباركود</button>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ الرصيد</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+<script>
+function openMealsModal(id, name, code) {
+    document.getElementById('mealEmpId').value = id;
+    document.getElementById('mealEmpName').innerText = name;
+
+    // Generate Barcode
+    JsBarcode("#empBarcode", code || ('EMP-' + id), {
+        format: "CODE128",
+        lineColor: "#2c3e50",
+        width: 2,
+        height: 50,
+        displayValue: true
+    });
+
+    document.getElementById('mealsModal').style.display = 'block';
+}
+
+function closeMealsModal() {
+    document.getElementById('mealsModal').style.display = 'none';
+}
+
+function printBarcode() {
+    const svg = document.getElementById('empBarcode').outerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>طباعة بطاقة المطعم</title>
+                <style>
+                    body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; flex-direction: column; }
+                    @media print { @page { margin: 0; } body { margin: 1cm; } }
+                </style>
+            </head>
+            <body>
+                ${svg}
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+        </html>
+    `);
+}
+</script>
 
 {% endblock %}
