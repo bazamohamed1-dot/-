@@ -33,7 +33,8 @@
              <button class="btn btn-info" onclick="openAssignmentModal()"><i class="fas fa-upload"></i> استيراد الإسناد (AI)</button>
              <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> إضافة موظف</button>
              <button id="btnEditAssignments" class="btn btn-warning" onclick="toggleEditAssignments()"><i class="fas fa-edit"></i> تعديل الإسناد للأساتذة</button>
-             <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
+             <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> طباعة القائمة</button>
+             <button class="btn btn-dark" onclick="printSelectedBarcodes()"><i class="fas fa-id-card"></i> طباعة بطاقات المطعم</button>
              <a href="{% url 'dashboard' %}" class="btn btn-dark"><i class="fas fa-arrow-right"></i> رجوع</a>
         </div>
     </div>
@@ -44,6 +45,7 @@
         <table class="table" id="employeesTable">
             <thead>
                 <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="selectAllEmployees" onclick="toggleSelectAll(this)"></th>
                     <th>الرمز</th>
                     <th>الاسم واللقب</th>
                     <th>الرتبة</th>
@@ -56,6 +58,7 @@
             <tbody>
                 {% for emp in employees %}
                 <tr class="employee-row" data-rank="{{ emp.rank }}">
+                    <td><input type="checkbox" class="employee-select" value="{{ emp.employee_code|escapejs }}" data-name="{{ emp.first_name|escapejs }} {{ emp.last_name|escapejs }}" data-rank="{{ emp.get_rank_display }}"></td>
                     <td>{{ emp.employee_code }}</td>
                     <td>
                         {% if emp.photo %}
@@ -885,7 +888,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 <div class="form-group mb-3">
                     <label class="font-weight-bold mb-2">إضافة رصيد (عدد الوجبات):</label>
                     <div class="input-group justify-content-center" style="width: 200px; margin: 0 auto;">
-                        <input type="number" name="added_meals" class="form-control text-center" min="1" required>
+                        <input type="number" name="added_meals" class="form-control text-center"  required>
                     </div>
                     <small class="text-muted d-block mt-2">سيتم إضافة هذا العدد إلى الرصيد الحالي للموظف.</small>
                 </div>
@@ -924,6 +927,84 @@ function openMealsModal(id, name, code) {
 
 function closeMealsModal() {
     document.getElementById('mealsModal').style.display = 'none';
+}
+
+
+
+function toggleSelectAll(source) {
+    checkboxes = document.querySelectorAll('.employee-select');
+    for (var i = 0, n = checkboxes.length; i < n; i++) {
+        checkboxes[i].checked = source.checked;
+    }
+}
+
+function printSelectedBarcodes() {
+    const selected = document.querySelectorAll('.employee-select:checked');
+    if (selected.length === 0) {
+        alert('الرجاء تحديد موظف واحد على الأقل للطباعة.');
+        return;
+    }
+
+    let printHtml = `
+        <html>
+            <head>
+                <title>طباعة بطاقات المطعم</title>
+                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+                <style>
+                    body { font-family: 'Tajawal', sans-serif; display: flex; flex-wrap: wrap; gap: 20px; padding: 20px; justify-content: center; }
+                    .card { border: 2px solid #2c3e50; border-radius: 10px; padding: 15px; text-align: center; width: 250px; page-break-inside: avoid; margin-bottom: 20px; }
+                    .card h4 { margin: 5px 0 10px 0; color: #2c3e50; font-size: 1.2rem; }
+                    .card p { margin: 0 0 10px 0; color: #7f8c8d; font-size: 0.9rem; }
+                    svg { width: 100%; height: auto; }
+                    @media print {
+                        body { padding: 0; gap: 10px; }
+                        .card { border: 1px solid #000; margin: 10px; }
+                    }
+                </style>
+            </head>
+            <body>
+    `;
+
+    selected.forEach((cb, index) => {
+        const code = cb.value;
+        const name = cb.dataset.name;
+        const rank = cb.dataset.rank;
+        const svgId = 'barcode_' + index;
+
+        printHtml += `
+            <div class="card">
+                <h4>المطعم المدرسي</h4>
+                <p><strong>${name}</strong><br>${rank}</p>
+                <svg id="${svgId}"></svg>
+                <script>
+                    setTimeout(() => {
+                        JsBarcode("#${svgId}", "${code}", {
+                            format: "CODE128",
+                            lineColor: "#000",
+                            width: 2,
+                            height: 60,
+                            displayValue: true
+                        });
+                    }, 100);
+                </script>
+            </div>
+        `;
+    });
+
+    printHtml += `
+            <script>
+                setTimeout(() => {
+                    window.print();
+                    // window.close();
+                }, 1000);
+            </script>
+            </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printHtml);
+    printWindow.document.close();
 }
 
 function printBarcode() {
