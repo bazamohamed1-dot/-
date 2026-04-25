@@ -1268,12 +1268,11 @@ def update_employee_meals(request):
         try:
             employee = Employee.objects.get(pk=employee_id)
             added_meals = int(added_meals)
-            if added_meals > 0:
-                employee.remaining_meals += added_meals
-                employee.save()
-                messages.success(request, f"تمت إضافة {added_meals} وجبة بنجاح للموظف {employee.first_name} {employee.last_name}.")
-            else:
-                messages.error(request, "قيمة الرصيد المضافة غير صالحة.")
+            # Remove strict > 0 check to allow negative numbers (reducing balance)
+            employee.remaining_meals += added_meals
+            employee.save()
+            action_text = "إضافة" if added_meals >= 0 else "خصم"
+            messages.success(request, f"تم {action_text} {abs(added_meals)} وجبة بنجاح للموظف {employee.first_name} {employee.last_name}.")
         except Employee.DoesNotExist:
             messages.error(request, "لم يتم العثور على الموظف.")
         except ValueError:

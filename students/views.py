@@ -1343,26 +1343,47 @@ def canteen_daily_summary(request):
     if request.method == 'GET':
         meals = _canteen_meals_map()
         meal_today = meals.get(d.isoformat(), '') or meals.get(str(d), '')
-        student_live = CanteenAttendance.objects.filter(date=d).count()
+        student_live = CanteenAttendance.objects.filter(date=d, student__isnull=False).count()
+        staff_live = CanteenAttendance.objects.filter(date=d, employee__rank='admin').count()
+        teachers_live = CanteenAttendance.objects.filter(date=d, employee__rank='teacher').count()
+        workers_live = CanteenAttendance.objects.filter(date=d, employee__rank='worker').count()
+
         row = CanteenDailySummary.objects.filter(date=d).first()
         if row:
             return Response(
                 {
                     'date': d.isoformat(),
                     'meal_description': row.meal_description,
-                    'student_count': row.student_count,
+                    'student_count': student_live,
                     'supervisors_count': row.supervisors_count,
-                    'staff_count': row.staff_count,
-                    'teachers_count': row.teachers_count,
-                    'workers_count': row.workers_count,
+                    'staff_count': staff_live,
+                    'teachers_count': teachers_live,
+                    'workers_count': workers_live,
                     'guests_count': row.guests_count,
                     'notes': row.notes,
-                    'total': row.total_beneficiaries,
+                    'total': student_live + staff_live + teachers_live + workers_live + row.guests_count,
                     'saved': True,
                     'meal_plan_text': meal_today,
                     'student_count_live': student_live,
                 }
             )
+        return Response(
+            {
+                'date': d.isoformat(),
+                'meal_description': meal_today,
+                'student_count': student_live,
+                'supervisors_count': 0,
+                'staff_count': staff_live,
+                'teachers_count': teachers_live,
+                'workers_count': workers_live,
+                'guests_count': 0,
+                'notes': '',
+                'total': student_live + staff_live + teachers_live + workers_live,
+                'saved': False,
+                'meal_plan_text': meal_today,
+                'student_count_live': student_live,
+            }
+        )
         return Response(
             {
                 'date': d.isoformat(),
@@ -1381,14 +1402,13 @@ def canteen_daily_summary(request):
             }
         )
 
-    # POST — حفظ / تحديث الملخص
     payload = request.data
     meal_desc = (payload.get('meal_description') or '').strip()
-    try:
-        sc = int(payload.get('student_count', 0))
-    except (TypeError, ValueError):
-        sc = 0
-    sc = max(0, sc)
+
+    student_live = CanteenAttendance.objects.filter(date=d, student__isnull=False).count()
+    staff_live = CanteenAttendance.objects.filter(date=d, employee__rank='admin').count()
+    teachers_live = CanteenAttendance.objects.filter(date=d, employee__rank='teacher').count()
+    workers_live = CanteenAttendance.objects.filter(date=d, employee__rank='worker').count()
 
     def _pi(name):
         try:
@@ -1400,11 +1420,11 @@ def canteen_daily_summary(request):
         date=d,
         defaults={
             'meal_description': meal_desc,
-            'student_count': sc,
+            'student_count': student_live,
             'supervisors_count': _pi('supervisors_count'),
-            'staff_count': _pi('staff_count'),
-            'teachers_count': _pi('teachers_count'),
-            'workers_count': _pi('workers_count'),
+            'staff_count': staff_live,
+            'teachers_count': teachers_live,
+            'workers_count': workers_live,
             'guests_count': _pi('guests_count'),
             'notes': (payload.get('notes') or '').strip(),
         },
@@ -1413,7 +1433,7 @@ def canteen_daily_summary(request):
         {
             'ok': True,
             'date': d.isoformat(),
-            'total': obj.total_beneficiaries,
+            'total': student_live + staff_live + teachers_live + workers_live + _pi('guests_count'),
             'saved': True,
         },
         status=status.HTTP_200_OK,

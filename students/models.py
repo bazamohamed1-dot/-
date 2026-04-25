@@ -404,6 +404,7 @@ class UserRole(models.Model):
         return self.name
 
 class Employee(models.Model):
+    remaining_meals = models.IntegerField(default=0, verbose_name="الرصيد المتبقي للوجبات")
     RANK_CHOICES = [
         ('teacher', 'أستاذ'),
         ('worker', 'عامل مهني'),
