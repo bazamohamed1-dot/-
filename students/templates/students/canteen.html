@@ -288,6 +288,7 @@
         <textarea id="statsMealDesc" class="form-input" rows="2" style="width:100%; margin-bottom:10px; background-color: #f1f5f9;" readonly></textarea>
         <div class="info-grid" style="grid-template-columns: 1fr 1fr; gap:10px;">
             <div><label class="info-label">التلاميذ</label><input type="number" min="0" id="statsStudents" class="form-input western-nums" style="direction:ltr; background-color: #f1f5f9;" readonly></div>
+            <div><label class="info-label">المشرفون المرافقون</label><input type="number" min="0" id="statsSupervisors" class="form-input western-nums" style="direction:ltr;"></div>
             <div><label class="info-label">الموظفون</label><input type="number" min="0" id="statsStaff" class="form-input western-nums" style="direction:ltr; background-color: #f1f5f9;" readonly></div>
             <div><label class="info-label">الأساتذة</label><input type="number" min="0" id="statsTeachers" class="form-input western-nums" style="direction:ltr; background-color: #f1f5f9;" readonly></div>
             <div><label class="info-label">العمال</label><input type="number" min="0" id="statsWorkers" class="form-input western-nums" style="direction:ltr; background-color: #f1f5f9;" readonly></div>
@@ -1022,5 +1023,41 @@
     loadTodayMealFromServer();
 
     // Export Button visibility is now handled by server-side permissions
+
+    async function submitManualEmployee() {
+        const code = document.getElementById('manualEmployeeCode').value.trim();
+        if(!code) return;
+
+        try {
+            const res = await fetch('/canteen/manual_attendance/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('baza_school_csrf_v2')
+                },
+                body: JSON.stringify({ student_id: code }) // Backend uses student_id for employees too via search
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                document.getElementById('manualEmployeeCode').value = '';
+                await updateStats();
+
+                if (data.is_employee) {
+                    playAlert('success');
+                    showAlert(`تم تسجيل الموظف: ${data.employee_name} - ${data.employee_rank}`, 'success');
+                } else {
+                    showAlert("تم التسجيل بنجاح", 'success');
+                }
+                closeManualModal();
+            } else {
+                alert(data.error || "خطأ");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("فشل الاتصال بالخادم.");
+        }
+    }
+
 </script>
 {% endblock %}
