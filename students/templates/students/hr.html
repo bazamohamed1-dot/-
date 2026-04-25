@@ -888,7 +888,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 <div class="form-group mb-3">
                     <label class="font-weight-bold mb-2">إضافة رصيد (عدد الوجبات):</label>
                     <div class="input-group justify-content-center" style="width: 200px; margin: 0 auto;">
-                        <input type="number" name="added_meals" class="form-control text-center"  required>
+                        <input type="number" name="added_meals" class="form-control text-center" min="1" required>
                     </div>
                     <small class="text-muted d-block mt-2">سيتم إضافة هذا العدد إلى الرصيد الحالي للموظف.</small>
                 </div>
@@ -930,10 +930,9 @@ function closeMealsModal() {
 }
 
 
-
 function toggleSelectAll(source) {
-    checkboxes = document.querySelectorAll('.employee-select');
-    for (var i = 0, n = checkboxes.length; i < n; i++) {
+    const checkboxes = document.querySelectorAll('.employee-select');
+    for (let i = 0; i < checkboxes.length; i++) {
         checkboxes[i].checked = source.checked;
     }
 }
@@ -949,7 +948,7 @@ function printSelectedBarcodes() {
         <html>
             <head>
                 <title>طباعة بطاقات المطعم</title>
-                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"><\/script>
                 <style>
                     body { font-family: 'Tajawal', sans-serif; display: flex; flex-wrap: wrap; gap: 20px; padding: 20px; justify-content: center; }
                     .card { border: 2px solid #2c3e50; border-radius: 10px; padding: 15px; text-align: center; width: 250px; page-break-inside: avoid; margin-bottom: 20px; }
@@ -986,7 +985,7 @@ function printSelectedBarcodes() {
                             displayValue: true
                         });
                     }, 100);
-                </script>
+                <\/script>
             </div>
         `;
     });
@@ -995,9 +994,8 @@ function printSelectedBarcodes() {
             <script>
                 setTimeout(() => {
                     window.print();
-                    // window.close();
                 }, 1000);
-            </script>
+            <\/script>
             </body>
         </html>
     `;
